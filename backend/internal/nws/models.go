@@ -19,6 +19,10 @@ type Alert struct {
 	SourceURL string `json:"sourceUrl,omitempty"`
 	EventCode string `json:"eventCode,omitempty"`
 	Office    string `json:"office,omitempty"`
+	// Optional geometry for radius filtering / map display
+	CentroidLat *float64    `json:"centroidLat,omitempty"`
+	CentroidLon *float64    `json:"centroidLon,omitempty"`
+	Geometry    interface{} `json:"geometry,omitempty"`
 }
 
 type HistoryLog struct {

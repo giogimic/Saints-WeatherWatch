@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 
 export interface WeatherAlert {
   id: string;
@@ -21,6 +21,10 @@ export interface WeatherAlert {
   sourceUrl?: string;
   eventCode?: string;
   office?: string;
+  centroidLat?: number;
+  centroidLon?: number;
+  geometry?: unknown;
+  approximate?: boolean;
 }
 
 export interface WeatherHistoryEntry {
@@ -203,11 +207,19 @@ export class WeatherService {
     score: number;
     total: number;
     seconds: number;
-  }): Observable<QuizAttempt> {
-    return this.http.post<QuizAttempt>('/api/quiz/attempts', attempt).pipe(
+  }): Observable<{ attempt: QuizAttempt; unlocked: string[] } | null> {
+    return this.http.post<{ attempt: QuizAttempt; unlocked: string[] } | QuizAttempt>(
+      '/api/quiz/attempts',
+      attempt,
+    ).pipe(
+      map(res => {
+        if (res && 'attempt' in res) return res as { attempt: QuizAttempt; unlocked: string[] };
+        if (res && 'id' in res) return { attempt: res as QuizAttempt, unlocked: [] };
+        return null;
+      }),
       catchError(err => {
         console.error('saveQuizAttempt error:', err);
-        return of(null as unknown as QuizAttempt);
+        return of(null);
       })
     );
   }
@@ -219,6 +231,12 @@ export class WeatherService {
         console.error('getQuizLeaderboard error:', err);
         return of([]);
       })
+    );
+  }
+
+  getMyQuizAttempts(): Observable<QuizAttempt[]> {
+    return this.http.get<QuizAttempt[]>('/api/quiz/mine').pipe(
+      catchError(() => of([]))
     );
   }
 
@@ -248,6 +266,73 @@ export class WeatherService {
       })
     );
   }
+
+  getFavorites(): Observable<string[]> {
+    return this.http.get<{ cameraIds: string[] }>('/api/favorites').pipe(
+      map(r => r.cameraIds || []),
+      catchError(() => of([]))
+    );
+  }
+
+  addFavorite(cameraId: string): Observable<void> {
+    return this.http.post<void>('/api/favorites', { cameraId }).pipe(
+      catchError(() => of(undefined))
+    );
+  }
+
+  removeFavorite(cameraId: string): Observable<void> {
+    return this.http.delete<void>(`/api/favorites/${encodeURIComponent(cameraId)}`).pipe(
+      catchError(() => of(undefined))
+    );
+  }
+
+  getWatchedAreas(): Observable<WatchedArea[]> {
+    return this.http.get<WatchedArea[]>('/api/watched-areas').pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  createWatchedArea(body: { label: string; lat: number; lon: number; radiusMiles: number }): Observable<WatchedArea> {
+    return this.http.post<WatchedArea>('/api/watched-areas', body).pipe(
+      catchError(() => of(null as unknown as WatchedArea))
+    );
+  }
+
+  deleteWatchedArea(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/watched-areas/${id}`).pipe(
+      catchError(() => of(undefined))
+    );
+  }
+
+  expandWatchedArea(id: string): Observable<{ area: WatchedArea; alerts: WeatherAlert[]; count: number }> {
+    return this.http.get<{ area: WatchedArea; alerts: WeatherAlert[]; count: number }>(
+      `/api/watched-areas/${id}/expand`
+    ).pipe(
+      catchError(() => of({ area: null as any, alerts: [], count: 0 }))
+    );
+  }
+
+  getDashboardPrefs(): Observable<DashboardPrefs> {
+    return this.http.get<DashboardPrefs>('/api/dashboard/prefs').pipe(
+      catchError(() => of({
+        cardOrder: 'profile,progress,garage,cams,areas,map',
+        hiddenCards: '',
+        mapLayers: 'radar,warnings,cams',
+      }))
+    );
+  }
+
+  saveDashboardPrefs(prefs: DashboardPrefs): Observable<DashboardPrefs> {
+    return this.http.put<DashboardPrefs>('/api/dashboard/prefs', prefs).pipe(
+      catchError(() => of(prefs))
+    );
+  }
+
+  getVehicleCatalog(): Observable<VehicleDef[]> {
+    return this.http.get<VehicleDef[]>('/api/vehicles').pipe(
+      catchError(() => of([]))
+    );
+  }
 }
 
 export interface QuizAttempt {
@@ -258,6 +343,7 @@ export interface QuizAttempt {
   total: number;
   seconds: number;
   createdAt: string;
+  userId?: string;
 }
 
 export interface SavedLocation {
@@ -265,4 +351,28 @@ export interface SavedLocation {
   label: string;
   lat: number;
   lon: number;
+  userId?: string;
+}
+
+export interface WatchedArea {
+  id: string;
+  userId: string;
+  label: string;
+  lat: number;
+  lon: number;
+  radiusMiles: number;
+  createdAt: string;
+}
+
+export interface DashboardPrefs {
+  cardOrder: string;
+  hiddenCards: string;
+  mapLayers: string;
+}
+
+export interface VehicleDef {
+  key: string;
+  name: string;
+  blurb: string;
+  unlockHint: string;
 }

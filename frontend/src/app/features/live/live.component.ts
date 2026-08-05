@@ -4,6 +4,8 @@ import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { catchError, of } from 'rxjs';
+import { AuthService } from '../../core/auth.service';
+import { OpsStateService } from '../../core/ops-state.service';
 
 export interface CameraFeed {
   id: string;
@@ -139,16 +141,28 @@ export interface CameraFeed {
                             </div>
                           }
                         </div>
-                        @if (camera.lat && camera.lng) {
-                          <a
-                            class="btn btn-xs btn-ghost border border-base-300 rounded-lg font-black uppercase text-[10px] mt-3 min-h-10"
-                            [routerLink]="['/map']"
-                            [queryParams]="{ cam: camera.id }"
-                            (click)="$event.stopPropagation()"
-                          >
-                            Show on map
-                          </a>
-                        }
+                        <div class="mt-3 flex flex-wrap gap-2">
+                          @if (camera.lat && camera.lng) {
+                            <a
+                              class="btn btn-xs btn-ghost border border-base-300 rounded-lg font-black uppercase text-[10px] min-h-10"
+                              [routerLink]="['/map']"
+                              [queryParams]="{ cam: camera.id }"
+                              (click)="$event.stopPropagation()"
+                            >
+                              Show on map
+                            </a>
+                          }
+                          @if (camera.group === 'cams') {
+                            <button
+                              type="button"
+                              class="btn btn-xs rounded-lg font-black uppercase text-[10px] min-h-10"
+                              [ngClass]="isFavorite(camera.id) ? 'btn-secondary' : 'btn-ghost border border-base-300'"
+                              (click)="toggleFavorite(camera.id); $event.stopPropagation()"
+                            >
+                              {{ isFavorite(camera.id) ? '★ Favorited' : '☆ Favorite' }}
+                            </button>
+                          }
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -215,6 +229,8 @@ export class LiveComponent implements OnInit, OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
+  private readonly ops = inject(OpsStateService);
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
   private listTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -337,6 +353,18 @@ export class LiveComponent implements OnInit, OnDestroy {
     return status === 'LIVE'
       ? 'bg-error/20 text-error border-error/50'
       : 'bg-warning/20 text-warning border-warning/50';
+  }
+
+  isFavorite(id: string): boolean {
+    return this.ops.favoriteCamIds().includes(id);
+  }
+
+  toggleFavorite(id: string): void {
+    if (!this.auth.isLoggedIn()) {
+      this.auth.openModal('login');
+      return;
+    }
+    this.ops.toggleFavorite(id);
   }
 
   private openRequestedCam(camId: string): void {

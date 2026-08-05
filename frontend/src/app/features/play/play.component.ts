@@ -2,6 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
+import { OpsStateService } from '../../core/ops-state.service';
 import { QuizAttempt, WeatherService } from '../../core/weather.service';
 import {
   QUIZ_TRACKS,
@@ -285,6 +287,26 @@ const CALLSIGN_KEY = 'ww-play-callsign';
             @if (postedToBoard) {
               <p class="text-xs font-bold text-success uppercase tracking-wider">Posted to Top Experts</p>
             }
+            @if (unlockedKeys.length) {
+              <p class="text-xs font-bold text-secondary uppercase tracking-wider">
+                Unlocked: {{ unlockedKeys.join(', ') }}
+              </p>
+            }
+            @if (!auth.isLoggedIn()) {
+              <div class="rounded-xl border border-primary/40 bg-primary/10 p-4 text-left space-y-2">
+                <p class="text-sm font-black text-white uppercase italic">Save this run</p>
+                <p class="text-xs text-base-content/60 font-semibold">
+                  Create a chaser profile to keep scores, unlock cartoon chase vehicles, and open your live dashboard.
+                </p>
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm rounded-xl font-black uppercase min-h-11"
+                  (click)="promptRegister()"
+                >
+                  Create profile / log in
+                </button>
+              </div>
+            }
             <div class="flex flex-col sm:flex-row gap-2 justify-center pt-2">
               <button
                 type="button"
@@ -310,6 +332,8 @@ const CALLSIGN_KEY = 'ww-play-callsign';
 })
 export class PlayComponent implements OnInit {
   private readonly weather = inject(WeatherService);
+  readonly auth = inject(AuthService);
+  private readonly ops = inject(OpsStateService);
 
   readonly tracks = QUIZ_TRACKS;
 
@@ -327,7 +351,9 @@ export class PlayComponent implements OnInit {
   callsign = 'Storm Expert';
   leaderboard: QuizAttempt[] = [];
   postedToBoard = false;
+  unlockedKeys: string[] = [];
   private startedAt = 0;
+  private lastSeconds = 0;
 
   get current(): QuizQuestion | null {
     return this.deck[this.index] ?? null;
@@ -351,6 +377,21 @@ export class PlayComponent implements OnInit {
     this.loadProgress();
     this.loadCallsign();
     this.loadLeaderboard();
+    if (this.auth.user()) {
+      this.callsign = this.auth.user()!.chaserName;
+    }
+  }
+
+  promptRegister(): void {
+    if (!this.activeTrack) return;
+    this.auth.pendingQuiz = {
+      category: this.activeTrack.id,
+      score: this.score,
+      total: this.deck.length,
+      seconds: this.lastSeconds || 1,
+      playerName: this.callsign || 'Storm Expert',
+    };
+    this.auth.openModal('signup');
   }
 
   saveCallsign(): void {
@@ -445,18 +486,25 @@ export class PlayComponent implements OnInit {
     this.progress = { ...this.progress, [cat]: next };
     this.saveProgress();
     this.view = 'results';
+    this.unlockedKeys = [];
 
     const seconds = Math.max(1, Math.round((Date.now() - this.startedAt) / 1000));
+    this.lastSeconds = seconds;
+    const playerName = this.auth.user()?.chaserName || this.callsign || 'Storm Expert';
     this.weather.saveQuizAttempt({
-      playerName: this.callsign || 'Storm Expert',
+      playerName,
       category: cat,
       score: this.score,
       total: this.deck.length,
       seconds,
-    }).subscribe(row => {
-      if (row?.id) {
+    }).subscribe(res => {
+      if (res?.attempt?.id) {
         this.postedToBoard = true;
+        this.unlockedKeys = res.unlocked || [];
         this.loadLeaderboard();
+        if (this.auth.isLoggedIn()) {
+          this.auth.refreshMe().subscribe(() => this.ops.reloadAccountData());
+        }
       }
     });
   }

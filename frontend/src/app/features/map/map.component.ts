@@ -532,10 +532,13 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   savePinAtCenter(): void {
     if (!this.map || this.savingPin) return;
-    const c = this.map.getCenter();
-    const label = (this.newPinLabel || 'Home base').trim().slice(0, 48) || 'Home base';
     this.savingPin = true;
-    this.weather.createSavedLocation({ label, lat: c.lat, lon: c.lng }).subscribe(row => {
+    const c = this.map.getCenter();
+    this.weather.createSavedLocation({
+      label: (this.newPinLabel || 'Home base').trim().slice(0, 48) || 'Home base',
+      lat: c.lat,
+      lon: c.lng,
+    }).subscribe(row => {
       this.savingPin = false;
       if (row?.id) {
         this.savedLocations = [...this.savedLocations, row].sort((a, b) =>
@@ -544,6 +547,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         this.renderSavedMarkers();
         this.selectedLabel = row.label;
         this.focusSavedLocation(row);
+      } else {
+        this.selectedLabel = 'Log in to save home-base pins';
       }
     });
   }

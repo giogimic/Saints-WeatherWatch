@@ -84,12 +84,14 @@ Open `http://localhost:4200` in your browser.
 - [x] **Phase 6** — Play quizzes + Prisma `QuizAttempt` leaderboard; chase logs in Archive
 - [x] **Phase 7** — Live cams from `/api/cams` (opencctv/FAA/GOES) + responsive mobile ops nav
 - [x] **Phase 8** — Docker compose deploy (see `update.sh` / deployment docs)
+- [x] **Phase 9** — Chaser accounts (name+PIN), vehicle rewards, live Dashboard (favorites / watch zones)
 
 ### Recently shipped (see `logs/`)
 - Storm Ops UI overhaul (quiet Archive, Live accordion, Map hub, deep links)
 - Maine alert archive backfill from IEM VTEC
 - Storm Expert Training quizzes + Top Experts board
 - Saved locations / home-base pins on Map
+- Chaser accounts, cartoon vehicle garage, SPA Dashboard with watched-area radius alerts
 
 ## Data Sources (all free, no API keys)
 

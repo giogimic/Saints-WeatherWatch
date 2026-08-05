@@ -11,8 +11,43 @@ generator client {
   output   = "../internal/store/gen"
 }
 
+model User {
+  id                  String   @id @default(cuid())
+  chaserName          String   @unique
+  chaserNameNorm      String   @unique
+  pinHash             String
+  email               String?  @unique
+  equippedVehicleKey  String   @default("starter_car")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sessions             Session[]
+  quizAttempts         QuizAttempt[]
+  vehicles             UserVehicle[]
+  favoriteCameras      FavoriteCamera[]
+  watchedAreas         WatchedArea[]
+  savedLocations       SavedLocation[]
+  dashboardPreference  DashboardPreference?
+
+  @@index([createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model QuizAttempt {
   id         String   @id @default(cuid())
+  userId     String?
   playerName String
   category   String   // science | radar | safety | history
   score      Int
@@ -20,8 +55,59 @@ model QuizAttempt {
   seconds    Int
   createdAt  DateTime @default(now())
 
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@index([category, score])
   @@index([createdAt])
+  @@index([userId, category])
+}
+
+model UserVehicle {
+  id         String   @id @default(cuid())
+  userId     String
+  vehicleKey String
+  unlockedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, vehicleKey])
+  @@index([userId])
+}
+
+model FavoriteCamera {
+  id       String   @id @default(cuid())
+  userId   String
+  cameraId String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cameraId])
+  @@index([userId])
+}
+
+model WatchedArea {
+  id          String   @id @default(cuid())
+  userId      String
+  label       String
+  lat         Float
+  lon         Float
+  radiusMiles Int      @default(50)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model DashboardPreference {
+  id          String @id @default(cuid())
+  userId      String @unique
+  cardOrder   String @default("profile,progress,garage,cams,areas,map")
+  hiddenCards String @default("")
+  mapLayers   String @default("radar,warnings,cams")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ChaseLogEntry {
@@ -41,12 +127,16 @@ model ChaseLogEntry {
 }
 
 model SavedLocation {
-  id    String @id @default(cuid())
-  label String
-  lat   Float
-  lon   Float
+  id     String  @id @default(cuid())
+  userId String?
+  label  String
+  lat    Float
+  lon    Float
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([lat, lon])
+  @@index([userId])
 }
 
 model TrackerIncident {

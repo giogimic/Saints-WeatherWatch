@@ -9,9 +9,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/cams"
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/store"
+	"github.com/saints-weatherwatch/backend/internal/vehicles"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 )
 
@@ -27,12 +29,25 @@ type overviewResponse struct {
 
 // Mount attaches all API routes to the provided router.
 func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache) {
+	limiter := auth.NewPINLimiter()
 	r.Route("/api", func(r chi.Router) {
+		r.Use(auth.Middleware(st))
+
 		r.Get("/health", healthHandler(st))
 		r.Get("/alerts", alertsHandler(cache))
 		r.Get("/overview", overviewHandler(cache))
 		r.Get("/history", historyHandler(st))
 		r.Delete("/history/{id}", deleteHistoryHandler(st))
+
+		// Auth
+		r.Post("/auth/signup", signupHandler(st, limiter))
+		r.Post("/auth/login", loginHandler(st, limiter))
+		r.Post("/auth/logout", logoutHandler(st))
+		r.Get("/auth/me", meHandler(st))
+
+		// Vehicles
+		r.Get("/vehicles", vehiclesCatalogHandler())
+		r.Post("/vehicles/equip", equipVehicleHandler(st))
 
 		// Chase Logs
 		r.Get("/chaselogs", getChaseLogsHandler(st))
@@ -42,6 +57,18 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		// Quiz attempts + leaderboard
 		r.Get("/quiz/leaderboard", getQuizLeaderboardHandler(st))
 		r.Post("/quiz/attempts", createQuizAttemptHandler(st))
+		r.Get("/quiz/mine", myQuizStatsHandler(st))
+
+		// Dashboard (login required handlers enforce auth)
+		r.Get("/favorites", getFavoritesHandler(st))
+		r.Post("/favorites", addFavoriteHandler(st))
+		r.Delete("/favorites/{cameraId}", removeFavoriteHandler(st))
+		r.Get("/watched-areas", getWatchedAreasHandler(st))
+		r.Post("/watched-areas", createWatchedAreaHandler(st))
+		r.Delete("/watched-areas/{id}", deleteWatchedAreaHandler(st))
+		r.Get("/watched-areas/{id}/expand", expandWatchedAreaHandler(st, cache))
+		r.Get("/dashboard/prefs", getDashboardPrefsHandler(st))
+		r.Put("/dashboard/prefs", saveDashboardPrefsHandler(st))
 
 		// Saved chase / home-base pins
 		r.Get("/locations", getSavedLocationsHandler(st))
@@ -330,18 +357,34 @@ func createQuizAttemptHandler(st *store.Store) http.HandlerFunc {
 			return
 		}
 
+		opts := []db.QuizAttemptSetParam{}
+		user, loggedIn := auth.UserFromContext(r.Context())
+		if loggedIn {
+			name = user.ChaserName
+			opts = append(opts, db.QuizAttempt.User.Link(db.User.ID.Equals(user.ID)))
+		}
+
 		entry, err := st.Client.QuizAttempt.CreateOne(
 			db.QuizAttempt.PlayerName.Set(name),
 			db.QuizAttempt.Category.Set(req.Category),
 			db.QuizAttempt.Score.Set(req.Score),
 			db.QuizAttempt.Total.Set(req.Total),
 			db.QuizAttempt.Seconds.Set(req.Seconds),
+			opts...,
 		).Exec(r.Context())
 		if err != nil {
 			http.Error(w, "Failed to save attempt", http.StatusInternalServerError)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(entry)
+
+		unlocked := []string{}
+		if loggedIn {
+			unlocked = vehicles.EvaluateAfterAttempt(st, r.Context(), user.ID, req.Category, req.Score, req.Total)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"attempt":  entry,
+			"unlocked": unlocked,
+		})
 	}
 }
 
@@ -389,11 +432,12 @@ type createSavedLocationReq struct {
 func getSavedLocationsHandler(st *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if st == nil {
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok || st == nil {
 			_ = json.NewEncoder(w).Encode([]any{})
 			return
 		}
-		rows, err := st.Client.SavedLocation.FindMany().OrderBy(
+		rows, err := st.Client.SavedLocation.FindMany(db.SavedLocation.UserID.Equals(user.ID)).OrderBy(
 			db.SavedLocation.Label.Order(db.SortOrderAsc),
 		).Exec(r.Context())
 		if err != nil {
@@ -407,8 +451,9 @@ func getSavedLocationsHandler(st *store.Store) http.HandlerFunc {
 func createSavedLocationHandler(st *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if st == nil {
-			http.Error(w, "DB not initialized", http.StatusInternalServerError)
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok || st == nil {
+			http.Error(w, "Login required to save pins", http.StatusUnauthorized)
 			return
 		}
 
@@ -433,6 +478,7 @@ func createSavedLocationHandler(st *store.Store) http.HandlerFunc {
 			db.SavedLocation.Label.Set(label),
 			db.SavedLocation.Lat.Set(req.Lat),
 			db.SavedLocation.Lon.Set(req.Lon),
+			db.SavedLocation.UserID.Set(user.ID),
 		).Exec(r.Context())
 		if err != nil {
 			http.Error(w, "Failed to save location", http.StatusInternalServerError)
@@ -444,12 +490,22 @@ func createSavedLocationHandler(st *store.Store) http.HandlerFunc {
 
 func deleteSavedLocationHandler(st *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if st == nil {
-			http.Error(w, "DB not initialized", http.StatusInternalServerError)
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok || st == nil {
+			http.Error(w, "Login required", http.StatusUnauthorized)
 			return
 		}
 		id := chi.URLParam(r, "id")
-		_, err := st.Client.SavedLocation.FindUnique(db.SavedLocation.ID.Equals(id)).Delete().Exec(r.Context())
+		row, err := st.Client.SavedLocation.FindUnique(db.SavedLocation.ID.Equals(id)).Exec(r.Context())
+		if err != nil || row == nil {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		if uid, has := row.UserID(); !has || uid != user.ID {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		_, err = st.Client.SavedLocation.FindUnique(db.SavedLocation.ID.Equals(id)).Delete().Exec(r.Context())
 		if err != nil {
 			http.Error(w, "Failed to delete location", http.StatusInternalServerError)
 			return

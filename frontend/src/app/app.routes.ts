@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { authGuard } from './core/auth.guard';
 
 export const routes: Routes = [
   {
@@ -36,6 +37,19 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/play/play.component').then((m) => m.PlayComponent),
     title: 'Play — Saints Weather Watch',
+  },
+  {
+    path: 'account',
+    loadComponent: () =>
+      import('./features/account/account.component').then((m) => m.AccountComponent),
+    title: 'Account — Saints Weather Watch',
+  },
+  {
+    path: 'dashboard',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
+    title: 'Dashboard — Saints Weather Watch',
   },
   {
     path: 'archive',

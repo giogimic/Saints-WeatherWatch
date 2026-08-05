@@ -22,6 +22,7 @@ type nwsFeatureCollection struct {
 
 type nwsFeature struct {
 	Properties nwsProperties `json:"properties"`
+	Geometry   json.RawMessage `json:"geometry"`
 }
 
 type nwsProperties struct {
@@ -157,7 +158,7 @@ func mapFeature(f nwsFeature, scope string) Alert {
 	}
 	category := strings.ToLower(strings.ReplaceAll(p.Event, " ", "-"))
 
-	return Alert{
+	a := Alert{
 		ID:            p.ID,
 		Severity:      p.Severity,
 		Area:          truncateRunes(p.AreaDesc, 120),
@@ -175,6 +176,75 @@ func mapFeature(f nwsFeature, scope string) Alert {
 		SourceURL:     httpSourceURL(p.ID),
 		EventCode:     eventCodeFor(p.Event),
 		Office:        p.SenderName,
+	}
+
+	if len(f.Geometry) > 0 && string(f.Geometry) != "null" {
+		var geom interface{}
+		if err := json.Unmarshal(f.Geometry, &geom); err == nil {
+			a.Geometry = geom
+			if lat, lon, ok := centroidFromGeometry(geom); ok {
+				a.CentroidLat = &lat
+				a.CentroidLon = &lon
+			}
+		}
+	}
+	return a
+}
+
+func centroidFromGeometry(geom interface{}) (lat, lon float64, ok bool) {
+	m, okm := geom.(map[string]interface{})
+	if !okm {
+		return 0, 0, false
+	}
+	coords := collectCoords(m["coordinates"])
+	if len(coords) == 0 {
+		return 0, 0, false
+	}
+	var sumLat, sumLon float64
+	for _, c := range coords {
+		sumLon += c[0]
+		sumLat += c[1]
+	}
+	n := float64(len(coords))
+	return sumLat / n, sumLon / n, true
+}
+
+func collectCoords(node interface{}) [][2]float64 {
+	arr, ok := node.([]interface{})
+	if !ok || len(arr) == 0 {
+		return nil
+	}
+	// Position: [lon, lat]
+	if len(arr) >= 2 {
+		if lon, ok1 := asFloat(arr[0]); ok1 {
+			if lat, ok2 := asFloat(arr[1]); ok2 {
+				// Heuristic: lon typically in [-180,180], and nested rings are arrays of arrays
+				if _, isArr := arr[0].([]interface{}); !isArr {
+					return [][2]float64{{lon, lat}}
+				}
+			}
+		}
+	}
+	out := make([][2]float64, 0, 32)
+	for _, child := range arr {
+		out = append(out, collectCoords(child)...)
+	}
+	return out
+}
+
+func asFloat(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case json.Number:
+		f, err := n.Float64()
+		return f, err == nil
+	default:
+		return 0, false
 	}
 }
 
