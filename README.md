@@ -75,7 +75,7 @@ Open `http://localhost:4200` in your browser.
 ## Features (Roadmap)
 
 - [x] **Phase 1** — Project scaffold, Go server, Prisma DB, Angular app with storm theme
-- [ ] **Phase 2** — NWS alerts pipeline + home dashboard + alerts feed
+- [x] **Phase 2** — NWS alerts pipeline + home dashboard + alerts feed
 - [ ] **Phase 3** — Live map with animated radar, warning polygons, storm reports
 - [ ] **Phase 4** — WebSocket live updates + new-warning banner
 - [ ] **Phase 5** — Interactive Learn hub (tornado science, EF-scale, radar reading)

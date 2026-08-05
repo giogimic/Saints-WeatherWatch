@@ -1,95 +1,72 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Color Definitions ---
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CDN_DIR="$ROOT_DIR/frontend"
-BACKEND_DIR="$ROOT_DIR/backend"
 SUBDOMAIN=""
 
-if [ ! -d "$ROOT_DIR" ]; then
-  echo "Project root not found: $ROOT_DIR"
+echo -e "${CYAN}======================================================${NC}"
+echo -e "${CYAN}🚀 SaintsGamingweb - WeatherWatch Deployment Script 🚀${NC}"
+echo -e "${CYAN}======================================================${NC}\n"
+
+# --- Pre-flight Checks ---
+if ! command -v docker >/dev/null 2>&1; then
+  echo -e "${RED}❌ Error: Docker is not installed or not in PATH.${NC}"
+  echo -e "Please install Docker and Docker Compose before deploying."
   exit 1
 fi
 
-if [ ! -f "$ROOT_DIR/frontend/package.json" ]; then
-  echo "Frontend package.json not found. Make sure the Angular app is in frontend/"
+if [ ! -f "$ROOT_DIR/docker-compose.yml" ]; then
+  echo -e "${RED}❌ Error: docker-compose.yml not found in $ROOT_DIR${NC}"
   exit 1
 fi
 
-if [ ! -f "$ROOT_DIR/backend/go.mod" ]; then
-  echo "Backend go.mod not found. Make sure the Go server is in backend/"
+if [ ! -f "$ROOT_DIR/Caddyfile" ]; then
+  echo -e "${RED}❌ Error: Caddyfile not found in $ROOT_DIR${NC}"
   exit 1
 fi
 
-if command -v docker >/dev/null 2>&1; then
-  DOCKER_OK=1
-else
-  DOCKER_OK=0
-fi
+echo -e "${GREEN}✓ Docker detected${NC}"
+echo -e "${GREEN}✓ Compose config found${NC}"
+echo -e "${GREEN}✓ Caddyfile found${NC}\n"
 
-if [ -f "$ROOT_DIR/Caddyfile" ]; then
-  echo "Detected Caddyfile at $ROOT_DIR/Caddyfile"
-  CADDY_FOUND=1
-else
-  echo "No Caddyfile found at the repo root."
-  CADDY_FOUND=0
-fi
-
-if [ $CADDY_FOUND -eq 0 ] && [ $DOCKER_OK -eq 1 ]; then
-  echo "Docker is available, but no root Caddyfile was found."
-  echo "If your deployment is containerized, make sure the Caddyfile is mounted into the container or generated from the service config."
-fi
-
+# --- Prompt for Subdomain ---
 while [ -z "$SUBDOMAIN" ]; do
-  read -rp "Enter the subdomain to use for the live preview (for example: weatherwatch): " SUBDOMAIN
+  echo -e "${YELLOW}Please enter the target subdomain (e.g., 'weather' for weather.saintsgamingweb.com):${NC}"
+  read -rp "> " SUBDOMAIN
   if [ -z "$SUBDOMAIN" ]; then
-    echo "A subdomain is required."
+    echo -e "${RED}A subdomain is required!${NC}"
   fi
 done
 
-if command -v node >/dev/null 2>&1; then
-  echo "Installing frontend dependencies with npm"
-  (cd "$CDN_DIR" && npm install)
-else
-  echo "Node.js is not installed. Install Node.js 20+ before building the frontend."
-  exit 1
-fi
+FULL_DOMAIN="${SUBDOMAIN}.saintsgamingweb.com"
+echo -e "\n${BLUE}➔ Configuring Caddy for: ${CYAN}https://${FULL_DOMAIN}${NC}"
 
-if command -v go >/dev/null 2>&1; then
-  echo "Installing backend dependencies with Go modules"
-  (cd "$BACKEND_DIR" && go mod download)
-else
-  echo "Go is not installed. Install Go 1.22+ before building the backend."
-  exit 1
-fi
+# --- Configure Caddyfile ---
+# Back up original Caddyfile just in case
+cp "$ROOT_DIR/Caddyfile" "$ROOT_DIR/Caddyfile.bak"
 
-if [ $DOCKER_OK -eq 1 ]; then
-  echo "Docker detected. Preferred deployment flow: run the app in a container and update the Caddyfile to match the chosen subdomain."
-else
-  echo "Docker was not detected. You can still build the frontend/backend locally, but containerized deployment will need Docker installed first."
-fi
+# Use perl to replace the first line domain (or any domain matching *.saintsgamingweb.com)
+perl -0pi -e "s#^[^\s]+\.saintsgamingweb\.com#${FULL_DOMAIN}#g" "$ROOT_DIR/Caddyfile" || true
 
-if [ $CADDY_FOUND -eq 1 ]; then
-  echo "Updating Caddyfile with subdomain: $SUBDOMAIN"
-  cp "$ROOT_DIR/Caddyfile" "$ROOT_DIR/Caddyfile.bak"
-  perl -0pi -e "s#https?://[^\s]+#https://${SUBDOMAIN}.example.com#g" "$ROOT_DIR/Caddyfile" || true
-  echo "Preview target will be https://${SUBDOMAIN}.example.com"
-else
-  echo "No Caddyfile detected. If you are using Docker, place the Caddyfile in the repo root or in the container config and set the host to ${SUBDOMAIN}.example.com."
-fi
+echo -e "${GREEN}✓ Caddyfile updated successfully.${NC}\n"
 
-echo "Building frontend"
-(cd "$CDN_DIR" && npm run build)
+# --- Launch Docker Compose ---
+echo -e "${BLUE}➔ Launching Docker containers...${NC}"
+echo -e "${YELLOW}(This may take a minute if building images for the first time)${NC}\n"
 
-echo "Testing backend"
-(cd "$BACKEND_DIR" && go test ./...)
+docker compose up -d --build
 
-cat <<EOF
-
-Deployment prep complete.
-Next steps:
-1. Confirm the Linux server has Node.js, Go, and Docker installed.
-2. Use the chosen subdomain: ${SUBDOMAIN}.example.com
-3. If you are using Docker, make sure the container mounts or includes the Caddyfile.
-4. Redeploy the site with the updated Caddy target.
-EOF
+echo -e "\n${CYAN}======================================================${NC}"
+echo -e "${GREEN}🎉 Deployment Complete!${NC}"
+echo -e "${CYAN}======================================================${NC}"
+echo -e "Your WeatherWatch cluster is spinning up."
+echo -e "It will be available shortly at: ${YELLOW}https://${FULL_DOMAIN}${NC}"
+echo -e "Run '${CYAN}docker compose logs -f${NC}' to view live logs."

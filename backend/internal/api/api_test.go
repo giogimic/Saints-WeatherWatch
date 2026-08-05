@@ -5,13 +5,44 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/saints-weatherwatch/backend/internal/nws"
 )
+
+func mockCache() *nws.Cache {
+	c := nws.NewCache(nil)
+	now := time.Now().UTC()
+	c.Set(nws.AlertsResponse{
+		GeneratedAt: now.Format(time.RFC3339),
+		Alerts: []nws.Alert{
+			{
+				ID:            "nws-001",
+				Severity:      "Extreme",
+				Area:          "Central Plains",
+				Headline:      "Tornado Warning",
+				Status:        "active",
+				StartsAt:      now.Add(-8 * time.Minute).Format(time.RFC3339),
+				EndsAt:        now.Add(22 * time.Minute).Format(time.RFC3339),
+				Category:      "tornado",
+				Why:           "A strong rotating storm is present",
+				LocationIndex: "Zone A: close to the storm core",
+				Cause:         "Wind shear and warm, unstable air",
+				WhatToDo:      "Take shelter",
+			},
+		},
+		History: []nws.HistoryLog{
+			{ID: "hist-001", Category: "tornado", Headline: "Tornado Warning", LastSeen: now.Format(time.RFC3339), Count: 1},
+		},
+	})
+	return c
+}
 
 func TestAlertsEndpointReturnsStructuredPayload(t *testing.T) {
 	r := chi.NewRouter()
-	Mount(r, nil)
+	cache := mockCache()
+	Mount(r, nil, cache)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/alerts", nil)
 	rr := httptest.NewRecorder()
@@ -54,7 +85,8 @@ func TestAlertsEndpointReturnsStructuredPayload(t *testing.T) {
 
 func TestOverviewEndpointReturnsSummary(t *testing.T) {
 	r := chi.NewRouter()
-	Mount(r, nil)
+	cache := mockCache()
+	Mount(r, nil, cache)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/overview", nil)
 	rr := httptest.NewRecorder()

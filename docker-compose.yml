@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:latest
+    container_name: weatherwatch_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: weatherwatch_frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: weatherwatch_backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=file:/app/weatherwatch.db
+      - PORT=8080
+    expose:
+      - "8080"
+    volumes:
+      - weatherwatch_db:/app
+
+volumes:
+  caddy_data:
+  caddy_config:
+  weatherwatch_db:

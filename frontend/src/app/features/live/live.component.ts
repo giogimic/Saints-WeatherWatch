@@ -89,9 +89,9 @@ export class LiveComponent {
       region: 'South Coast',
       status: 'LIVE',
       description: 'Harbor visibility and coastal pass-through conditions for the Portland corridor.',
-      embedUrl: 'https://www.youtube.com/embed/ScMzIvxBSi4?si=zE3qM1FXAI5s3mks',
+      embedUrl: 'https://www.youtube.com/embed/x_ruIH2UmjQ?autoplay=1&mute=1',
       sourceUrl: 'https://www.youtube.com/results?search_query=portland+harbor+weather+cam',
-      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/ScMzIvxBSi4?si=zE3qM1FXAI5s3mks'),
+      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/x_ruIH2UmjQ?autoplay=1&mute=1'),
     },
     {
       id: 'bangor-coast',
@@ -99,9 +99,9 @@ export class LiveComponent {
       region: 'Penobscot Bay',
       status: 'LIVE',
       description: 'Coastal motion, cloud deck behavior, and movement across the interstate corridor.',
-      embedUrl: 'https://www.youtube.com/embed/aqz-KE-bpKQ?si=I_zccqMHE9j4H2IH',
+      embedUrl: 'https://www.youtube.com/embed/17b2pL34z0s?autoplay=1&mute=1',
       sourceUrl: 'https://www.youtube.com/results?search_query=bangor+weather+cam',
-      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/aqz-KE-bpKQ?si=I_zccqMHE9j4H2IH'),
+      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/17b2pL34z0s?autoplay=1&mute=1'),
     },
     {
       id: 'downeast-ridge',
@@ -109,9 +109,9 @@ export class LiveComponent {
       region: 'Mount Desert',
       status: 'LIVE',
       description: 'A high-exposure ridge view with rapid cloud changes and marine wind buildup.',
-      embedUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ?si=AGj2xVdr2Exr1Kgc',
+      embedUrl: 'https://www.youtube.com/embed/z2XQPOmeSCU?autoplay=1&mute=1',
       sourceUrl: 'https://www.youtube.com/results?search_query=downeast+storm+cam',
-      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/dQw4w9WgXcQ?si=AGj2xVdr2Exr1Kgc'),
+      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/z2XQPOmeSCU?autoplay=1&mute=1'),
     },
     {
       id: 'maine-roadwatch',
@@ -119,9 +119,9 @@ export class LiveComponent {
       region: 'Statewide',
       status: 'UP NEXT',
       description: 'Road conditions and surface visibility updates for storm-sensitive highway runs.',
-      embedUrl: 'https://www.youtube.com/embed/ysz5S6PUM-U?si=fd_8JdF2g5ejl7mE',
+      embedUrl: 'https://www.youtube.com/embed/SH63YaIWyK0?autoplay=1&mute=1',
       sourceUrl: 'https://www.youtube.com/results?search_query=maine+road+camera',
-      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/ysz5S6PUM-U?si=fd_8JdF2g5ejl7mE'),
+      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/SH63YaIWyK0?autoplay=1&mute=1'),
     },
   ];
 

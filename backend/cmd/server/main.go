@@ -15,6 +15,7 @@ import (
 
 	"github.com/saints-weatherwatch/backend/internal/api"
 	"github.com/saints-weatherwatch/backend/internal/config"
+	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/store"
 )
 
@@ -45,8 +46,14 @@ func main() {
 		MaxAge:           300,
 	}))
 
+	// NWS Alerts Cache
+	nwsCache := nws.NewCache(st)
+	bgCtx, bgCancel := context.WithCancel(context.Background())
+	defer bgCancel()
+	nwsCache.StartPipeline(bgCtx, 3*time.Minute)
+
 	// Routes
-	api.Mount(r, st)
+	api.Mount(r, st, nwsCache)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

@@ -27,6 +27,19 @@ export interface WeatherHistoryEntry {
   locationIndex: string;
 }
 
+export interface TrackerIncident {
+  id: string;
+  headline: string;
+  category: string;
+  severity: string;
+  area: string;
+  datePulled: string;
+  startsAt?: string;
+  endsAt?: string;
+  description?: string;
+  isTornado: boolean;
+}
+
 export interface WeatherAlertsResponse {
   generatedAt: string;
   alerts: WeatherAlert[];
@@ -55,5 +68,9 @@ export class WeatherService {
 
   getOverview(): Observable<WeatherOverviewResponse> {
     return this.http.get<WeatherOverviewResponse>('/api/overview');
+  }
+
+  getHistory(): Observable<TrackerIncident[]> {
+    return this.http.get<TrackerIncident[]>('/api/history');
   }
 }

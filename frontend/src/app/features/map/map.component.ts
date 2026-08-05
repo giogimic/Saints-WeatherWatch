@@ -116,9 +116,18 @@ interface Tracker {
             <div class="badge badge-secondary badge-outline">Coastal Maine / inland crossovers</div>
           </div>
 
+          <div class="mb-4 rounded-2xl border border-base-300 bg-base-300/40 p-3 text-sm text-base-content/70">
+            <span class="font-semibold text-base-content">Selected tracker:</span>
+            {{ selectedTrackerName ?? 'None' }}
+          </div>
+
           <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             @for (tracker of trackers; track tracker.name) {
-              <article class="card bg-base-200/70 border border-base-300 shadow-lg">
+              <button
+                type="button"
+                class="card bg-base-200/70 border border-base-300 shadow-lg text-left transition hover:-translate-y-0.5 hover:border-primary {{ selectedTrackerName === tracker.name ? 'ring-2 ring-primary' : '' }}"
+                (click)="selectTracker(tracker.name)"
+              >
                 <div class="card-body">
                   <div class="flex items-start justify-between gap-3">
                     <div>
@@ -132,7 +141,7 @@ interface Tracker {
                   </div>
                   <p class="mt-2 text-sm text-base-content/70">{{ tracker.note }}</p>
                 </div>
-              </article>
+              </button>
             }
           </div>
         </section>
@@ -146,8 +155,10 @@ interface Tracker {
 export class MapComponent implements AfterViewInit, OnDestroy {
   activeOverlay: OverlayKey = 'radar';
   overlayKeys: OverlayKey[] = ['radar', 'warnings', 'reports', 'wind'];
+  selectedTrackerName: string | null = 'Portland';
   private map?: L.Map;
   private readonly overlays = new Map<OverlayKey, L.LayerGroup>();
+  private readonly markers = new Map<string, L.CircleMarker>();
 
   overlayLabels: Record<OverlayKey, { label: string; icon: string; description: string }> = {
     radar: {
@@ -255,6 +266,19 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     this.applyOverlay(key);
   }
 
+  selectTracker(trackerName: string): void {
+    this.selectedTrackerName = trackerName;
+    const tracker = this.trackers.find((item) => item.name === trackerName);
+    const marker = tracker ? this.markers.get(trackerName) : undefined;
+
+    if (!tracker || !marker || !this.map) {
+      return;
+    }
+
+    this.map.flyTo(tracker.coordinates, 8, { duration: 0.8 });
+    marker.openPopup();
+  }
+
   private buildLayers(): void {
     const keyOrder: OverlayKey[] = ['radar', 'warnings', 'reports', 'wind'];
     const styles: Record<OverlayKey, { color: string; fillColor: string; radius: number }> = {
@@ -285,6 +309,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
           </div>
         `);
 
+        this.markers.set(tracker.name, marker);
         marker.addTo(layer);
       }
 

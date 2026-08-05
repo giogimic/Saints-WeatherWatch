@@ -48,3 +48,17 @@ model SavedLocation {
 
   @@index([lat, lon])
 }
+model TrackerIncident {
+  id          String   @id
+  headline    String
+  category    String
+  severity    String
+  area        String
+  datePulled  DateTime @default(now())
+  startsAt    String?
+  endsAt      String?
+  description String?
+  isTornado   Boolean  @default(false)
+
+  @@index([category, datePulled])
+}
