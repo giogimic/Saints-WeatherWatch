@@ -14,6 +14,7 @@ COPY . .
 
 # Generate Prisma Client (requires schema.prisma and downloads the query engine)
 RUN go run github.com/steebchen/prisma-client-go generate
+RUN go run github.com/steebchen/prisma-client-go db push
 
 # Build the server
 RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/server
