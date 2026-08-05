@@ -261,13 +261,62 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       attribution: 'NASA GIBS',
     });
 
-    // Default to satellite layer to showcase the new feature
-    satelliteLayer.addTo(this.map);
+    // Default to street view for better contrast with radar overlay
+    streetLayer.addTo(this.map);
 
-    L.control.layers({
-      "Satellite (NASA)": satelliteLayer,
-      "Street Map": streetLayer
-    }).addTo(this.map);
+    // NOAA NEXRAD Radar overlay (Iowa State Mesonet)
+    const radarLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi', {
+      layers: 'nexrad-n0r-900913',
+      format: 'image/png',
+      transparent: true,
+      attribution: 'NOAA NEXRAD via Iowa State Mesonet',
+      opacity: 0.6,
+    } as any);
+
+    // NWS Weather Warnings overlay
+    const warningsLayer = L.tileLayer.wms('https://mapservices.weather.noaa.gov/eventdriven/services/WWA/watch_warn_adv/MapServer/WMSServer', {
+      layers: '0,1',
+      format: 'image/png',
+      transparent: true,
+      attribution: 'NOAA NWS',
+      opacity: 0.5,
+    } as any);
+
+    L.control.layers(
+      {
+        "Street Map": streetLayer,
+        "Satellite (NASA)": satelliteLayer,
+      },
+      {
+        "🌧️ NEXRAD Radar": radarLayer,
+        "⚠️ NWS Warnings": warningsLayer,
+      }
+    ).addTo(this.map);
+
+    // Add radar by default
+    radarLayer.addTo(this.map);
+
+    // Camera location markers
+    const camIcon = L.divIcon({
+      html: '<span style="font-size:20px;">📷</span>',
+      className: '',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+
+    const camLocations = [
+      { name: 'FKOC Stadium Cam', coords: [47.234, -68.5895] as [number, number] },
+      { name: 'Dickey Bridge (MaineDOT)', coords: [47.21, -68.85] as [number, number] },
+      { name: 'Route 11 Soucy Hill', coords: [46.12, -68.14] as [number, number] },
+      { name: 'Island Falls (Rt 11)', coords: [46.01, -68.26] as [number, number] },
+      { name: 'Smyrna (Rt 2)', coords: [46.13, -68.00] as [number, number] },
+    ];
+
+    for (const cam of camLocations) {
+      L.marker(cam.coords, { icon: camIcon })
+        .bindPopup(`<strong>${cam.name}</strong><br><a href="/live" style="color:#00e5ff;">Open Live Feed →</a>`)
+        .addTo(this.map);
+    }
 
     this.buildLayers();
     this.applyOverlay(this.activeOverlay);

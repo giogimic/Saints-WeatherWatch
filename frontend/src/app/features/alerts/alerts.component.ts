@@ -10,121 +10,122 @@ import { WeatherService } from '../../core/weather.service';
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
-    <div class="min-h-[calc(100vh-4rem)] p-6 storm-bg">
-      <div class="max-w-5xl mx-auto">
-        <div class="mb-10 text-center relative">
-          <!-- Fun diagonal stripes decoration -->
-          <div class="absolute inset-0 opacity-[0.05] pointer-events-none -z-10" style="background: repeating-linear-gradient(45deg, transparent, transparent 15px, #fff 15px, #fff 30px);"></div>
-          
-          <div class="mx-auto mb-6 flex h-28 w-28 items-center justify-center rounded-3xl bg-base-100 border-4 border-base-300 shadow-[6px_6px_0_0_rgba(69,44,99,1)] rotate-3 hover:-rotate-3 transition-transform">
-            <svg viewBox="0 0 120 120" class="h-16 w-16 text-accent drop-shadow-md" fill="none" stroke="currentColor" stroke-width="4">
-              <path d="M58 18l-10 24h10l-6 42 24-30H56l1-36z" fill="currentColor" opacity="0.16" />
-              <path d="M58 18l-10 24h10l-6 42 24-30H56l1-36z" stroke="currentColor" />
-              <path d="M39 60l-8 6M76 48l-7 7M52 79l-5 5" stroke="currentColor" opacity="0.75" />
-            </svg>
-          </div>
-          <h1 class="text-5xl md:text-6xl font-black text-white mb-4 italic uppercase tracking-wider font-sans drop-shadow-[3px_3px_0_rgba(69,44,99,1)]">Storm Alerts</h1>
-          <p class="text-base-content/80 mb-6 max-w-3xl mx-auto text-sm md:text-lg font-bold bg-base-200/50 p-4 rounded-2xl border-2 border-base-300 inline-block">
-            Watch this feed like a quick storm dashboard. If it says "warning," it means the weather is acting up right now.
+    <div class="min-h-[calc(100vh-4rem)] p-4 md:p-6">
+      <div class="max-w-4xl mx-auto">
+
+        <!-- Compact Header -->
+        <div class="text-center mb-6">
+          <h1 class="text-4xl md:text-5xl font-black text-white italic uppercase tracking-wider font-sans drop-shadow-[3px_3px_0_rgba(69,44,99,1)]">
+            🚨 Storm Alerts
+          </h1>
+          <p class="text-base-content/60 text-sm font-bold uppercase tracking-widest mt-2">
+            Live NWS feed • Auto-refreshes every 60s
           </p>
         </div>
 
-        <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] mb-8">
-          <article class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-6">
-            <div class="mb-4 flex items-center gap-4 border-b-4 border-base-300 pb-4">
-              <div class="rounded-2xl bg-accent/20 border-2 border-accent p-3 text-accent shadow-sm rotate-[-5deg]">
-                <svg viewBox="0 0 64 64" class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="4">
-                  <path d="M14 44h36" stroke="currentColor" opacity="0.4" />
-                  <path d="M18 34l8-8 8 8 10-10 8 8" stroke="currentColor" />
-                  <path d="M17 52h30" stroke="currentColor" opacity="0.3" />
-                </svg>
-              </div>
-              <h2 class="text-2xl font-black text-accent uppercase italic font-sans tracking-wide">Fast rules</h2>
-            </div>
-            <ul class="list-disc pl-5 text-base font-semibold text-base-content/80 space-y-3 marker:text-accent">
-              <li><strong class="text-white bg-accent/20 px-2 py-0.5 rounded-md">Watch</strong> means conditions are possible.</li>
-              <li><strong class="text-white bg-error/20 px-2 py-0.5 rounded-md text-error">Warning</strong> means the storm is already being felt or expected very soon.</li>
-              <li>Use the live cams to spot what the sky is doing before you head out.</li>
-            </ul>
-          </article>
-
-          <article class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-6">
-            <div class="mb-4 flex items-center gap-4 border-b-4 border-base-300 pb-4">
-              <div class="rounded-2xl bg-primary/20 border-2 border-primary p-3 text-primary shadow-sm rotate-[5deg]">
-                <svg viewBox="0 0 64 64" class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="4">
-                  <rect x="10" y="18" width="44" height="28" rx="6" stroke="currentColor" opacity="0.6" />
-                  <path d="M20 28h24M20 36h16" stroke="currentColor" />
-                </svg>
-              </div>
-              <h2 class="text-2xl font-black text-primary uppercase italic font-sans tracking-wide">Quick Links</h2>
-            </div>
-            <div class="flex flex-wrap gap-3 mt-4">
-              <a class="btn btn-primary border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase" routerLink="/live">Live Cams</a>
-              <a class="btn btn-secondary border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase" routerLink="/archive">Archive</a>
-              <a class="btn btn-accent border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase" routerLink="/map">Storm Map</a>
-            </div>
-          </article>
-        </div>
-
         @if (alerts$ | async; as response) {
-          @if (response?.alerts?.length) {
-            <div class="grid gap-6 md:grid-cols-2">
+
+          <!-- Summary Stats Bar -->
+          <div class="flex flex-wrap gap-3 justify-center mb-6">
+            <div class="badge gap-2 text-sm py-4 px-5 border-2 border-base-300 rounded-xl font-black uppercase bg-base-100">
+              Total: <span class="text-primary">{{ response.alerts.length }}</span>
+            </div>
+            <div class="badge gap-2 text-sm py-4 px-5 border-2 border-error/50 rounded-xl font-black uppercase bg-error/10 text-error">
+              ⚠ Severe+: <span>{{ countSevere(response.alerts) }}</span>
+            </div>
+            <div class="badge gap-2 text-sm py-4 px-5 border-2 border-base-300 rounded-xl font-black uppercase bg-base-100">
+              Updated: <span class="text-accent">{{ formatTime(response.generatedAt) }}</span>
+            </div>
+          </div>
+
+          @if (response.alerts.length > 0) {
+            <!-- Compact Alert List -->
+            <div class="space-y-3">
               @for (alert of response.alerts; track alert.id) {
-                <article class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[8px_8px_0_0_rgba(69,44,99,1)] p-6 relative overflow-hidden group hover:-translate-y-2 transition-transform">
-                  <!-- Highlight bar -->
-                  <div class="absolute left-0 top-0 bottom-0 w-4" [ngClass]="getSeverityColorClass(alert.severity)"></div>
-                  
-                  <div class="pl-4">
-                    <div class="flex flex-wrap items-start justify-between gap-3 mb-4 border-b-4 border-base-300 pb-4">
-                      <div>
-                        <div class="badge font-black uppercase border-2 shadow-sm mb-3 px-3 py-4 text-xs rounded-xl" [ngClass]="getSeverityBgClass(alert.severity)">
-                          {{ alert.severity }}
-                        </div>
-                        <h2 class="text-2xl font-black font-sans text-white leading-tight uppercase italic drop-shadow-sm">{{ alert.headline }}</h2>
-                        <p class="text-sm text-base-content/70 font-bold mt-1">📍 {{ alert.area }}</p>
-                      </div>
-                      <div class="text-right text-sm font-bold bg-base-200 p-3 rounded-2xl border-2 border-base-300 flex flex-col gap-1 shadow-inner">
-                        <div class="text-xs uppercase tracking-widest text-base-content/50">Status</div>
-                        <div class="text-primary">{{ statusLabel(alert.status) }}</div>
-                        <div class="text-error animate-pulse mt-1">{{ countdown(alert.endsAt) }}</div>
-                      </div>
-                    </div>
+                <article 
+                  class="bg-base-100 border-2 border-base-300 rounded-2xl shadow-[4px_4px_0_0_rgba(69,44,99,1)] relative overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-all"
+                  (click)="toggleAlert(alert.id)"
+                >
+                  <!-- Severity stripe -->
+                  <div class="absolute left-0 top-0 bottom-0 w-2" [ngClass]="getSeverityColorClass(alert.severity)"></div>
 
-                    <div class="mt-4 rounded-2xl bg-base-200/50 p-4 border-2 border-base-300 border-dashed">
-                      <div class="mb-2 font-black text-secondary uppercase tracking-wider text-xs">Why this alert exists</div>
-                      <p class="text-sm font-semibold italic text-base-content/80">{{ alert.why }}</p>
+                  <!-- Compact Header Row -->
+                  <div class="pl-5 pr-4 py-3 flex items-center gap-3">
+                    <span class="badge text-[10px] font-black uppercase border px-2 py-2 rounded-lg shrink-0" [ngClass]="getSeverityBgClass(alert.severity)">
+                      {{ alert.severity }}
+                    </span>
+                    <div class="flex-1 min-w-0">
+                      <h2 class="font-black font-sans text-white text-sm md:text-base leading-tight truncate">{{ alert.headline }}</h2>
+                      <p class="text-[11px] text-base-content/50 font-bold mt-0.5 truncate">📍 {{ alert.area }}</p>
                     </div>
-
-                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm font-bold">
-                      <div class="rounded-xl bg-base-200 border-2 border-base-300 px-4 py-3">
-                        <div class="text-[10px] uppercase tracking-widest text-base-content/50 mb-1">Category</div>
-                        <div class="text-primary">{{ alert.category }}</div>
-                      </div>
-                      <div class="rounded-xl bg-base-200 border-2 border-base-300 px-4 py-3">
-                        <div class="text-[10px] uppercase tracking-widest text-base-content/50 mb-1">Location index</div>
-                        <div class="text-accent">{{ alert.locationIndex }}</div>
-                      </div>
-                      <div class="rounded-xl bg-base-200 border-2 border-base-300 px-4 py-3 sm:col-span-2">
-                        <div class="text-[10px] uppercase tracking-widest text-base-content/50 mb-1">Cause</div>
-                        <div class="text-base-content">{{ alert.cause }}</div>
-                      </div>
-                      <div class="rounded-xl bg-error/10 border-2 border-error px-4 py-3 sm:col-span-2">
-                        <div class="text-[10px] uppercase tracking-widest text-error mb-1">What to do</div>
-                        <div class="text-white">{{ alert.whatToDo }}</div>
-                      </div>
+                    <div class="text-right shrink-0 hidden sm:block">
+                      <div class="text-[10px] text-error font-bold animate-pulse">{{ countdown(alert.endsAt) }}</div>
                     </div>
+                    <span class="text-base-content/30 text-xs shrink-0 transition-transform" [class.rotate-180]="isExpanded(alert.id)">▼</span>
                   </div>
+
+                  <!-- Expandable Details -->
+                  @if (isExpanded(alert.id)) {
+                    <div class="pl-5 pr-4 pb-4 border-t border-base-300 pt-3 space-y-3">
+                      
+                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold">
+                        <div class="bg-base-200 rounded-lg px-3 py-2">
+                          <div class="text-[9px] uppercase tracking-widest text-base-content/40 mb-0.5">Status</div>
+                          <div class="text-primary">{{ statusLabel(alert.status) }}</div>
+                        </div>
+                        <div class="bg-base-200 rounded-lg px-3 py-2">
+                          <div class="text-[9px] uppercase tracking-widest text-base-content/40 mb-0.5">Category</div>
+                          <div class="text-secondary">{{ alert.category }}</div>
+                        </div>
+                        <div class="bg-base-200 rounded-lg px-3 py-2">
+                          <div class="text-[9px] uppercase tracking-widest text-base-content/40 mb-0.5">Location</div>
+                          <div class="text-accent">{{ alert.locationIndex }}</div>
+                        </div>
+                        <div class="bg-base-200 rounded-lg px-3 py-2">
+                          <div class="text-[9px] uppercase tracking-widest text-base-content/40 mb-0.5">Remaining</div>
+                          <div class="text-error">{{ countdown(alert.endsAt) }}</div>
+                        </div>
+                      </div>
+
+                      @if (alert.why) {
+                        <div class="bg-base-200/50 rounded-xl p-3 border border-base-300 border-dashed">
+                          <div class="text-[9px] uppercase tracking-widest text-secondary font-black mb-1">Why this alert exists</div>
+                          <p class="text-xs text-base-content/80 font-semibold italic">{{ alert.why }}</p>
+                        </div>
+                      }
+
+                      @if (alert.cause) {
+                        <div class="text-xs font-bold text-base-content/70">
+                          <span class="text-base-content/40 uppercase text-[9px] tracking-widest">Cause:</span> {{ alert.cause }}
+                        </div>
+                      }
+
+                      @if (alert.whatToDo) {
+                        <div class="bg-error/10 rounded-xl p-3 border border-error/30">
+                          <div class="text-[9px] uppercase tracking-widest text-error font-black mb-1">What to do</div>
+                          <p class="text-xs text-white font-bold">{{ alert.whatToDo }}</p>
+                        </div>
+                      }
+                    </div>
+                  }
                 </article>
               }
             </div>
           } @else {
-            <div class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-12 text-center">
-              <span class="text-6xl block mb-4">☀️</span>
-              <h3 class="text-2xl font-black text-white uppercase italic font-sans mb-2">All Clear</h3>
-              <p class="text-base-content/70 font-bold">No active weather alerts for your region. Enjoy the calm!</p>
+            <div class="bg-base-100 border-2 border-base-300 rounded-2xl shadow-[4px_4px_0_0_rgba(69,44,99,1)] p-10 text-center">
+              <span class="text-5xl block mb-3">☀️</span>
+              <h3 class="text-xl font-black text-white uppercase italic font-sans mb-1">All Clear</h3>
+              <p class="text-base-content/60 font-bold text-sm">No active weather alerts. Enjoy the calm!</p>
             </div>
           }
         }
+
+        <!-- Quick Links -->
+        <div class="flex flex-wrap gap-3 justify-center mt-6">
+          <a class="btn btn-sm btn-ghost border-2 border-base-300 rounded-xl font-black uppercase text-xs hover:-translate-y-0.5 transition-all" routerLink="/live">📹 Live Cams</a>
+          <a class="btn btn-sm btn-ghost border-2 border-base-300 rounded-xl font-black uppercase text-xs hover:-translate-y-0.5 transition-all" routerLink="/archive">🗄️ Archive</a>
+          <a class="btn btn-sm btn-ghost border-2 border-base-300 rounded-xl font-black uppercase text-xs hover:-translate-y-0.5 transition-all" routerLink="/map">🗺️ Storm Map</a>
+        </div>
       </div>
     </div>
   `,
@@ -134,6 +135,28 @@ export class AlertsComponent {
   private readonly weatherService = inject(WeatherService);
 
   alerts$ = timer(0, 60000).pipe(switchMap(() => this.weatherService.getAlerts()));
+
+  expandedAlerts = new Set<string>();
+
+  toggleAlert(id: string): void {
+    if (this.expandedAlerts.has(id)) {
+      this.expandedAlerts.delete(id);
+    } else {
+      this.expandedAlerts.add(id);
+    }
+  }
+
+  isExpanded(id: string): boolean {
+    return this.expandedAlerts.has(id);
+  }
+
+  countSevere(alerts: any[]): number {
+    return alerts.filter(a => a.severity === 'Severe' || a.severity === 'Extreme').length;
+  }
+
+  formatTime(value: string): string {
+    return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
 
   getSeverityColorClass(severity: string): string {
     switch (severity?.toLowerCase()) {
@@ -160,6 +183,6 @@ export class AlertsComponent {
   countdown(value: string): string {
     const distance = new Date(value).getTime() - Date.now();
     const minutes = Math.max(0, Math.round(distance / 60000));
-    return `${minutes} min remaining`;
+    return `${minutes}m left`;
   }
 }

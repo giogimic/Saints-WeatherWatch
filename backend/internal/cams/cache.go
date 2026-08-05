@@ -37,6 +37,7 @@ type Cache struct {
 func NewCache() *Cache {
 	return &Cache{
 		configs: []CameraConfig{
+			// === Fort Kent / Northern Maine ===
 			{
 				ID:              "fkoc-stadium",
 				URL:             "https://www.fortkentoc.org/webcam.jpg",
@@ -47,15 +48,38 @@ func NewCache() *Cache {
 				URL:             "https://www.maine.gov/mdot/cams/all/dickey_Public.jpg",
 				RefreshInterval: 60 * time.Second,
 			},
+			// === Aroostook County / Route 11 Corridor ===
 			{
 				ID:              "mdot-soucy",
 				URL:             "https://www.maine.gov/mdot/cams/all/rt11soucy_Public.jpg",
 				RefreshInterval: 60 * time.Second,
 			},
 			{
+				ID:              "mdot-island-falls",
+				URL:             "https://www.maine.gov/mdot/cams/all/islandfalls_Public.jpg",
+				RefreshInterval: 2 * time.Minute,
+			},
+			{
+				ID:              "mdot-smyrna",
+				URL:             "https://www.maine.gov/mdot/cams/all/smyrna_Public.jpg",
+				RefreshInterval: 2 * time.Minute,
+			},
+			// === NOAA Satellite Imagery ===
+			{
 				ID:              "goes-east",
 				URL:             "https://cdn.star.nesdis.noaa.gov/GOES16/ABI/SECTOR/ne/GEOCOLOR/1000x1000.jpg",
 				RefreshInterval: 5 * time.Minute,
+			},
+			{
+				ID:              "goes-east-ir",
+				URL:             "https://cdn.star.nesdis.noaa.gov/GOES16/ABI/SECTOR/ne/13/1000x1000.jpg",
+				RefreshInterval: 5 * time.Minute,
+			},
+			// === NOAA Radar Mosaic ===
+			{
+				ID:              "noaa-radar-ne",
+				URL:             "https://radar.weather.gov/ridge/standard/NORTHEAST_0.gif",
+				RefreshInterval: 3 * time.Minute,
 			},
 		},
 		images: make(map[string]CachedImage),
