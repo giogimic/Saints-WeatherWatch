@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/saints-weatherwatch/backend/internal/cams"
 	"github.com/saints-weatherwatch/backend/internal/nws"
 )
 
@@ -42,7 +43,7 @@ func mockCache() *nws.Cache {
 func TestAlertsEndpointReturnsStructuredPayload(t *testing.T) {
 	r := chi.NewRouter()
 	cache := mockCache()
-	Mount(r, nil, cache)
+	Mount(r, nil, cache, cams.NewCache())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/alerts", nil)
 	rr := httptest.NewRecorder()
@@ -86,7 +87,7 @@ func TestAlertsEndpointReturnsStructuredPayload(t *testing.T) {
 func TestOverviewEndpointReturnsSummary(t *testing.T) {
 	r := chi.NewRouter()
 	cache := mockCache()
-	Mount(r, nil, cache)
+	Mount(r, nil, cache, cams.NewCache())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/overview", nil)
 	rr := httptest.NewRecorder()

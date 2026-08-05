@@ -38,7 +38,8 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Post("/chaselogs", createChaseLogHandler(st))
 		r.Delete("/chaselogs/{id}", deleteChaseLogHandler(st))
 
-		// Camera proxy
+		// Camera proxy + listing
+		r.Get("/cams", camListHandler(camCache))
 		r.Get("/cams/{id}", camImageHandler(camCache))
 	})
 }
@@ -129,6 +130,16 @@ func historyHandler(st *store.Store) http.HandlerFunc {
 		}
 		if category := r.URL.Query().Get("category"); category != "" {
 			filters = append(filters, db.TrackerIncident.Category.Equals(category))
+		}
+		if scope := r.URL.Query().Get("scope"); scope != "" {
+			if scope == "national" {
+				filters = append(filters, db.TrackerIncident.Or(
+					db.TrackerIncident.Scope.Equals("usa"),
+					db.TrackerIncident.Scope.Equals("canada"),
+				))
+			} else {
+				filters = append(filters, db.TrackerIncident.Scope.Equals(scope))
+			}
 		}
 		if tornadoOnly := r.URL.Query().Get("tornadoOnly"); tornadoOnly == "true" {
 			filters = append(filters, db.TrackerIncident.IsTornado.Equals(true))
@@ -258,6 +269,13 @@ func deleteChaseLogHandler(st *store.Store) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func camListHandler(camCache *cams.Cache) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(camCache.ListMeta())
 	}
 }
 

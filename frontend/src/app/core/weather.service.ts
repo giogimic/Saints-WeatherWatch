@@ -34,6 +34,7 @@ export interface TrackerIncident {
   category: string;
   severity: string;
   area: string;
+  scope?: string; // maine | usa | canada | global
   datePulled: string;
   startsAt?: string;
   endsAt?: string;
@@ -94,12 +95,13 @@ export class WeatherService {
     );
   }
 
-  getHistory(filters?: { search?: string, severity?: string, category?: string, tornadoOnly?: boolean }): Observable<TrackerIncident[]> {
+  getHistory(filters?: { search?: string, severity?: string, category?: string, scope?: string, tornadoOnly?: boolean }): Observable<TrackerIncident[]> {
     let params = new URLSearchParams();
     if (filters) {
       if (filters.search) params.set('search', filters.search);
       if (filters.severity) params.set('severity', filters.severity);
       if (filters.category) params.set('category', filters.category);
+      if (filters.scope) params.set('scope', filters.scope);
       if (filters.tornadoOnly) params.set('tornadoOnly', 'true');
     }
     const query = params.toString() ? `?${params.toString()}` : '';

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/joho/godotenv"
 
 	"github.com/saints-weatherwatch/backend/internal/api"
 	"github.com/saints-weatherwatch/backend/internal/cams"
@@ -21,9 +22,11 @@ import (
 )
 
 func main() {
+	// Load backend/.env when present (ignored if missing).
+	_ = godotenv.Load()
+
 	cfg := config.Load()
 
-	// Initialize Prisma-backed store
 	st, err := store.New(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("store init failed: %v", err)
@@ -31,33 +34,34 @@ func main() {
 	defer st.Close()
 
 	r := chi.NewRouter()
-
-	// Middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
-		ExposedHeaders:   []string{"Link"},
+		ExposedHeaders:   []string{"Link", "X-Last-Updated"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
 
-	// NWS Alerts Cache
-	nwsCache := nws.NewCache(st)
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	defer bgCancel()
-	nwsCache.StartPipeline(bgCtx, 3*time.Minute)
 
-	// Camera image cache
+	nwsCache := nws.NewCache(st)
+	alertEvery := time.Duration(cfg.NWSAlertIntervalSec) * time.Second
+	if alertEvery < 30*time.Second {
+		alertEvery = 3 * time.Minute
+	}
+	nwsCache.StartPipeline(bgCtx, alertEvery)
+
 	camCache := cams.NewCache()
-	camCache.Start(bgCtx)
+	discoverEvery := time.Duration(cfg.CamDiscoverIntervalSec) * time.Second
+	camCache.Start(bgCtx.Done(), discoverEvery)
 
-	// Routes
 	api.Mount(r, st, nwsCache, camCache)
 
 	srv := &http.Server{
@@ -66,9 +70,8 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// Graceful shutdown
 	go func() {
-		log.Printf("Saints Weather Watch backend listening on :%s", cfg.Port)
+		log.Printf("Saints Weather Watch backend listening on :%s (db=%s)", cfg.Port, cfg.DatabaseURL)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
@@ -78,6 +81,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	log.Println("shutting down...")
+	bgCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

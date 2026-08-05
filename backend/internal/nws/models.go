@@ -10,9 +10,11 @@ type Alert struct {
 	EndsAt        string `json:"endsAt"`
 	Category      string `json:"category"`
 	Why           string `json:"why"`
-	LocationIndex string `json:"locationIndex"` // Mocked logic or mapping
+	LocationIndex string `json:"locationIndex"`
 	Cause         string `json:"cause"`
 	WhatToDo      string `json:"whatToDo"`
+	// maine | usa | canada | global — used by archive + live grouping
+	Scope string `json:"scope"`
 }
 
 type HistoryLog struct {

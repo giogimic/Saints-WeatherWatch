@@ -21,7 +21,7 @@ import { Observable, BehaviorSubject, switchMap, map } from 'rxjs';
           </div>
           <h1 class="text-5xl md:text-6xl font-black text-white mb-4 italic uppercase tracking-wider font-sans drop-shadow-[3px_3px_0_rgba(69,44,99,1)]">Archive</h1>
           <p class="text-base-content/80 max-w-3xl mx-auto text-sm md:text-lg font-bold bg-base-200/50 p-4 rounded-2xl border-2 border-base-300 inline-block">
-            Historical threat logs &amp; personal storm chase records. Search, filter, and relive past weather events.
+            Historical threat logs by region — Maine first, then USA &amp; Canada, then global — plus personal storm chase records.
           </p>
         </div>
 
@@ -50,6 +50,16 @@ import { Observable, BehaviorSubject, switchMap, map } from 'rxjs';
               <article class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-5 space-y-5">
                 <h3 class="text-xl font-black text-primary uppercase italic font-sans tracking-wide border-b-4 border-base-300 pb-3">Filters</h3>
                 
+                <div class="space-y-2">
+                  <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block">Region Scope</label>
+                  <select [(ngModel)]="filters.scope" (change)="loadHistory()" class="select select-bordered w-full select-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                    <option value="maine">Maine</option>
+                    <option value="national">USA &amp; Canada</option>
+                    <option value="global">Global</option>
+                    <option value="">All scopes</option>
+                  </select>
+                </div>
+
                 <div class="space-y-2">
                   <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block">Search</label>
                   <input type="text" [(ngModel)]="filters.search" (keyup.enter)="loadHistory()" placeholder="e.g. Penobscot..." class="input input-bordered w-full input-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
@@ -103,7 +113,13 @@ import { Observable, BehaviorSubject, switchMap, map } from 'rxjs';
                   <div class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-12 text-center">
                     <span class="text-5xl block mb-3">💨</span>
                     <h3 class="text-xl font-black text-white uppercase italic font-sans">Nothing found</h3>
-                    <p class="text-base-content/60 font-bold text-sm mt-2">Try adjusting your filters.</p>
+                    <p class="text-base-content/60 font-bold text-sm mt-2">
+                      @if (filters.scope === 'global') {
+                        Global archive is reserved for non-US/Canada sources — nothing stored yet.
+                      } @else {
+                        Try adjusting your filters, or wait for the next alert poll to archive entries.
+                      }
+                    </p>
                   </div>
                 }
 
@@ -134,7 +150,7 @@ import { Observable, BehaviorSubject, switchMap, map } from 'rxjs';
                       }
 
                       <div class="mt-3 flex items-center justify-between text-[10px] uppercase tracking-widest text-base-content/40 font-bold">
-                        <span>{{ entry.category }}</span>
+                        <span>{{ entry.category }} · {{ scopeLabel(entry.scope) }}</span>
                         <span>Logged: {{ formatDate(entry.datePulled) }}</span>
                       </div>
                     </div>
@@ -259,6 +275,7 @@ export class ArchiveComponent implements OnInit {
     search: '',
     severity: '',
     category: '',
+    scope: 'maine',
     tornadoOnly: false
   };
 
@@ -354,6 +371,16 @@ export class ArchiveComponent implements OnInit {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  scopeLabel(scope?: string): string {
+    switch ((scope || '').toLowerCase()) {
+      case 'maine': return 'Maine';
+      case 'usa': return 'USA';
+      case 'canada': return 'Canada';
+      case 'global': return 'Global';
+      default: return scope || '—';
+    }
   }
 
   getSeverityColorClass(severity: string): string {
