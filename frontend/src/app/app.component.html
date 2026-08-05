@@ -1,27 +1,27 @@
 <!-- Desktop Navbar (hidden on mobile) -->
-<div class="navbar bg-base-200/80 backdrop-blur-sm border-b border-base-300 sticky top-0 z-50 hidden md:flex">
+<div class="navbar bg-base-100 border-b-4 border-base-300 sticky top-0 z-50 hidden md:flex shadow-[0_4px_0_0_rgba(69,44,99,1)]">
   <div class="navbar-start">
-    <a routerLink="/" class="btn btn-ghost text-xl gap-2 normal-case">
-      <span class="text-2xl">🌪️</span>
-      <span class="font-extrabold">Saints <span class="text-primary">Weather Watch</span></span>
+    <a routerLink="/" class="btn btn-ghost text-2xl gap-3 normal-case hover:scale-105 hover:bg-transparent transition-transform font-black italic tracking-wide font-sans text-white">
+      <span class="text-3xl drop-shadow-md">🌪️</span>
+      <span style="-webkit-text-stroke: 1px rgba(69,44,99,0.5);">SAINTS <span class="text-primary drop-shadow-[2px_2px_0_rgba(69,44,99,1)]">WEATHER WATCH</span></span>
     </a>
   </div>
-  <div class="navbar-center">
+  <div class="navbar-center font-sans font-bold">
     @for (item of navItems; track item.path) {
       <a
         [routerLink]="item.path"
-        routerLinkActive="btn-primary"
+        routerLinkActive="btn-primary border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] scale-105 -translate-y-1"
         [routerLinkActiveOptions]="{ exact: item.path === '' }"
-        class="btn btn-ghost btn-sm gap-1"
+        class="btn btn-ghost btn-sm gap-2 rounded-xl mx-1 transition-all"
       >
-        <span>{{ item.icon }}</span>
-        {{ item.label }}
+        <span class="text-lg">{{ item.icon }}</span>
+        <span class="uppercase tracking-wider">{{ item.label }}</span>
       </a>
     }
   </div>
   <div class="navbar-end">
-    <div class="badge badge-error gap-1 text-xs">
-      <span class="loading loading-dot loading-xs"></span>
+    <div class="badge badge-error gap-2 text-xs font-black p-3 border-2 border-error-content shadow-[2px_2px_0_0_rgba(69,44,99,1)] rounded-lg">
+      <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
       LIVE
     </div>
   </div>
@@ -33,16 +33,16 @@
 </main>
 
 <!-- Mobile Bottom Tab Bar (hidden on desktop) -->
-<div class="btm-nav btm-nav-sm bg-base-200 border-t border-base-300 md:hidden fixed bottom-0 z-50">
+<div class="btm-nav bg-base-100 border-t-4 border-base-300 md:hidden fixed bottom-0 z-50 pb-2 h-20 shadow-[0_-4px_0_0_rgba(69,44,99,1)]">
   @for (item of navItems; track item.path) {
     <a
       [routerLink]="item.path"
-      routerLinkActive="active text-primary"
+      routerLinkActive="active text-primary bg-base-200 border-t-4 border-primary shadow-[inset_0_4px_0_0_rgba(0,229,255,0.2)]"
       [routerLinkActiveOptions]="{ exact: item.path === '' }"
-      class="flex flex-col items-center gap-0.5"
+      class="flex flex-col items-center gap-1 font-sans font-bold"
     >
-      <span class="text-lg">{{ item.icon }}</span>
-      <span class="text-[10px] font-medium">{{ item.label }}</span>
+      <span class="text-2xl drop-shadow-sm">{{ item.icon }}</span>
+      <span class="text-[10px] uppercase tracking-wider">{{ item.label }}</span>
     </a>
   }
 </div>
