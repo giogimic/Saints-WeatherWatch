@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { WeatherService, TrackerIncident, ChaseLogEntry } from '../../core/weather.service';
-import { Observable, BehaviorSubject, switchMap } from 'rxjs';
+import { Observable, BehaviorSubject, switchMap, map } from 'rxjs';
 
 @Component({
   selector: 'app-archive',
@@ -66,8 +66,21 @@ import { Observable, BehaviorSubject, switchMap } from 'rxjs';
                 </div>
 
                 <div class="space-y-2">
-                  <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block">Category</label>
-                  <input type="text" [(ngModel)]="filters.category" (keyup.enter)="loadHistory()" placeholder="e.g. Met" class="input input-bordered w-full input-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                  <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block">Sort By</label>
+                  <select [(ngModel)]="sortDirection" (change)="loadHistory()" class="select select-bordered w-full select-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                  </select>
+                </div>
+
+                <div class="space-y-2">
+                  <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block">Time Range</label>
+                  <select [(ngModel)]="timeRange" (change)="loadHistory()" class="select select-bordered w-full select-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                    <option value="all">All Time</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="24h">Last 24 Hours</option>
+                  </select>
                 </div>
 
                 <div class="flex items-center gap-3">
@@ -238,7 +251,8 @@ export class ArchiveComponent implements OnInit {
   // NWS Archive State
   private refreshHistoryTrigger = new BehaviorSubject<void>(undefined);
   history$: Observable<TrackerIncident[]> = this.refreshHistoryTrigger.pipe(
-    switchMap(() => this.weatherService.getHistory(this.filters))
+    switchMap(() => this.weatherService.getHistory(this.filters)),
+    map(incidents => this.applyClientFilters(incidents))
   );
   
   filters = {
@@ -247,6 +261,9 @@ export class ArchiveComponent implements OnInit {
     category: '',
     tornadoOnly: false
   };
+
+  sortDirection: 'newest' | 'oldest' = 'newest';
+  timeRange: 'all' | '24h' | '7d' | '30d' = 'all';
 
   // Chase Logs State
   private refreshChaseLogsTrigger = new BehaviorSubject<void>(undefined);
@@ -267,6 +284,30 @@ export class ArchiveComponent implements OnInit {
 
   loadHistory() {
     this.refreshHistoryTrigger.next();
+  }
+
+  applyClientFilters(incidents: TrackerIncident[]): TrackerIncident[] {
+    let result = incidents;
+
+    // Time range filter
+    if (this.timeRange !== 'all') {
+      const now = Date.now();
+      const ranges: Record<string, number> = {
+        '24h': 24 * 60 * 60 * 1000,
+        '7d': 7 * 24 * 60 * 60 * 1000,
+        '30d': 30 * 24 * 60 * 60 * 1000,
+      };
+      const cutoff = now - (ranges[this.timeRange] || 0);
+      result = result.filter(i => new Date(i.datePulled).getTime() > cutoff);
+    }
+
+    // Sort
+    result = [...result].sort((a, b) => {
+      const diff = new Date(b.datePulled).getTime() - new Date(a.datePulled).getTime();
+      return this.sortDirection === 'newest' ? diff : -diff;
+    });
+
+    return result;
   }
 
   deleteHistory(id: string) {
@@ -333,3 +374,4 @@ export class ArchiveComponent implements OnInit {
     }
   }
 }
+
