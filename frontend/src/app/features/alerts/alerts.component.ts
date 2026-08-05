@@ -130,11 +130,21 @@ import { WeatherService } from '../../core/weather.service';
                           <p class="text-xs text-white font-bold">{{ alert.whatToDo }}</p>
                         </div>
                       }
-                      @if (alert.sourceUrl) {
-                        <a [href]="alert.sourceUrl" target="_blank" rel="noopener noreferrer" class="inline-block text-[10px] font-black uppercase tracking-widest text-primary hover:underline" (click)="$event.stopPropagation()">
-                          Official source ↗
+                      <div class="flex flex-wrap gap-2">
+                        <a
+                          class="btn btn-xs btn-ghost border border-base-300 rounded-lg font-black uppercase text-[10px] min-h-10"
+                          routerLink="/map"
+                          [queryParams]="{ focus: 'alert', id: alert.id }"
+                          (click)="$event.stopPropagation()"
+                        >
+                          Show on map
                         </a>
-                      }
+                        @if (alert.sourceUrl) {
+                          <a [href]="alert.sourceUrl" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-ghost border border-base-300 rounded-lg font-black uppercase text-[10px] min-h-10" (click)="$event.stopPropagation()">
+                            Official source ↗
+                          </a>
+                        }
+                      </div>
                     </div>
                   }
                 </article>

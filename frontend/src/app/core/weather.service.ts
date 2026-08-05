@@ -81,6 +81,24 @@ export interface WeatherOverviewResponse {
   mostAtRiskArea: string;
 }
 
+export interface CameraFeedDto {
+  id: string;
+  title: string;
+  region: string;
+  description: string;
+  status: string;
+  type: 'iframe' | 'image';
+  group: 'cams' | 'satellite' | 'radar';
+  imageUrl?: string;
+  embedUrl?: string;
+  attribution: string;
+  sourceUrl?: string;
+  lat?: number;
+  lng?: number;
+  km?: number;
+  category?: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -92,6 +110,40 @@ export class WeatherService {
       catchError(err => {
         console.error('getAlerts error:', err);
         return of({ generatedAt: new Date().toISOString(), alerts: [], history: [] });
+      })
+    );
+  }
+
+  getCams(): Observable<CameraFeedDto[]> {
+    return this.http.get<CameraFeedDto[]>('/api/cams').pipe(
+      catchError(err => {
+        console.error('getCams error:', err);
+        return of([]);
+      })
+    );
+  }
+
+  /** IEM Local Storm Reports — Maine + nearby, last N hours. */
+  getLsrGeoJson(hours = 24): Observable<GeoJSON.FeatureCollection> {
+    const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+    const url =
+      `https://mesonet.agron.iastate.edu/geojson/lsr.geojson?states=ME&hours=${hours}`;
+    return this.http.get<GeoJSON.FeatureCollection>(url).pipe(
+      catchError(err => {
+        console.error('getLsrGeoJson error:', err);
+        return of(empty);
+      })
+    );
+  }
+
+  /** SPC Day-1 categorical outlook polygons. */
+  getSpcOutlook(): Observable<GeoJSON.FeatureCollection> {
+    const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+    const url = 'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson';
+    return this.http.get<GeoJSON.FeatureCollection>(url).pipe(
+      catchError(err => {
+        console.error('getSpcOutlook error:', err);
+        return of(empty);
       })
     );
   }

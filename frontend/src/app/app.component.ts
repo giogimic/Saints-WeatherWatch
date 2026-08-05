@@ -11,7 +11,9 @@ import { LogbookComponent } from './shared/components/logbook/logbook.component'
 })
 export class AppComponent {
   title = 'Saints Weather Watch';
+  moreOpen = false;
 
+  /** Full desktop nav */
   navItems = [
     { path: '', label: 'Home', icon: '🏠' },
     { path: 'map', label: 'Map', icon: '🗺️' },
@@ -21,4 +23,26 @@ export class AppComponent {
     { path: 'learn', label: 'Learn', icon: '📚' },
     { path: 'play', label: 'Play', icon: '🎮' },
   ];
+
+  /** Ops-first mobile primary tabs */
+  mobilePrimary = [
+    { path: 'map', label: 'Map', icon: '🗺️' },
+    { path: 'alerts', label: 'Alerts', icon: '🚨' },
+    { path: 'live', label: 'Live', icon: '📹' },
+    { path: 'archive', label: 'Archive', icon: '🗄️' },
+  ];
+
+  mobileMore = [
+    { path: '', label: 'Home', icon: '🏠' },
+    { path: 'learn', label: 'Learn', icon: '📚' },
+    { path: 'play', label: 'Play', icon: '🎮' },
+  ];
+
+  toggleMore(): void {
+    this.moreOpen = !this.moreOpen;
+  }
+
+  closeMore(): void {
+    this.moreOpen = false;
+  }
 }
