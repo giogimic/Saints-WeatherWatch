@@ -221,6 +221,33 @@ export class WeatherService {
       })
     );
   }
+
+  getSavedLocations(): Observable<SavedLocation[]> {
+    return this.http.get<SavedLocation[]>('/api/locations').pipe(
+      catchError(err => {
+        console.error('getSavedLocations error:', err);
+        return of([]);
+      })
+    );
+  }
+
+  createSavedLocation(loc: { label: string; lat: number; lon: number }): Observable<SavedLocation> {
+    return this.http.post<SavedLocation>('/api/locations', loc).pipe(
+      catchError(err => {
+        console.error('createSavedLocation error:', err);
+        return of(null as unknown as SavedLocation);
+      })
+    );
+  }
+
+  deleteSavedLocation(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/locations/${id}`).pipe(
+      catchError(err => {
+        console.error('deleteSavedLocation error:', err);
+        return of(undefined);
+      })
+    );
+  }
 }
 
 export interface QuizAttempt {
@@ -231,4 +258,11 @@ export interface QuizAttempt {
   total: number;
   seconds: number;
   createdAt: string;
+}
+
+export interface SavedLocation {
+  id: string;
+  label: string;
+  lat: number;
+  lon: number;
 }

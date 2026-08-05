@@ -78,25 +78,33 @@ Open `http://localhost:4200` in your browser.
 
 - [x] **Phase 1** — Project scaffold, Go server, Prisma DB, Angular app with storm theme
 - [x] **Phase 2** — NWS alerts pipeline + home dashboard + alerts feed
-- [ ] **Phase 3** — Live map with animated radar, warning polygons, storm reports
+- [x] **Phase 3** — Live map with radar/warnings WMS, LSR + SPC layers, cam pins, ops layer chips
 - [ ] **Phase 4** — WebSocket live updates + new-warning banner
-- [ ] **Phase 5** — Interactive Learn hub (tornado science, EF-scale, radar reading)
-- [ ] **Phase 6** — Quiz + chase log (Prisma-backed)
-- [ ] **Phase 7** — Chaser live streams + responsive polish + PWA
-- [ ] **Phase 8** — Docker compose, embedded frontend, final polish
+- [x] **Phase 5** — Learn hub (storm science, EF-scale, radar reading — plain-language)
+- [x] **Phase 6** — Play quizzes + Prisma `QuizAttempt` leaderboard; chase logs in Archive
+- [x] **Phase 7** — Live cams from `/api/cams` (opencctv/FAA/GOES) + responsive mobile ops nav
+- [x] **Phase 8** — Docker compose deploy (see `update.sh` / deployment docs)
+
+### Recently shipped (see `logs/`)
+- Storm Ops UI overhaul (quiet Archive, Live accordion, Map hub, deep links)
+- Maine alert archive backfill from IEM VTEC
+- Storm Expert Training quizzes + Top Experts board
+- Saved locations / home-base pins on Map
 
 ## Data Sources (all free, no API keys)
 
 - **NWS API** (`api.weather.gov`) — active warnings & watches
-- **Iowa State IEM** — storm reports + warning polygons
-- **SPC** — convective outlooks, mesoscale discussions
-- **RainViewer** — animated NEXRAD radar tiles
-- **YouTube** — curated storm chaser live streams
+- **Iowa State IEM** — NEXRAD WMS, LSR GeoJSON, VTEC archive
+- **SPC** — day-1 categorical outlook GeoJSON
+- **NOAA Event-Driven WMS** — watch/warning polygons
+- **GOES / FAA / regional cams** — via backend `/api/cams` proxy
+- **OpenStreetMap / CARTO / Esri** — map basemaps
 
 ## Docs
 
 - [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- Build notes: [`logs/`](logs/)
 
 ## Database
 

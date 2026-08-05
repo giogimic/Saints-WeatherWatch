@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import { Subscription } from 'rxjs';
 
-import { CameraFeedDto, WeatherAlert, WeatherService } from '../../core/weather.service';
+import { CameraFeedDto, SavedLocation, WeatherAlert, WeatherService } from '../../core/weather.service';
 
 type BaseKey = 'street' | 'dark' | 'imagery';
 type LayerChip = 'radar' | 'radarSharp' | 'warnings' | 'lsr' | 'spc' | 'cams';
@@ -156,6 +156,56 @@ const STORAGE_KEY = 'ww-map-view';
 
       <ng-template #sidePanel>
         <article class="storm-card p-3 space-y-2">
+          <h2 class="text-xs font-black uppercase tracking-widest text-primary">Home base</h2>
+          <p class="text-[10px] text-base-content/45 font-semibold">
+            Pin chase spots from the current map center.
+          </p>
+          <div class="flex gap-2">
+            <input
+              type="text"
+              maxlength="48"
+              [(ngModel)]="newPinLabel"
+              placeholder="Label (e.g. Home)"
+              class="input input-xs input-bordered bg-base-200/80 border-base-300 rounded-lg font-semibold flex-1 min-h-10"
+            >
+            <button
+              type="button"
+              class="btn btn-primary btn-xs rounded-lg font-black uppercase min-h-10"
+              (click)="savePinAtCenter()"
+              [disabled]="savingPin"
+            >
+              {{ savingPin ? '…' : 'Pin' }}
+            </button>
+          </div>
+          @if (savedLocations.length === 0) {
+            <p class="text-xs text-base-content/50 font-semibold">No pins yet.</p>
+          } @else {
+            <div class="space-y-1.5 max-h-36 overflow-y-auto">
+              @for (loc of savedLocations; track loc.id) {
+                <div class="flex items-center gap-2 rounded-lg border border-base-300/60 bg-base-200/40 px-2 py-1.5">
+                  <button
+                    type="button"
+                    class="flex-1 text-left min-w-0 min-h-10"
+                    (click)="focusSavedLocation(loc)"
+                  >
+                    <div class="text-xs font-black text-white truncate">{{ loc.label }}</div>
+                    <div class="text-[10px] text-base-content/45 font-semibold tabular-nums">
+                      {{ loc.lat | number:'1.2-2' }}, {{ loc.lon | number:'1.2-2' }}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-xs text-error/70"
+                    title="Delete pin"
+                    (click)="removeSavedLocation(loc.id)"
+                  >✕</button>
+                </div>
+              }
+            </div>
+          }
+        </article>
+
+        <article class="storm-card p-3 space-y-2">
           <h2 class="text-xs font-black uppercase tracking-widest text-accent">Active near you</h2>
           @if (nearbyAlerts.length === 0) {
             <p class="text-xs text-base-content/50 font-semibold">No active Maine alerts right now.</p>
@@ -235,7 +285,9 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private lsrLayer = L.layerGroup();
   private spcLayer = L.layerGroup();
   private camsLayer = L.layerGroup();
+  private savedLayer = L.layerGroup();
   private camMarkers = new Map<string, L.Marker>();
+  private savedMarkers = new Map<string, L.Marker>();
 
   searchQuery = '';
   isSearching = false;
@@ -245,6 +297,9 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   activeBase: BaseKey = 'dark';
   nearbyAlerts: WeatherAlert[] = [];
   camsWithCoords: CameraFeedDto[] = [];
+  savedLocations: SavedLocation[] = [];
+  newPinLabel = 'Home base';
+  savingPin = false;
 
   layers: Record<LayerChip, boolean> = {
     radar: true,
@@ -340,6 +395,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     this.loadLsr();
     this.loadSpc();
     this.loadNearbyAlerts();
+    this.loadSavedLocations();
 
     this.subs.add(
       this.route.queryParamMap.subscribe(params => {
@@ -471,6 +527,75 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     sync(this.lsrLayer, this.layers.lsr);
     sync(this.spcLayer, this.layers.spc);
     sync(this.camsLayer, this.layers.cams);
+    sync(this.savedLayer, true);
+  }
+
+  savePinAtCenter(): void {
+    if (!this.map || this.savingPin) return;
+    const c = this.map.getCenter();
+    const label = (this.newPinLabel || 'Home base').trim().slice(0, 48) || 'Home base';
+    this.savingPin = true;
+    this.weather.createSavedLocation({ label, lat: c.lat, lon: c.lng }).subscribe(row => {
+      this.savingPin = false;
+      if (row?.id) {
+        this.savedLocations = [...this.savedLocations, row].sort((a, b) =>
+          a.label.localeCompare(b.label)
+        );
+        this.renderSavedMarkers();
+        this.selectedLabel = row.label;
+        this.focusSavedLocation(row);
+      }
+    });
+  }
+
+  focusSavedLocation(loc: SavedLocation): void {
+    if (!this.map) return;
+    this.map.flyTo([loc.lat, loc.lon], 11, { duration: 0.7 });
+    this.selectedLabel = loc.label;
+    const marker = this.savedMarkers.get(loc.id);
+    if (marker) setTimeout(() => marker.openPopup(), 400);
+  }
+
+  removeSavedLocation(id: string): void {
+    this.weather.deleteSavedLocation(id).subscribe(() => {
+      this.savedLocations = this.savedLocations.filter(l => l.id !== id);
+      const marker = this.savedMarkers.get(id);
+      if (marker) {
+        this.savedLayer.removeLayer(marker);
+        this.savedMarkers.delete(id);
+      }
+      if (this.selectedLabel && !this.savedLocations.some(l => l.label === this.selectedLabel)) {
+        this.selectedLabel = null;
+      }
+    });
+  }
+
+  private loadSavedLocations(): void {
+    this.subs.add(
+      this.weather.getSavedLocations().subscribe(rows => {
+        this.savedLocations = rows || [];
+        this.renderSavedMarkers();
+        this.applyLayerVisibility();
+      })
+    );
+  }
+
+  private renderSavedMarkers(): void {
+    this.savedLayer.clearLayers();
+    this.savedMarkers.clear();
+    const icon = L.divIcon({
+      html: '<span style="font-size:18px;filter:drop-shadow(0 1px 2px #000)">🏠</span>',
+      className: '',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+    });
+    for (const loc of this.savedLocations) {
+      const marker = L.marker([loc.lat, loc.lon], { icon }).bindPopup(
+        `<strong>${loc.label}</strong><br><span style="font-size:11px;opacity:.7">Saved pin</span>`
+      );
+      marker.addTo(this.savedLayer);
+      this.savedMarkers.set(loc.id, marker);
+    }
   }
 
   private loadCams(): void {

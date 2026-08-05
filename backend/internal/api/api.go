@@ -43,6 +43,11 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Get("/quiz/leaderboard", getQuizLeaderboardHandler(st))
 		r.Post("/quiz/attempts", createQuizAttemptHandler(st))
 
+		// Saved chase / home-base pins
+		r.Get("/locations", getSavedLocationsHandler(st))
+		r.Post("/locations", createSavedLocationHandler(st))
+		r.Delete("/locations/{id}", deleteSavedLocationHandler(st))
+
 		// Camera proxy + listing
 		r.Get("/cams", camListHandler(camCache))
 		r.Get("/cams/{id}", camImageHandler(camCache))
@@ -372,6 +377,84 @@ func getQuizLeaderboardHandler(st *store.Store) http.HandlerFunc {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(attempts)
+	}
+}
+
+type createSavedLocationReq struct {
+	Label string  `json:"label"`
+	Lat   float64 `json:"lat"`
+	Lon   float64 `json:"lon"`
+}
+
+func getSavedLocationsHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if st == nil {
+			_ = json.NewEncoder(w).Encode([]any{})
+			return
+		}
+		rows, err := st.Client.SavedLocation.FindMany().OrderBy(
+			db.SavedLocation.Label.Order(db.SortOrderAsc),
+		).Exec(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to fetch locations", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(rows)
+	}
+}
+
+func createSavedLocationHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if st == nil {
+			http.Error(w, "DB not initialized", http.StatusInternalServerError)
+			return
+		}
+
+		var req createSavedLocationReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid input", http.StatusBadRequest)
+			return
+		}
+		label := strings.TrimSpace(req.Label)
+		if label == "" {
+			label = "Home base"
+		}
+		if len(label) > 48 {
+			label = label[:48]
+		}
+		if req.Lat < -90 || req.Lat > 90 || req.Lon < -180 || req.Lon > 180 {
+			http.Error(w, "Invalid coordinates", http.StatusBadRequest)
+			return
+		}
+
+		entry, err := st.Client.SavedLocation.CreateOne(
+			db.SavedLocation.Label.Set(label),
+			db.SavedLocation.Lat.Set(req.Lat),
+			db.SavedLocation.Lon.Set(req.Lon),
+		).Exec(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to save location", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(entry)
+	}
+}
+
+func deleteSavedLocationHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if st == nil {
+			http.Error(w, "DB not initialized", http.StatusInternalServerError)
+			return
+		}
+		id := chi.URLParam(r, "id")
+		_, err := st.Client.SavedLocation.FindUnique(db.SavedLocation.ID.Equals(id)).Delete().Exec(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to delete location", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
