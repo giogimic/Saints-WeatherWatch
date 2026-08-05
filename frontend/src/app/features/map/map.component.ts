@@ -423,7 +423,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
     try {
       // Use OpenStreetMap Nominatim API for geocoding
-      const res = await fetch(\`https://nominatim.openstreetmap.org/search?format=json&q=\${encodeURIComponent(this.searchQuery)}&limit=1\`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(this.searchQuery)}&limit=1`);
       const data = await res.json();
 
       if (data && data.length > 0) {
@@ -468,7 +468,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     });
 
     this.searchMarker = L.marker([lat, lon], { icon: searchIcon })
-      .bindPopup(\`<strong>\${this.searchResult?.display_name}</strong>\`)
+      .bindPopup(`<strong>${this.searchResult?.display_name}</strong>`)
       .addTo(this.map);
     
     setTimeout(() => this.searchMarker?.openPopup(), 1000);
@@ -528,15 +528,15 @@ export class MapComponent implements AfterViewInit, OnDestroy {
           weight: 2,
         });
 
-        marker.bindPopup(\`
+        marker.bindPopup(`
           <div style="min-width: 180px;">
-            <strong>\${tracker.name}</strong><br />
-            <span>\${tracker.region}</span><br />
-            <span>\${tracker.status}</span><br />
-            <small>\${tracker.wind}</small><br />
-            <small>\${tracker.note}</small>
+            <strong>${tracker.name}</strong><br />
+            <span>${tracker.region}</span><br />
+            <span>${tracker.status}</span><br />
+            <small>${tracker.wind}</small><br />
+            <small>${tracker.note}</small>
           </div>
-        \`);
+        `);
 
         this.markers.set(tracker.name, marker);
         marker.addTo(layer);
