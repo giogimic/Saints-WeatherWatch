@@ -1,8 +1,0 @@
-weather.saintsgamingweb.com {
-    handle /api/* {
-        reverse_proxy localhost:5081
-    }
-    handle {
-        reverse_proxy localhost:5080
-    }
-}
