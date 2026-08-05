@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, OnDestroy } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 
 type OverlayKey = 'radar' | 'warnings' | 'reports' | 'wind';
@@ -17,7 +18,7 @@ interface Tracker {
 @Component({
   selector: 'app-map',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="min-h-[calc(100vh-4rem)] p-6">
       <div class="max-w-7xl mx-auto">
@@ -50,6 +51,53 @@ interface Tracker {
             <div class="stat-value text-success">LIVE</div>
             <div class="stat-desc">Regional feed connected</div>
           </div>
+        </div>
+
+        <!-- SEARCH BAR -->
+        <div class="card bg-base-200/70 border border-base-300 shadow-xl p-4 mb-6">
+          <h2 class="text-xl font-bold text-primary mb-2">Location Search</h2>
+          <div class="flex flex-col sm:flex-row gap-3 items-center">
+            <input 
+              type="text" 
+              placeholder="Search for a city or town..." 
+              class="input input-bordered w-full font-bold" 
+              [(ngModel)]="searchQuery"
+              (keyup.enter)="performSearch()"
+            >
+            <button class="btn btn-primary font-black uppercase tracking-wider w-full sm:w-auto" (click)="performSearch()" [disabled]="isSearching">
+              @if (isSearching) {
+                <span class="loading loading-spinner"></span>
+              } @else {
+                🔍 Search
+              }
+            </button>
+          </div>
+          @if (searchError) {
+            <p class="text-error font-bold mt-2 text-sm">{{ searchError }}</p>
+          }
+          
+          <!-- Search Results / Nearest Hotspots -->
+          @if (searchResult) {
+            <div class="mt-4 p-4 bg-base-300/40 rounded-xl border border-base-300">
+              <h3 class="text-sm font-black uppercase tracking-widest text-secondary mb-2">📍 Found: {{ searchResult.display_name }}</h3>
+              <p class="text-xs font-bold text-base-content/60 mb-3">Nearest monitored hotspots:</p>
+              
+              <div class="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                @for (loc of nearestLocations; track loc.name) {
+                  <button 
+                    class="btn btn-sm h-auto py-2 flex flex-col items-start gap-1 justify-start border-2 border-base-300 bg-base-100 hover:border-primary transition-colors text-left"
+                    (click)="jumpToCoords(loc.coords, loc.name, loc.type)"
+                  >
+                    <div class="flex justify-between w-full items-center">
+                      <span class="font-bold text-[11px] truncate">{{ loc.name }}</span>
+                      <span class="badge badge-sm badge-outline text-[9px]">{{ loc.type }}</span>
+                    </div>
+                    <span class="text-[10px] text-base-content/60 font-semibold">{{ loc.distance.toFixed(1) }} miles away</span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
         </div>
 
         <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -88,7 +136,7 @@ interface Tracker {
               </p>
             </div>
 
-            <div id="maine-map" class="mt-4 h-[420px] w-full rounded-2xl overflow-hidden border border-base-300"></div>
+            <div id="maine-map" class="mt-4 h-[500px] w-full rounded-2xl overflow-hidden border border-base-300 relative z-0"></div>
           </section>
 
           <section class="card bg-base-200/70 border border-base-300 shadow-xl p-4">
@@ -107,44 +155,43 @@ interface Tracker {
                 <div class="font-semibold">Downeast and mid-coast bands</div>
               </div>
             </div>
+            
+            <div class="mt-6">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-secondary">Tracker Nodes</h2>
+                <div class="badge badge-secondary badge-outline text-xs">Coastal / Inland</div>
+              </div>
+
+              <div class="mb-4 rounded-xl border border-base-300 bg-base-300/40 p-3 text-sm text-base-content/70">
+                <span class="font-semibold text-base-content">Selected tracker:</span>
+                {{ selectedTrackerName ?? 'None' }}
+              </div>
+
+              <div class="grid gap-3">
+                @for (tracker of trackers; track tracker.name) {
+                  <button
+                    type="button"
+                    class="card bg-base-200/70 border-2 border-base-300 shadow-sm text-left transition hover:-translate-y-0.5 hover:border-primary {{ selectedTrackerName === tracker.name ? 'ring-2 ring-primary border-primary' : '' }}"
+                    (click)="selectTracker(tracker.name)"
+                  >
+                    <div class="card-body p-3">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <div class="badge badge-outline badge-sm mb-1">{{ tracker.region }}</div>
+                          <h3 class="card-title text-base">{{ tracker.name }}</h3>
+                        </div>
+                        <div class="text-right">
+                          <div class="text-xs font-semibold text-success">{{ tracker.status }}</div>
+                          <div class="text-[10px] text-base-content/60">{{ tracker.wind }}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                }
+              </div>
+            </div>
           </section>
         </div>
-
-        <section class="mt-6">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-bold text-secondary">Tracker Nodes</h2>
-            <div class="badge badge-secondary badge-outline">Coastal Maine / inland crossovers</div>
-          </div>
-
-          <div class="mb-4 rounded-2xl border border-base-300 bg-base-300/40 p-3 text-sm text-base-content/70">
-            <span class="font-semibold text-base-content">Selected tracker:</span>
-            {{ selectedTrackerName ?? 'None' }}
-          </div>
-
-          <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            @for (tracker of trackers; track tracker.name) {
-              <button
-                type="button"
-                class="card bg-base-200/70 border border-base-300 shadow-lg text-left transition hover:-translate-y-0.5 hover:border-primary {{ selectedTrackerName === tracker.name ? 'ring-2 ring-primary' : '' }}"
-                (click)="selectTracker(tracker.name)"
-              >
-                <div class="card-body">
-                  <div class="flex items-start justify-between gap-3">
-                    <div>
-                      <div class="badge badge-outline mb-2">{{ tracker.region }}</div>
-                      <h3 class="card-title text-lg">{{ tracker.name }}</h3>
-                    </div>
-                    <div class="text-right">
-                      <div class="text-sm font-semibold text-success">{{ tracker.status }}</div>
-                      <div class="text-xs text-base-content/60">{{ tracker.wind }}</div>
-                    </div>
-                  </div>
-                  <p class="mt-2 text-sm text-base-content/70">{{ tracker.note }}</p>
-                </div>
-              </button>
-            }
-          </div>
-        </section>
       </div>
     </div>
   `,
@@ -158,7 +205,22 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   selectedTrackerName: string | null = 'Portland';
   private map?: L.Map;
   private readonly overlays = new Map<OverlayKey, L.LayerGroup>();
-  private readonly markers = new Map<string, L.CircleMarker>();
+  private readonly markers = new Map<string, L.CircleMarker | L.Marker>();
+  private searchMarker?: L.Marker;
+
+  searchQuery = '';
+  isSearching = false;
+  searchError = '';
+  searchResult: { lat: number; lon: number; display_name: string } | null = null;
+  nearestLocations: { name: string; distance: number; type: 'Camera' | 'Tracker'; coords: [number, number] }[] = [];
+
+  camLocations = [
+    { name: 'FKOC Stadium Cam', coords: [47.234, -68.5895] as [number, number] },
+    { name: 'Dickey Bridge (MaineDOT)', coords: [47.21, -68.85] as [number, number] },
+    { name: 'Route 11 Soucy Hill', coords: [46.12, -68.14] as [number, number] },
+    { name: 'Island Falls (Rt 11)', coords: [46.01, -68.26] as [number, number] },
+    { name: 'Smyrna (Rt 2)', coords: [46.13, -68.00] as [number, number] },
+  ];
 
   overlayLabels: Record<OverlayKey, { label: string; icon: string; description: string }> = {
     radar: {
@@ -304,18 +366,11 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       iconAnchor: [12, 12],
     });
 
-    const camLocations = [
-      { name: 'FKOC Stadium Cam', coords: [47.234, -68.5895] as [number, number] },
-      { name: 'Dickey Bridge (MaineDOT)', coords: [47.21, -68.85] as [number, number] },
-      { name: 'Route 11 Soucy Hill', coords: [46.12, -68.14] as [number, number] },
-      { name: 'Island Falls (Rt 11)', coords: [46.01, -68.26] as [number, number] },
-      { name: 'Smyrna (Rt 2)', coords: [46.13, -68.00] as [number, number] },
-    ];
-
-    for (const cam of camLocations) {
-      L.marker(cam.coords, { icon: camIcon })
+    for (const cam of this.camLocations) {
+      const marker = L.marker(cam.coords, { icon: camIcon })
         .bindPopup(`<strong>${cam.name}</strong><br><a href="/live" style="color:#00e5ff;">Open Live Feed →</a>`)
         .addTo(this.map);
+      this.markers.set(cam.name, marker);
     }
 
     this.buildLayers();
@@ -333,15 +388,124 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   selectTracker(trackerName: string): void {
     this.selectedTrackerName = trackerName;
-    const tracker = this.trackers.find((item) => item.name === trackerName);
-    const marker = tracker ? this.markers.get(trackerName) : undefined;
+    const marker = this.markers.get(trackerName);
 
-    if (!tracker || !marker || !this.map) {
+    if (!marker || !this.map) {
       return;
     }
 
-    this.map.flyTo(tracker.coordinates, 8, { duration: 0.8 });
+    const coords = marker.getLatLng();
+    this.map.flyTo(coords, 9, { duration: 0.8 });
     marker.openPopup();
+  }
+
+  jumpToCoords(coords: [number, number], name: string, type: 'Camera' | 'Tracker') {
+    if (!this.map) return;
+    this.map.flyTo(coords, 10, { duration: 1.0 });
+    
+    // Open the popup if it exists
+    const marker = this.markers.get(name);
+    if (marker) {
+      // Small delay to let the map fly first
+      setTimeout(() => {
+        marker.openPopup();
+      }, 500);
+    }
+  }
+
+  async performSearch() {
+    if (!this.searchQuery.trim()) return;
+    
+    this.isSearching = true;
+    this.searchError = '';
+    this.searchResult = null;
+    this.nearestLocations = [];
+
+    try {
+      // Use OpenStreetMap Nominatim API for geocoding
+      const res = await fetch(\`https://nominatim.openstreetmap.org/search?format=json&q=\${encodeURIComponent(this.searchQuery)}&limit=1\`);
+      const data = await res.json();
+
+      if (data && data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        
+        this.searchResult = {
+          lat,
+          lon,
+          display_name: data[0].display_name.split(',').slice(0, 3).join(',')
+        };
+
+        this.updateSearchMarker(lat, lon);
+        this.findNearestHotspots(lat, lon);
+        
+        if (this.map) {
+          this.map.flyTo([lat, lon], 8, { duration: 1 });
+        }
+      } else {
+        this.searchError = 'Location not found. Try a different search term.';
+      }
+    } catch (err) {
+      this.searchError = 'Error searching location. Please try again.';
+      console.error(err);
+    } finally {
+      this.isSearching = false;
+    }
+  }
+
+  private updateSearchMarker(lat: number, lon: number) {
+    if (!this.map) return;
+    
+    if (this.searchMarker) {
+      this.map.removeLayer(this.searchMarker);
+    }
+
+    const searchIcon = L.divIcon({
+      html: '<div style="font-size:32px; filter: drop-shadow(0px 4px 4px rgba(0,0,0,0.5)); animation: bounce 1s infinite;">📍</div>',
+      className: '',
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+    });
+
+    this.searchMarker = L.marker([lat, lon], { icon: searchIcon })
+      .bindPopup(\`<strong>\${this.searchResult?.display_name}</strong>\`)
+      .addTo(this.map);
+    
+    setTimeout(() => this.searchMarker?.openPopup(), 1000);
+  }
+
+  private findNearestHotspots(lat: number, lon: number) {
+    const allLocations: { name: string; type: 'Camera' | 'Tracker'; coords: [number, number] }[] = [
+      ...this.trackers.map(t => ({ name: t.name, type: 'Tracker' as const, coords: t.coordinates })),
+      ...this.camLocations.map(c => ({ name: c.name, type: 'Camera' as const, coords: c.coords }))
+    ];
+
+    const withDistances = allLocations.map(loc => ({
+      ...loc,
+      distance: this.calculateDistance(lat, lon, loc.coords[0], loc.coords[1])
+    }));
+
+    // Sort by distance and take top 6
+    this.nearestLocations = withDistances
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 6);
+  }
+
+  // Haversine formula for distance in miles
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 3958.8; // Radius of the earth in miles
+    const dLat = this.deg2rad(lat2 - lat1);
+    const dLon = this.deg2rad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  private deg2rad(deg: number): number {
+    return deg * (Math.PI / 180);
   }
 
   private buildLayers(): void {
@@ -364,15 +528,15 @@ export class MapComponent implements AfterViewInit, OnDestroy {
           weight: 2,
         });
 
-        marker.bindPopup(`
+        marker.bindPopup(\`
           <div style="min-width: 180px;">
-            <strong>${tracker.name}</strong><br />
-            <span>${tracker.region}</span><br />
-            <span>${tracker.status}</span><br />
-            <small>${tracker.wind}</small><br />
-            <small>${tracker.note}</small>
+            <strong>\${tracker.name}</strong><br />
+            <span>\${tracker.region}</span><br />
+            <span>\${tracker.status}</span><br />
+            <small>\${tracker.wind}</small><br />
+            <small>\${tracker.note}</small>
           </div>
-        `);
+        \`);
 
         this.markers.set(tracker.name, marker);
         marker.addTo(layer);
@@ -401,19 +565,6 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     const selected = this.overlays.get(key);
     if (selected) {
       selected.addTo(this.map);
-      this.map.fitBounds(this.getBoundsForActiveOverlay(key), { padding: [24, 24] });
     }
-  }
-
-  private getBoundsForActiveOverlay(key: OverlayKey): L.LatLngBounds {
-    const points = this.trackers
-      .filter((tracker) => tracker.overlay === key)
-      .map((tracker) => tracker.coordinates);
-
-    if (points.length === 0) {
-      return L.latLngBounds([43.0, -71.0], [46.9, -66.8]);
-    }
-
-    return L.latLngBounds(points);
   }
 }
