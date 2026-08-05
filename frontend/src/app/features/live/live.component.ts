@@ -77,9 +77,9 @@ export interface CameraFeed {
               </span>
             </h2>
 
-            <div class="grid gap-3 md:grid-cols-2" [class.xl:grid-cols-3]="section.group === 'cams'">
+            <div class="grid gap-3 md:grid-cols-2 items-start" [class.xl:grid-cols-3]="section.group === 'cams'">
               @for (camera of getCamsByGroup(section.group); track camera.id) {
-                <article class="storm-card overflow-hidden">
+                <article class="storm-card overflow-hidden self-start">
                   <button
                     type="button"
                     class="w-full text-left p-4 min-h-14 flex items-center gap-3 hover:bg-white/5 transition-colors"

@@ -1,44 +1,412 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import {
+  QUIZ_TRACKS,
+  QuizCategory,
+  QuizQuestion,
+  QuizTrack,
+  expertRank,
+  questionsFor,
+} from './play.questions';
+
+interface TrackProgress {
+  bestPercent: number;
+  bestScore: number;
+  bestTotal: number;
+  plays: number;
+}
+
+type View = 'hub' | 'quiz' | 'results';
+
+const STORAGE_KEY = 'ww-play-progress-v1';
 
 @Component({
   selector: 'app-play',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   template: `
-    <div class="min-h-[calc(100vh-4rem)] p-6">
-      <div class="max-w-6xl mx-auto">
-        <div class="text-center mb-8">
-          <span class="text-6xl mb-4 block">🎮</span>
-          <h1 class="text-4xl font-bold text-primary mb-3">Play</h1>
-          <p class="text-base-content/60 max-w-3xl mx-auto">
-            Test your storm knowledge with trivia quizzes and log your own chase adventures.
-          </p>
-        </div>
+    <div class="min-h-[calc(100vh-4rem)] p-4 md:p-6">
+      <div class="max-w-3xl mx-auto">
 
-        <div class="grid gap-4 md:grid-cols-3">
-          <article class="card bg-base-200/70 border border-base-300 shadow-lg">
-            <div class="card-body">
-              <h2 class="card-title text-primary">Radar Quiz</h2>
-              <p class="text-sm text-base-content/60">Pick the right interpretation of a velocity couplet and storm motion pattern.</p>
+        @if (view === 'hub') {
+          <div class="mb-6 md:mb-8">
+            <p class="text-[10px] font-black uppercase tracking-[0.25em] text-primary mb-2">Storm Expert Training</p>
+            <h1 class="text-3xl md:text-4xl font-black text-white italic uppercase tracking-wider font-sans">
+              Prove Your Skills
+            </h1>
+            <p class="text-base-content/60 text-sm font-semibold mt-2 max-w-xl">
+              Big buttons. Clear choices. Real chase knowledge. Pick a track and show what you know.
+            </p>
+            @if (overallRank) {
+              <div class="mt-4 storm-card px-4 py-3 flex items-center gap-3">
+                <span class="text-2xl">🏆</span>
+                <div>
+                  <div class="text-[10px] uppercase tracking-widest text-base-content/40 font-bold">Your rank</div>
+                  <div class="font-black text-primary text-lg leading-tight">{{ overallRank.title }}</div>
+                  <div class="text-xs text-base-content/55 font-semibold">{{ overallRank.blurb }}</div>
+                </div>
+              </div>
+            }
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-2">
+            @for (track of tracks; track track.id) {
+              <button
+                type="button"
+                class="storm-card text-left p-4 min-h-[7.5rem] hover:border-primary/50 transition-colors group"
+                (click)="startTrack(track)"
+              >
+                <div class="flex items-start gap-3">
+                  <span class="text-3xl shrink-0" aria-hidden="true">{{ track.icon }}</span>
+                  <div class="min-w-0 flex-1">
+                    <h2 class="font-black uppercase italic text-white text-lg leading-tight group-hover:text-primary transition-colors">
+                      {{ track.title }}
+                    </h2>
+                    <p class="text-xs text-base-content/55 font-semibold mt-1">{{ track.subtitle }}</p>
+                    @if (progress[track.id]; as p) {
+                      <p class="text-[10px] font-black uppercase tracking-wider text-accent mt-2">
+                        Best {{ p.bestScore }}/{{ p.bestTotal }} · {{ p.bestPercent }}%
+                      </p>
+                    } @else {
+                      <p class="text-[10px] font-black uppercase tracking-wider text-base-content/35 mt-2">
+                        Not attempted yet
+                      </p>
+                    }
+                  </div>
+                  <span class="text-base-content/30 text-sm self-center">▶</span>
+                </div>
+              </button>
+            }
+          </div>
+
+          <a
+            routerLink="/archive"
+            class="storm-card mt-3 p-4 flex items-center gap-3 hover:border-secondary/40 transition-colors block"
+          >
+            <span class="text-2xl">📒</span>
+            <div class="flex-1 min-w-0">
+              <div class="font-black uppercase italic text-sm text-white">Chase Reports</div>
+              <p class="text-xs text-base-content/50 font-semibold">
+                Log real intercepts in Archive · map chase game coming later
+              </p>
             </div>
-          </article>
-          <article class="card bg-base-200/70 border border-base-300 shadow-lg">
-            <div class="card-body">
-              <h2 class="card-title text-secondary">EF Scale Ladder</h2>
-              <p class="text-sm text-base-content/60">Match the damage indicators to the likely tornado intensity range.</p>
+            <span class="text-base-content/30 text-sm">→</span>
+          </a>
+        }
+
+        @if (view === 'quiz' && activeTrack && current) {
+          <div class="mb-4 flex items-center gap-3">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm rounded-xl font-black uppercase text-[10px] min-h-11 border border-base-300"
+              (click)="backToHub()"
+            >
+              ← Exit
+            </button>
+            <div class="flex-1 min-w-0">
+              <div class="text-[10px] font-black uppercase tracking-widest text-base-content/40">
+                {{ activeTrack.title }} · {{ index + 1 }} / {{ deck.length }}
+              </div>
+              <div class="h-2 rounded-full bg-base-300/60 mt-1 overflow-hidden">
+                <div
+                  class="h-full bg-primary transition-all duration-300 rounded-full"
+                  [style.width.%]="progressPct"
+                ></div>
+              </div>
             </div>
-          </article>
-          <article class="card bg-base-200/70 border border-base-300 shadow-lg">
-            <div class="card-body">
-              <h2 class="card-title text-accent">Chase Log</h2>
-              <p class="text-sm text-base-content/60">Track mileage, location, and notes for your next storm intercept.</p>
+          </div>
+
+          <article class="storm-card p-4 md:p-6 space-y-4">
+            <h2 class="text-xl md:text-2xl font-black text-white leading-snug">
+              {{ current.prompt }}
+            </h2>
+
+            @if (current.diagram) {
+              <div class="rounded-xl border border-base-300 bg-base-300/30 p-3 flex justify-center" aria-hidden="true">
+                <ng-container [ngSwitch]="current.diagram">
+                  <svg *ngSwitchCase="'hook'" viewBox="0 0 200 120" class="w-full max-w-xs h-28">
+                    <rect width="200" height="120" rx="8" fill="#0f172a"/>
+                    <circle cx="110" cy="58" r="36" fill="#22c55e" opacity="0.35"/>
+                    <circle cx="110" cy="58" r="22" fill="#ef4444" opacity="0.55"/>
+                    <path d="M78 70 C60 90 55 95 70 100 C95 108 120 95 125 78" fill="none" stroke="#f97316" stroke-width="8" stroke-linecap="round"/>
+                    <text x="12" y="20" fill="#94a3b8" font-size="11" font-family="sans-serif">HOOK</text>
+                  </svg>
+                  <svg *ngSwitchCase="'couplet'" viewBox="0 0 200 120" class="w-full max-w-xs h-28">
+                    <rect width="200" height="120" rx="8" fill="#0f172a"/>
+                    <circle cx="85" cy="60" r="28" fill="#22c55e" opacity="0.7"/>
+                    <circle cx="115" cy="60" r="28" fill="#ef4444" opacity="0.7"/>
+                    <text x="12" y="20" fill="#94a3b8" font-size="11" font-family="sans-serif">VELOCITY</text>
+                    <text x="70" y="105" fill="#86efac" font-size="10" font-family="sans-serif">IN</text>
+                    <text x="118" y="105" fill="#fca5a5" font-size="10" font-family="sans-serif">OUT</text>
+                  </svg>
+                  <svg *ngSwitchCase="'core'" viewBox="0 0 200 120" class="w-full max-w-xs h-28">
+                    <rect width="200" height="120" rx="8" fill="#0f172a"/>
+                    <circle cx="100" cy="60" r="40" fill="#86efac" opacity="0.3"/>
+                    <circle cx="100" cy="60" r="28" fill="#f97316" opacity="0.5"/>
+                    <circle cx="100" cy="60" r="14" fill="#f472b6" opacity="0.85"/>
+                    <text x="12" y="20" fill="#94a3b8" font-size="11" font-family="sans-serif">CORE</text>
+                  </svg>
+                  <svg *ngSwitchCase="'watch'" viewBox="0 0 200 120" class="w-full max-w-xs h-28">
+                    <rect width="200" height="120" rx="8" fill="#0f172a"/>
+                    <rect x="40" y="35" width="120" height="50" rx="8" fill="#eab308" opacity="0.85"/>
+                    <text x="70" y="66" fill="#0f172a" font-size="18" font-weight="700" font-family="sans-serif">WATCH</text>
+                  </svg>
+                  <svg *ngSwitchCase="'warning'" viewBox="0 0 200 120" class="w-full max-w-xs h-28">
+                    <rect width="200" height="120" rx="8" fill="#0f172a"/>
+                    <rect x="30" y="35" width="140" height="50" rx="8" fill="#ef4444" opacity="0.9"/>
+                    <text x="55" y="66" fill="#fff" font-size="16" font-weight="700" font-family="sans-serif">WARNING</text>
+                  </svg>
+                  <svg *ngSwitchCase="'ef0'" viewBox="0 0 200 120" class="w-full max-w-xs h-28">
+                    <rect width="200" height="120" rx="8" fill="#0f172a"/>
+                    <rect x="60" y="50" width="80" height="45" fill="#64748b"/>
+                    <polygon points="60,50 100,25 140,50" fill="#94a3b8"/>
+                    <line x1="150" y1="40" x2="170" y2="55" stroke="#fbbf24" stroke-width="3"/>
+                    <text x="12" y="20" fill="#94a3b8" font-size="11" font-family="sans-serif">LIGHT DAMAGE</text>
+                  </svg>
+                  <svg *ngSwitchCase="'ef2'" viewBox="0 0 200 120" class="w-full max-w-xs h-28">
+                    <rect width="200" height="120" rx="8" fill="#0f172a"/>
+                    <rect x="50" y="55" width="70" height="40" fill="#64748b"/>
+                    <polygon points="50,55 85,20 120,55" fill="#94a3b8" opacity="0.5"/>
+                    <path d="M130 90 L145 40 L160 90" fill="none" stroke="#22c55e" stroke-width="4"/>
+                    <text x="12" y="20" fill="#94a3b8" font-size="11" font-family="sans-serif">SERIOUS DAMAGE</text>
+                  </svg>
+                  <svg *ngSwitchCase="'ef4'" viewBox="0 0 200 120" class="w-full max-w-xs h-28">
+                    <rect width="200" height="120" rx="8" fill="#0f172a"/>
+                    <rect x="55" y="85" width="90" height="10" fill="#475569"/>
+                    <line x1="70" y1="85" x2="60" y2="50" stroke="#94a3b8" stroke-width="3"/>
+                    <line x1="130" y1="85" x2="145" y2="45" stroke="#94a3b8" stroke-width="3"/>
+                    <text x="12" y="20" fill="#f472b6" font-size="11" font-family="sans-serif">WIPED CLEAN</text>
+                  </svg>
+                  <svg *ngSwitchCase="'shelf'" viewBox="0 0 200 120" class="w-full max-w-xs h-28">
+                    <rect width="200" height="120" rx="8" fill="#0f172a"/>
+                    <path d="M20 80 Q70 30 120 55 T190 40 L190 100 L20 100 Z" fill="#64748b" opacity="0.8"/>
+                    <text x="12" y="20" fill="#94a3b8" font-size="11" font-family="sans-serif">SHELF CLOUD</text>
+                  </svg>
+                </ng-container>
+              </div>
+            }
+
+            <div class="grid gap-2">
+              @for (choice of current.choices; track choice.id) {
+                <button
+                  type="button"
+                  class="btn btn-lg justify-start gap-3 min-h-16 rounded-2xl font-bold text-left border-2 normal-case"
+                  [disabled]="answered"
+                  [ngClass]="choiceButtonClass(choice.id)"
+                  (click)="pick(choice.id)"
+                >
+                  @if (choice.icon) {
+                    <span class="text-2xl shrink-0" aria-hidden="true">{{ choice.icon }}</span>
+                  }
+                  <span class="flex-1 text-base md:text-lg leading-snug">{{ choice.label }}</span>
+                </button>
+              }
             </div>
+
+            @if (answered) {
+              <div
+                class="rounded-xl border p-4"
+                [ngClass]="lastCorrect
+                  ? 'border-success/40 bg-success/10'
+                  : 'border-warning/40 bg-warning/10'"
+              >
+                <div class="font-black uppercase tracking-wider text-sm mb-1"
+                  [ngClass]="lastCorrect ? 'text-success' : 'text-warning'">
+                  {{ lastCorrect ? 'Expert call' : 'Almost — here’s the pro tip' }}
+                </div>
+                <p class="text-sm font-semibold text-base-content/80 leading-relaxed">
+                  {{ feedback }}
+                </p>
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm mt-3 rounded-xl font-black uppercase tracking-wider min-h-11"
+                  (click)="next()"
+                >
+                  {{ index + 1 >= deck.length ? 'See results' : 'Next question' }}
+                </button>
+              </div>
+            }
           </article>
-        </div>
+        }
+
+        @if (view === 'results' && activeTrack) {
+          <div class="storm-card p-6 text-center space-y-4">
+            <p class="text-[10px] font-black uppercase tracking-[0.25em] text-primary">Mission complete</p>
+            <h2 class="text-3xl font-black text-white italic uppercase">{{ resultRank.title }}</h2>
+            <p class="text-base-content/60 font-semibold">{{ resultRank.blurb }}</p>
+            <div class="text-5xl font-black text-primary py-2">
+              {{ score }}<span class="text-2xl text-base-content/40">/{{ deck.length }}</span>
+            </div>
+            <p class="text-sm font-bold text-accent uppercase tracking-widest">
+              {{ percent }}% · {{ activeTrack.badge }} track
+            </p>
+            <div class="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+              <button
+                type="button"
+                class="btn btn-primary rounded-xl font-black uppercase tracking-wider min-h-12"
+                (click)="startTrack(activeTrack)"
+              >
+                Run it again
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost border border-base-300 rounded-xl font-black uppercase tracking-wider min-h-12"
+                (click)="backToHub()"
+              >
+                All tracks
+              </button>
+            </div>
+          </div>
+        }
+
       </div>
     </div>
   `,
-  styles: ``
 })
-export class PlayComponent {}
+export class PlayComponent implements OnInit {
+  readonly tracks = QUIZ_TRACKS;
+
+  view: View = 'hub';
+  activeTrack: QuizTrack | null = null;
+  deck: QuizQuestion[] = [];
+  index = 0;
+  score = 0;
+  answered = false;
+  lastCorrect = false;
+  feedback = '';
+  selectedId: string | null = null;
+  progress: Partial<Record<QuizCategory, TrackProgress>> = {};
+  overallRank: { title: string; blurb: string } | null = null;
+
+  get current(): QuizQuestion | null {
+    return this.deck[this.index] ?? null;
+  }
+
+  get progressPct(): number {
+    if (!this.deck.length) return 0;
+    return Math.round(((this.index + (this.answered ? 1 : 0)) / this.deck.length) * 100);
+  }
+
+  get percent(): number {
+    if (!this.deck.length) return 0;
+    return Math.round((this.score / this.deck.length) * 100);
+  }
+
+  get resultRank(): { title: string; blurb: string } {
+    return expertRank(this.percent);
+  }
+
+  ngOnInit(): void {
+    this.loadProgress();
+  }
+
+  startTrack(track: QuizTrack): void {
+    this.activeTrack = track;
+    this.deck = this.shuffle(questionsFor(track.id));
+    this.index = 0;
+    this.score = 0;
+    this.answered = false;
+    this.selectedId = null;
+    this.feedback = '';
+    this.view = 'quiz';
+  }
+
+  backToHub(): void {
+    this.view = 'hub';
+    this.activeTrack = null;
+    this.deck = [];
+    this.refreshOverallRank();
+  }
+
+  pick(choiceId: string): void {
+    if (this.answered || !this.current) return;
+    this.selectedId = choiceId;
+    this.answered = true;
+    this.lastCorrect = choiceId === this.current.correctId;
+    if (this.lastCorrect) {
+      this.score++;
+      this.feedback = this.current.explainCorrect;
+    } else {
+      this.feedback = this.current.explainWrong;
+    }
+  }
+
+  next(): void {
+    if (this.index + 1 >= this.deck.length) {
+      this.finish();
+      return;
+    }
+    this.index++;
+    this.answered = false;
+    this.selectedId = null;
+    this.feedback = '';
+  }
+
+  choiceButtonClass(choiceId: string): string {
+    if (!this.answered) {
+      return 'btn-ghost border-base-300 bg-base-200/40 hover:border-primary hover:bg-primary/10';
+    }
+    const correct = this.current?.correctId === choiceId;
+    const picked = this.selectedId === choiceId;
+    if (correct) return 'btn-success border-success text-success-content';
+    if (picked) return 'btn-warning border-warning text-warning-content opacity-90';
+    return 'btn-ghost border-base-300 opacity-40';
+  }
+
+  private finish(): void {
+    if (!this.activeTrack) return;
+    const cat = this.activeTrack.id;
+    const percent = this.percent;
+    const prev = this.progress[cat];
+    const next: TrackProgress = {
+      bestPercent: Math.max(prev?.bestPercent ?? 0, percent),
+      bestScore: percent >= (prev?.bestPercent ?? -1) ? this.score : (prev?.bestScore ?? this.score),
+      bestTotal: this.deck.length,
+      plays: (prev?.plays ?? 0) + 1,
+    };
+    if (prev && percent < prev.bestPercent) {
+      next.bestScore = prev.bestScore;
+      next.bestTotal = prev.bestTotal;
+    }
+    this.progress = { ...this.progress, [cat]: next };
+    this.saveProgress();
+    this.view = 'results';
+  }
+
+  private loadProgress(): void {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) this.progress = JSON.parse(raw);
+    } catch {
+      this.progress = {};
+    }
+    this.refreshOverallRank();
+  }
+
+  private saveProgress(): void {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.progress));
+    } catch { /* ignore */ }
+    this.refreshOverallRank();
+  }
+
+  private refreshOverallRank(): void {
+    const vals = Object.values(this.progress);
+    if (!vals.length) {
+      this.overallRank = null;
+      return;
+    }
+    const avg = Math.round(vals.reduce((s, p) => s + p.bestPercent, 0) / vals.length);
+    this.overallRank = expertRank(avg);
+  }
+
+  private shuffle<T>(arr: T[]): T[] {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+}
