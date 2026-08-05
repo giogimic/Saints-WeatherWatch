@@ -6,8 +6,9 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        sans: ['Fredoka', 'sans-serif'],
+        mono: ['Fira Code', 'JetBrains Mono', 'monospace'],
+        display: ['Outfit', 'sans-serif'],
       },
       animation: {
         'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -31,30 +32,30 @@ module.exports = {
     themes: [
       {
         stormops: {
-          "primary": "#facc15",          // electric yellow - highlights, active
-          "primary-content": "#1e1b0a",  // dark text on yellow
-          "secondary": "#38bdf8",        // storm blue - watches, info
-          "secondary-content": "#082f49",
-          "accent": "#ef4444",           // tornado red - warnings, danger
-          "accent-content": "#450a0a",
-          "neutral": "#1e293b",          // slate
-          "neutral-content": "#cbd5e1",
-          "base-100": "#0f172a",         // deep slate/navy background
-          "base-200": "#1e293b",         // slightly lighter panels
-          "base-300": "#334155",         // borders, dividers
-          "base-content": "#e2e8f0",     // light text on dark
-          "info": "#38bdf8",
-          "success": "#22c55e",
-          "warning": "#f59e0b",
-          "error": "#ef4444",
-          "--rounded-box": "1rem",
-          "--rounded-btn": "0.5rem",
-          "--rounded-badge": "1.9rem",
-          "--animation-btn": "0.25s",
-          "--animation-input": "0.2s",
+          "primary": "#00e5ff",          // Neon Cyan (slurp juice)
+          "primary-content": "#001a1d",
+          "secondary": "#ff007f",        // Hot Pink
+          "secondary-content": "#4d0026",
+          "accent": "#ffea00",           // Loot-tier Gold/Yellow
+          "accent-content": "#4d4600",
+          "neutral": "#1a1025",          // Deep gaming purple
+          "neutral-content": "#e0d4f5",
+          "base-100": "#1a1025",         // Background
+          "base-200": "#2b1b3d",         // Panels
+          "base-300": "#452c63",         // Borders
+          "base-content": "#ffffff",     // Text
+          "info": "#00e5ff",
+          "success": "#39ff14",          // Neon green
+          "warning": "#ff9900",
+          "error": "#ff003c",            // Vivid red
+          "--rounded-box": "1.5rem",
+          "--rounded-btn": "1rem",
+          "--rounded-badge": "1.5rem",
+          "--animation-btn": "0.15s",
+          "--animation-input": "0.15s",
           "--btn-text-case": "uppercase",
-          "--navbar-height": "4rem",
-          "--tab-radius": "0.5rem",
+          "--navbar-height": "4.5rem",
+          "--tab-radius": "1rem",
         },
       },
     ],

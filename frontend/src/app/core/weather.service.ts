@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 
 export interface WeatherAlert {
   id: string;
@@ -63,14 +64,29 @@ export class WeatherService {
   private readonly http = inject(HttpClient);
 
   getAlerts(): Observable<WeatherAlertsResponse> {
-    return this.http.get<WeatherAlertsResponse>('/api/alerts');
+    return this.http.get<WeatherAlertsResponse>('/api/alerts').pipe(
+      catchError(err => {
+        console.error('getAlerts error:', err);
+        return of({ generatedAt: new Date().toISOString(), alerts: [], history: [] });
+      })
+    );
   }
 
   getOverview(): Observable<WeatherOverviewResponse> {
-    return this.http.get<WeatherOverviewResponse>('/api/overview');
+    return this.http.get<WeatherOverviewResponse>('/api/overview').pipe(
+      catchError(err => {
+        console.error('getOverview error:', err);
+        return of({ generatedAt: new Date().toISOString(), totalAlerts: 0, severeAlerts: 0, watchCount: 0, categories: [], topHeadline: '', mostAtRiskArea: '' });
+      })
+    );
   }
 
   getHistory(): Observable<TrackerIncident[]> {
-    return this.http.get<TrackerIncident[]>('/api/history');
+    return this.http.get<TrackerIncident[]>('/api/history').pipe(
+      catchError(err => {
+        console.error('getHistory error:', err);
+        return of([]);
+      })
+    );
   }
 }

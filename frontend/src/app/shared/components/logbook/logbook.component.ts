@@ -11,32 +11,38 @@ import { Observable, Subscription, interval, startWith, switchMap } from 'rxjs';
     <!-- Floating Action Button -->
     <div class="fixed bottom-20 right-6 md:bottom-8 z-[100]">
       <button 
-        class="btn btn-circle btn-accent btn-lg shadow-[0_0_20px_rgba(0,255,255,0.5)] border-2 border-cyan-400 hover:scale-105 transition-transform"
+        class="btn btn-circle btn-primary btn-lg border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:scale-110 hover:-translate-y-2 transition-all duration-300 flex items-center justify-center bg-primary"
         (click)="openLogbook()"
-        title="Command Center HUD"
+        title="Open Logbook"
       >
-        <span class="text-3xl">📡</span>
+        <span class="text-3xl drop-shadow-md">📖</span>
       </button>
     </div>
 
-    <!-- HUD Modal Dialog -->
-    <dialog id="hud_modal" class="modal modal-bottom sm:modal-middle backdrop-blur-sm">
-      <div class="modal-box bg-slate-900/90 text-cyan-50 shadow-[0_0_50px_rgba(0,255,255,0.2)] border border-cyan-500/50 sm:max-w-6xl overflow-hidden p-0 relative h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col rounded-xl">
+    <!-- Modal Dialog -->
+    <dialog id="hud_modal" class="modal modal-bottom sm:modal-middle backdrop-blur-md">
+      <div class="modal-box bg-base-100 text-base-content border-4 border-base-300 shadow-[12px_12px_0_0_rgba(69,44,99,1)] sm:max-w-6xl overflow-hidden p-0 relative h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col rounded-[2.5rem]">
         
-        <!-- HUD Scanlines overlay -->
-        <div class="absolute inset-0 pointer-events-none opacity-[0.03] z-50 mix-blend-overlay" style="background-image: repeating-linear-gradient(transparent, transparent 2px, #0ff 3px); background-size: 100% 4px;"></div>
-        
-        <!-- Header -->
-        <div class="bg-slate-950/80 p-4 border-b border-cyan-500/30 flex justify-between items-center z-10 sticky top-0 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
-          <div class="flex items-center gap-3">
-            <div class="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(255,0,0,0.8)]"></div>
+        <!-- Bubbly Header -->
+        <div class="bg-base-200 p-5 border-b-4 border-base-300 flex justify-between items-center z-10 sticky top-0 relative overflow-hidden">
+          <!-- Fun diagonal stripes decoration -->
+          <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background: repeating-linear-gradient(45deg, transparent, transparent 15px, #fff 15px, #fff 30px);"></div>
+          
+          <div class="flex items-center gap-4 relative z-10">
+            <div class="w-14 h-14 rounded-full bg-secondary text-secondary-content flex items-center justify-center text-3xl border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] -rotate-[10deg] hover:rotate-0 transition-transform">
+              📡
+            </div>
             <div>
-              <h2 class="text-2xl font-bold tracking-widest uppercase font-mono text-cyan-400 drop-shadow-[0_0_5px_rgba(0,255,255,0.5)]">Command Center Uplink</h2>
-              <p class="text-[10px] text-cyan-600 font-mono tracking-widest mt-1 uppercase">SYSTEM.STATUS: ONLINE // SECURE CONNECTION ESTABLISHED</p>
+              <h2 class="text-3xl md:text-4xl font-black tracking-wide text-primary drop-shadow-[3px_3px_0_rgba(69,44,99,1)] uppercase italic leading-none font-sans" style="-webkit-text-stroke: 1px rgba(69,44,99,0.5);">
+                Threat Logs
+              </h2>
+              <p class="text-xs text-success font-bold tracking-widest mt-1 uppercase flex items-center gap-2">
+                <span class="animate-pulse">●</span> System Online
+              </p>
             </div>
           </div>
-          <form method="dialog">
-            <button class="btn btn-sm btn-circle btn-ghost text-cyan-400 hover:bg-cyan-900/50 border border-cyan-500/20 font-mono">✕</button>
+          <form method="dialog" class="relative z-10">
+            <button class="btn btn-circle btn-error border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] text-white hover:scale-110 transition-transform text-xl font-black">✕</button>
           </form>
         </div>
 
@@ -44,32 +50,32 @@ import { Observable, Subscription, interval, startWith, switchMap } from 'rxjs';
         <div class="flex flex-col md:flex-row flex-1 overflow-hidden z-10">
           
           <!-- Live Feed Sidebar -->
-          <div class="md:w-1/3 border-b md:border-b-0 md:border-r border-cyan-500/30 bg-slate-900/50 p-4 flex flex-col h-1/2 md:h-auto overflow-hidden">
-            <h3 class="text-xs tracking-widest font-mono text-cyan-500 uppercase mb-4 flex items-center justify-between border-b border-cyan-500/20 pb-2">
-              <span>Live Uplink</span>
-              <span class="text-amber-500 animate-pulse font-bold text-xs">● POLLING</span>
+          <div class="md:w-1/3 border-b-4 md:border-b-0 md:border-r-4 border-base-300 bg-base-200/50 p-5 flex flex-col h-1/2 md:h-auto overflow-hidden">
+            <h3 class="text-sm font-black text-secondary uppercase mb-4 flex items-center justify-between border-b-4 border-base-300 pb-3 font-sans italic tracking-wider">
+              <span>⚡ Live Uplink</span>
+              <span class="text-accent animate-pulse font-bold text-[10px] bg-accent/20 px-2 py-1 rounded-full border border-accent/50">POLLING</span>
             </h3>
             
-            <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
+            <div class="flex-1 overflow-y-auto pr-3 custom-scrollbar space-y-4">
               @if (liveAlerts.length === 0) {
-                <div class="text-cyan-700 font-mono text-xs text-center mt-10 opacity-70">
-                  <span class="block text-2xl mb-2">📡</span>
-                  SCANNING FOR ANOMALIES...<br>NO ACTIVE ALERTS DETECTED.
+                <div class="text-base-content/60 font-bold text-sm text-center mt-12 bg-base-300/30 p-6 rounded-3xl border-2 border-base-300 border-dashed">
+                  <span class="block text-4xl mb-3 animate-bounce">👀</span>
+                  SCANNING...<br>NO ACTIVE ALERTS DETECTED.
                 </div>
               }
               
               @for (alert of liveAlerts; track alert.id) {
-                <div class="bg-slate-800/80 border border-slate-700 p-3 rounded-sm relative overflow-hidden group hover:border-cyan-500/50 transition-colors">
+                <div class="bg-base-100 border-4 border-base-300 p-4 rounded-3xl relative overflow-hidden group hover:-translate-y-1 hover:shadow-[4px_4px_0_0_rgba(69,44,99,1)] transition-all">
                   <!-- Highlight bar -->
-                  <div class="absolute left-0 top-0 bottom-0 w-1" [ngClass]="getSeverityColorClass(alert.severity)"></div>
+                  <div class="absolute left-0 top-0 bottom-0 w-3" [ngClass]="getSeverityColorClass(alert.severity)"></div>
                   
-                  <div class="pl-2">
-                    <div class="flex justify-between items-start mb-1">
-                      <span class="text-[9px] uppercase font-mono text-slate-400 tracking-wider">ID: {{ alert.id.substring(0, 12) }}...</span>
-                      <span class="text-[9px] font-bold uppercase font-mono px-1 rounded-sm" [ngClass]="getSeverityBgClass(alert.severity)">{{ alert.severity }}</span>
+                  <div class="pl-3">
+                    <div class="flex justify-between items-start mb-2">
+                      <span class="text-[10px] uppercase font-bold text-base-content/50 bg-base-200 px-2 py-1 rounded-lg">ID: {{ alert.id.substring(0, 8) }}</span>
+                      <span class="text-[10px] font-black uppercase px-2 py-1 rounded-lg border-2" [ngClass]="getSeverityBgClass(alert.severity)">{{ alert.severity }}</span>
                     </div>
-                    <h4 class="font-bold text-sm font-mono text-slate-200 leading-tight mb-2">{{ alert.headline }}</h4>
-                    <p class="text-xs text-slate-400 line-clamp-2">📍 {{ alert.area }}</p>
+                    <h4 class="font-bold text-base font-sans text-white leading-tight mb-2">{{ alert.headline }}</h4>
+                    <p class="text-xs text-base-content/70 font-semibold truncate">📍 {{ alert.area }}</p>
                   </div>
                 </div>
               }
@@ -77,58 +83,62 @@ import { Observable, Subscription, interval, startWith, switchMap } from 'rxjs';
           </div>
 
           <!-- Archived Threat Logs -->
-          <div class="md:w-2/3 p-4 flex flex-col h-1/2 md:h-auto overflow-hidden bg-slate-950/40">
-            <h3 class="text-xs tracking-widest font-mono text-cyan-500 uppercase mb-4 flex items-center justify-between border-b border-cyan-500/20 pb-2">
-              <span>Archived Threat Logs</span>
-              <span class="text-slate-500 text-[10px]">LOCAL DATABASE</span>
+          <div class="md:w-2/3 p-5 flex flex-col h-1/2 md:h-auto overflow-hidden bg-base-100 relative">
+            
+            <h3 class="text-sm font-black text-primary uppercase mb-4 flex items-center justify-between border-b-4 border-base-300 pb-3 font-sans italic tracking-wider">
+              <span>🗄️ Database Archive</span>
+              <span class="text-base-content/50 text-[10px] bg-base-200 px-2 py-1 rounded-full font-bold">LOCAL ONLY</span>
             </h3>
 
-            <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            <div class="flex-1 overflow-y-auto pr-3 custom-scrollbar">
               @if (history$ | async; as incidents) {
                 @if (incidents.length === 0) {
-                  <div class="text-center p-8 opacity-50 text-cyan-600 font-mono">
-                    <span class="text-4xl block mb-2">💾</span>
-                    <p>DATABASE EMPTY. NO HISTORICAL THREATS RECORDED.</p>
+                  <div class="flex flex-col justify-center items-center h-full opacity-60">
+                    <span class="text-6xl block mb-4 grayscale">💾</span>
+                    <h3 class="text-xl font-black text-base-content">DATABASE EMPTY</h3>
+                    <p class="font-bold text-sm">NO HISTORICAL THREATS RECORDED.</p>
                   </div>
                 } @else {
                   <div class="space-y-4">
                     @for (incident of incidents; track incident.id) {
-                      <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-md relative group hover:bg-slate-800/60 transition-colors">
+                      <div class="bg-base-200 border-4 border-base-300 p-5 rounded-[2rem] relative group hover:-translate-y-1 hover:shadow-[6px_6px_0_0_rgba(69,44,99,1)] transition-all overflow-hidden">
                         
-                        <div class="flex flex-wrap justify-between items-start gap-2 mb-3">
-                          <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-sm flex items-center justify-center bg-slate-950 border border-slate-800 shadow-inner">
-                              <span class="text-2xl" *ngIf="incident.isTornado">🌪️</span>
-                              <span class="text-xl" *ngIf="!incident.isTornado">⛈️</span>
+                        <div class="flex flex-wrap justify-between items-start gap-3 mb-4">
+                          <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-2xl flex items-center justify-center bg-base-100 border-4 border-base-300 shadow-[2px_2px_0_0_rgba(69,44,99,0.5)] rotate-3 group-hover:rotate-6 transition-transform">
+                              <span class="text-3xl drop-shadow-md" *ngIf="incident.isTornado">🌪️</span>
+                              <span class="text-3xl drop-shadow-md" *ngIf="!incident.isTornado">⛈️</span>
                             </div>
                             <div>
-                              <h3 class="font-bold text-base text-cyan-100 font-mono">{{ incident.headline }}</h3>
-                              <span class="text-[10px] text-cyan-600 uppercase font-mono tracking-widest">LOGGED: {{ formatDate(incident.datePulled) }}</span>
+                              <h3 class="font-black text-lg md:text-xl text-white font-sans">{{ incident.headline }}</h3>
+                              <span class="text-[10px] text-primary/80 font-bold uppercase tracking-wider bg-primary/10 px-2 py-1 rounded-lg inline-block mt-1">LOGGED: {{ formatDate(incident.datePulled) }}</span>
                             </div>
                           </div>
                           
                           <div class="text-right">
-                            <span class="px-2 py-0.5 text-[10px] rounded-sm font-mono tracking-widest font-bold uppercase border" 
-                                  [ngClass]="incident.isTornado ? 'bg-red-900/30 text-red-400 border-red-500/50' : 'bg-amber-900/30 text-amber-400 border-amber-500/50'">
+                            <span class="px-3 py-1 text-[11px] rounded-xl font-black uppercase border-2 shadow-sm" 
+                                  [ngClass]="incident.isTornado ? 'bg-error/20 text-error border-error/50' : 'bg-accent/20 text-accent border-accent/50'">
                               {{ incident.severity }}
                             </span>
                           </div>
                         </div>
                         
-                        <div class="grid sm:grid-cols-2 gap-4 mt-3 bg-slate-950/50 p-3 rounded-sm border border-slate-800/50 text-xs font-mono">
-                          <div>
-                            <span class="text-cyan-700 uppercase text-[9px] block mb-1">Impact Zone</span>
-                            <span class="text-slate-300">📍 {{ incident.area }}</span>
+                        <div class="grid sm:grid-cols-2 gap-3 mt-4 bg-base-100 p-4 rounded-2xl border-2 border-base-300 text-xs font-bold">
+                          <div class="flex flex-col gap-1">
+                            <span class="text-secondary uppercase text-[10px] bg-secondary/10 w-fit px-2 py-0.5 rounded-md">📍 Impact Zone</span>
+                            <span class="text-base-content">{{ incident.area }}</span>
                           </div>
-                          <div>
-                            <span class="text-cyan-700 uppercase text-[9px] block mb-1">Event Classification</span>
-                            <span class="text-slate-300 capitalize">{{ incident.category.replace('-', ' ') }}</span>
+                          <div class="flex flex-col gap-1">
+                            <span class="text-secondary uppercase text-[10px] bg-secondary/10 w-fit px-2 py-0.5 rounded-md">🏷️ Event Type</span>
+                            <span class="text-base-content capitalize">{{ incident.category.replace('-', ' ') }}</span>
                           </div>
                         </div>
 
-                        <div class="mt-3 text-xs text-slate-400 border-l-2 border-cyan-700/50 pl-3 italic font-mono leading-relaxed">
-                          > {{ incident.description }}
-                        </div>
+                        @if (incident.description) {
+                          <div class="mt-4 text-xs text-base-content/80 font-semibold bg-base-300/30 p-3 rounded-xl border-l-4 border-primary italic">
+                            {{ incident.description }}
+                          </div>
+                        }
                       </div>
                     }
                   </div>
@@ -143,17 +153,19 @@ import { Observable, Subscription, interval, startWith, switchMap } from 'rxjs';
   `,
   styles: [`
     .custom-scrollbar::-webkit-scrollbar {
-      width: 4px;
+      width: 12px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
-      background: rgba(15, 23, 42, 0.5);
+      background: rgba(43, 27, 61, 0.5);
+      border-radius: 10px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: rgba(6, 182, 212, 0.3);
-      border-radius: 4px;
+      background: #00e5ff;
+      border-radius: 10px;
+      border: 3px solid rgba(43, 27, 61, 0.5);
     }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: rgba(6, 182, 212, 0.6);
+      background: #39ff14;
     }
   `]
 })
@@ -166,7 +178,7 @@ export class LogbookComponent implements OnDestroy {
   private pollingSub?: Subscription;
 
   openLogbook() {
-    // Fetch History
+    // Fetch History (Now properly catches 500 errors in service)
     this.history$ = this.weatherService.getHistory();
     
     // Start Live Polling every 30 seconds
@@ -197,20 +209,20 @@ export class LogbookComponent implements OnDestroy {
   }
 
   getSeverityColorClass(severity: string): string {
-    switch (severity.toLowerCase()) {
-      case 'extreme': return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]';
-      case 'severe': return 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]';
-      case 'moderate': return 'bg-yellow-400';
-      default: return 'bg-cyan-500';
+    switch (severity?.toLowerCase()) {
+      case 'extreme': return 'bg-error';
+      case 'severe': return 'bg-accent';
+      case 'moderate': return 'bg-warning';
+      default: return 'bg-primary';
     }
   }
 
   getSeverityBgClass(severity: string): string {
-    switch (severity.toLowerCase()) {
-      case 'extreme': return 'bg-red-900/40 text-red-400 border border-red-500/50';
-      case 'severe': return 'bg-amber-900/40 text-amber-400 border border-amber-500/50';
-      case 'moderate': return 'bg-yellow-900/40 text-yellow-400 border border-yellow-500/50';
-      default: return 'bg-cyan-900/40 text-cyan-400 border border-cyan-500/50';
+    switch (severity?.toLowerCase()) {
+      case 'extreme': return 'bg-error/20 text-error border-error/50';
+      case 'severe': return 'bg-accent/20 text-accent border-accent/50';
+      case 'moderate': return 'bg-warning/20 text-warning border-warning/50';
+      default: return 'bg-primary/20 text-primary border-primary/50';
     }
   }
 }
