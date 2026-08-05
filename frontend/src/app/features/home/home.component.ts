@@ -15,7 +15,7 @@ import { WeatherService } from '../../core/weather.service';
       
       <div class="text-center max-w-4xl relative z-10">
         <div class="mb-6 text-8xl md:text-9xl animate-bounce drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]">🌪️</div>
-        <h1 class="text-6xl md:text-8xl font-black text-white mb-4 tracking-wide uppercase italic font-sans drop-shadow-[4px_4px_0_rgba(69,44,99,1)]" style="-webkit-text-stroke: 2px rgba(69,44,99,0.8);">
+        <h1 class="text-4xl sm:text-5xl md:text-8xl font-black text-white mb-4 tracking-wide uppercase italic font-sans drop-shadow-[4px_4px_0_rgba(69,44,99,1)]" style="-webkit-text-stroke: 2px rgba(69,44,99,0.8);">
           Weather<span class="text-primary drop-shadow-[2px_2px_0_rgba(69,44,99,1)]">Watch</span>
         </h1>
         <p class="text-xl md:text-2xl text-base-content/80 mb-2 font-bold font-sans tracking-wide">
