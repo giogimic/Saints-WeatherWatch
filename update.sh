@@ -57,11 +57,23 @@ if [ "$DB_PROVIDER" = "mysql" ]; then
   fi
 else
   echo -e "${CYAN}Detecting SQLite configuration...${NC}"
-  if [ -f "$ROOT_DIR/backend/weatherwatch.db" ]; then
-    cp "$ROOT_DIR/backend/weatherwatch.db" "$BACKUP_DIR/weatherwatch_sqlite_$TIMESTAMP.db"
-    echo -e "${GREEN}✓ SQLite backup saved to $BACKUP_DIR/weatherwatch_sqlite_$TIMESTAMP.db!${NC}"
+  SQLITE_DB=""
+  for candidate in \
+    "$ROOT_DIR/backend/data/weatherwatch.db" \
+    "$ROOT_DIR/backend/weatherwatch.db" \
+    "$ROOT_DIR/backend/prisma/weatherwatch.db"
+  do
+    if [ -f "$candidate" ]; then
+      SQLITE_DB="$candidate"
+      break
+    fi
+  done
+  if [ -n "$SQLITE_DB" ]; then
+    cp "$SQLITE_DB" "$BACKUP_DIR/weatherwatch_sqlite_$TIMESTAMP.db"
+    echo -e "${GREEN}✓ SQLite backup saved to $BACKUP_DIR/weatherwatch_sqlite_$TIMESTAMP.db${NC}"
+    echo -e "  (from $SQLITE_DB)"
   else
-    echo -e "${YELLOW}⚠️ No SQLite database found at $ROOT_DIR/backend/weatherwatch.db. Skipping backup.${NC}"
+    echo -e "${YELLOW}⚠️ No SQLite database found under backend/data or backend/. Skipping backup.${NC}"
   fi
 fi
 
@@ -69,12 +81,49 @@ fi
 echo -e "\n${BLUE}➔ Pulling latest changes from Git...${NC}"
 git pull
 
+# 3b. Migrate legacy SQLite path.
+# The backend volume used to mount over all of /app, which shadowed the freshly
+# built binary. It now mounts /app/data only, so the DB URL must live under it.
+if [ -f "$ROOT_DIR/.env" ] && grep -q '^DATABASE_URL=file:/app/weatherwatch.db' "$ROOT_DIR/.env"; then
+  echo -e "${YELLOW}➔ Migrating legacy DATABASE_URL to /app/data/weatherwatch.db${NC}"
+  sed -i 's|^DATABASE_URL=file:/app/weatherwatch.db|DATABASE_URL=file:/app/data/weatherwatch.db|' "$ROOT_DIR/.env"
+  export DATABASE_URL=file:/app/data/weatherwatch.db
+  echo -e "${GREEN}✓ .env updated${NC}"
+fi
+
 # 4. Rebuild & Restart
 echo -e "\n${BLUE}➔ Rebuilding and restarting containers...${NC}"
 if [ "$DB_PROVIDER" = "mysql" ]; then
   docker compose --profile mariadb up -d --build
 else
   docker compose up -d --build
+fi
+
+# 5. Verify the backend actually came up with the new routes
+echo -e "\n${BLUE}➔ Verifying backend...${NC}"
+BACKEND_URL="http://127.0.0.1:5081"
+ok=0
+for i in $(seq 1 30); do
+  if curl -fsS "$BACKEND_URL/api/health" >/dev/null 2>&1; then
+    ok=1
+    break
+  fi
+  sleep 2
+done
+
+if [ "$ok" = "1" ]; then
+  echo -e "${GREEN}✓ /api/health responding${NC}"
+  if curl -fsS "$BACKEND_URL/api/cams" >/dev/null 2>&1; then
+    CAM_COUNT=$(curl -fsS "$BACKEND_URL/api/cams" | grep -o '"id":' | wc -l | tr -d ' ')
+    echo -e "${GREEN}✓ /api/cams responding ($CAM_COUNT cameras)${NC}"
+  else
+    echo -e "${RED}❌ /api/cams missing — backend is running an old build.${NC}"
+    echo -e "${YELLOW}   Force a clean rebuild:${NC}"
+    echo -e "   ${CYAN}docker compose build --no-cache backend && docker compose up -d${NC}"
+  fi
+else
+  echo -e "${RED}❌ Backend did not respond on $BACKEND_URL/api/health${NC}"
+  echo -e "${YELLOW}   Check logs: ${CYAN}docker compose logs --tail=80 backend${NC}"
 fi
 
 echo -e "\n${CYAN}======================================================${NC}"

@@ -41,10 +41,10 @@ COPY --from=builder /app/go.sum ./go.sum
 
 # Copy entrypoint
 COPY entrypoint.sh ./
-RUN chmod +x entrypoint.sh
+RUN chmod +x entrypoint.sh && mkdir -p /app/data
 
-# Ensure we can persist the DB if SQLite is used
-VOLUME ["/app"]
+# Persist only the database directory, so rebuilds always ship a fresh binary
+VOLUME ["/app/data"]
 
 EXPOSE 8080
 

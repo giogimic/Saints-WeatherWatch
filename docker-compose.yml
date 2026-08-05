@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - "5080:80"
+    depends_on:
+      - backend
 
   backend:
     build:
@@ -16,12 +18,14 @@ services:
     container_name: weatherwatch_backend
     restart: unless-stopped
     environment:
-      - DATABASE_URL=${DATABASE_URL:-file:/app/weatherwatch.db}
+      - DATABASE_URL=${DATABASE_URL:-file:/app/data/weatherwatch.db}
       - PORT=8080
     ports:
       - "5081:8080"
     volumes:
-      - weatherwatch_db:/app
+      # Only persist the database directory. Never mount over /app — that would
+      # shadow the freshly built server binary with stale volume contents.
+      - weatherwatch_db:/app/data
 
   mariadb:
     image: mariadb:10.11

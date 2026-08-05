@@ -56,6 +56,39 @@ go test ./...
 go build ./cmd/server
 ```
 
+## Docker deployment notes
+
+The backend volume must only cover the database directory:
+
+```yaml
+volumes:
+  - weatherwatch_db:/app/data
+```
+
+Never mount a named volume at `/app`. Docker seeds a named volume from the image only when
+that volume is first created, so mounting `/app` permanently shadows the compiled `server`
+binary and every later `docker compose up --build` keeps running the original build.
+
+If the backend appears to be missing new routes (for example `/api/cams` returning 404 while
+the frontend clearly updated), force a clean rebuild:
+
+```bash
+docker compose build --no-cache backend
+docker compose up -d
+docker compose logs --tail=80 backend
+```
+
+### Running server.exe under Wine
+
+Only needed if you run the Windows binary outside Docker:
+
+```bash
+chmod +x start-backend-wine.sh
+./start-backend-wine.sh start     # also: stop | restart | status | logs
+```
+
+Docker is preferred, since it builds a native Linux binary.
+
 ## Linux preview deployment
 
 Use the repo root script:

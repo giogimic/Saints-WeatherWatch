@@ -63,7 +63,7 @@ else
   echo -e "${GREEN}✓ Selected SQLite${NC}"
   cat <<EOF > "$ROOT_DIR/.env"
 DB_PROVIDER=sqlite
-DATABASE_URL=file:/app/weatherwatch.db
+DATABASE_URL=file:/app/data/weatherwatch.db
 COMPOSE_PROFILES=
 EOF
   COMPOSE_CMD="docker compose up -d --build"

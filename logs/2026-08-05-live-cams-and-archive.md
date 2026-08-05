@@ -48,3 +48,33 @@ Status: **implemented** (questionnaire answers applied)
 - Wire a real “global” alert source if desired
 - Expand Canada beyond NB/QC warning feeds
 - Commit strategy for `internal/store/gen` (still gitignored)
+
+## 2026-08-05 later — Docker deploy bug: stale backend binary
+
+Symptom: after `./update.sh`, the frontend showed the new UI but reported
+"Could not load camera list / Backend camera list unavailable."
+
+Root cause: `docker-compose.yml` mounted the named volume `weatherwatch_db` at **`/app`** —
+the same directory containing the compiled `server` binary. Docker seeds a named volume from
+the image only when the volume is first created, so every subsequent `--build` produced a new
+image whose `/app` was immediately shadowed by the old volume contents. The backend container
+kept executing the **original** binary, which has no `/api/cams` route (nginx proxied fine;
+the route simply didn't exist). The frontend has no volume, so it updated normally.
+
+Fixes:
+- `docker-compose.yml`: volume now `weatherwatch_db:/app/data`; default
+  `DATABASE_URL=file:/app/data/weatherwatch.db`; frontend `depends_on: backend`
+- `backend/Dockerfile`: `VOLUME ["/app/data"]`, `mkdir -p /app/data`
+- `backend/entrypoint.sh`: normalizes `DATABASE_URL` to an absolute `file:` path so the Prisma
+  CLI (schema-dir relative) and the Go server (cwd relative) target one file; creates the parent
+  dir; `db push` failure now warns instead of killing the container
+- `deploy-preview.sh`: SQLite URL → `/app/data/weatherwatch.db`
+- `update.sh`: rewrites legacy `DATABASE_URL=file:/app/weatherwatch.db` in `.env`, and
+  post-deploy verifies `/api/health` + `/api/cams`, flagging a stale build explicitly
+
+## 2026-08-05 later — Wine starter
+
+Added `start-backend-wine.sh` for running `backend/server.exe` under Wine on Linux
+when Docker isn't used. Preferred production path remains `./update.sh` (Docker builds
+a native Linux `server` binary). Wine script supports `start|stop|restart|status|logs`.
+`update.sh` SQLite backup now also checks `backend/data/weatherwatch.db`.
