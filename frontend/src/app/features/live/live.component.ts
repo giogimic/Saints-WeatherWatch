@@ -63,8 +63,12 @@ interface CameraFeed {
 
                 @if (isOpen(camera.id)) {
                   <div class="mt-3 overflow-hidden rounded-xl border-2 border-base-300 bg-base-300/40 shadow-inner relative">
-                    <img class="aspect-video w-full object-cover" [src]="camera.imageUrl + '?t=' + currentTimestamp" alt="{{ camera.title }}" loading="lazy" />
-                    <div class="absolute bottom-1.5 right-1.5 bg-black/70 px-2 py-1 rounded-lg text-[9px] text-white font-bold uppercase tracking-wider backdrop-blur-sm">
+                    @if (camera.type === 'iframe' && camera.safeEmbedUrl) {
+                      <iframe class="aspect-video w-full" [src]="camera.safeEmbedUrl" title="{{ camera.title }}" frameborder="0" loading="lazy" allow="autoplay; fullscreen" allowfullscreen></iframe>
+                    } @else {
+                      <img class="aspect-video w-full object-cover" [src]="camera.imageUrl + '?t=' + currentTimestamp" alt="{{ camera.title }}" loading="lazy" />
+                    }
+                    <div class="absolute bottom-1.5 right-1.5 bg-black/70 px-2 py-1 rounded-lg text-[9px] text-white font-bold uppercase tracking-wider backdrop-blur-sm pointer-events-none">
                       {{ camera.attribution }}
                     </div>
                   </div>
@@ -163,66 +167,60 @@ export class LiveComponent implements OnDestroy {
   }
 
   cameras: CameraFeed[] = [
-    // === Road & Field Cams ===
+    // === Live Video Streams (YouTube) ===
     {
-      id: 'fkoc-stadium',
-      title: 'FKOC Stadium Cam',
-      region: 'Fort Kent',
+      id: 'portland-head-light',
+      title: 'Portland Head Light',
+      region: 'Cape Elizabeth',
       status: 'LIVE',
-      description: 'Fort Kent Outdoor Center biathlon stadium. 1600×900, refreshes every 60s.',
-      type: 'image',
+      description: 'Live view of Maine\\'s most iconic lighthouse and the entrance to Portland Harbor.',
+      type: 'iframe',
       group: 'cams',
-      imageUrl: '/api/cams/fkoc-stadium',
-      sourceUrl: 'https://www.fortkentoc.org/',
-      attribution: '© FKOC',
+      embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC4g3pL34z6Z6p16kP014Nwg&autoplay=1&mute=1',
+      sourceUrl: 'https://www.youtube.com/',
+      attribution: '© Portland Head Light',
+      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/live_stream?channel=UC4g3pL34z6Z6p16kP014Nwg&autoplay=1&mute=1'),
     },
     {
-      id: 'mdot-dickey',
-      title: 'Dickey Bridge',
-      region: 'Allagash',
+      id: 'kennebunkport-live',
+      title: 'Kennebunkport Harbor',
+      region: 'Kennebunkport',
       status: 'LIVE',
-      description: 'MaineDOT cam at Dickey Bridge over the St. John River.',
-      type: 'image',
+      description: 'Live streaming view of the Nonantum Resort and Kennebunk River.',
+      type: 'iframe',
       group: 'cams',
-      imageUrl: '/api/cams/mdot-dickey',
-      sourceUrl: 'https://www.maine.gov/mdot/cams/',
-      attribution: '© MaineDOT',
+      embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UCLmQ25P4Uq7xQ_nF9J_3LzA&autoplay=1&mute=1',
+      sourceUrl: 'https://www.youtube.com/',
+      attribution: '© Nonantum Resort',
+      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/live_stream?channel=UCLmQ25P4Uq7xQ_nF9J_3LzA&autoplay=1&mute=1'),
     },
     {
-      id: 'mdot-soucy',
-      title: 'Route 11 Soucy Hill',
-      region: 'Oakfield',
+      id: 'bar-harbor-cam',
+      title: 'Bar Harbor Pier',
+      region: 'Mount Desert Island',
       status: 'LIVE',
-      description: 'MaineDOT highway camera on Route 11 near Soucy Hill.',
-      type: 'image',
+      description: 'Live view of the harbor and Frenchman Bay from the Bar Harbor pier.',
+      type: 'iframe',
       group: 'cams',
-      imageUrl: '/api/cams/mdot-soucy',
-      sourceUrl: 'https://www.maine.gov/mdot/cams/',
-      attribution: '© MaineDOT',
+      embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UCcK7n_f-eOa7Qj2oP-r5v_w&autoplay=1&mute=1',
+      sourceUrl: 'https://www.youtube.com/',
+      attribution: '© Bar Harbor',
+      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/live_stream?channel=UCcK7n_f-eOa7Qj2oP-r5v_w&autoplay=1&mute=1'),
     },
+
+    // === Regional Webcam Aggregators (Windy) ===
     {
-      id: 'mdot-island-falls',
-      title: 'Island Falls (Rt 11)',
+      id: 'windy-cams-north',
+      title: 'Northern Maine Cams',
       region: 'Aroostook County',
       status: 'LIVE',
-      description: 'MaineDOT camera at Island Falls on Route 11.',
-      type: 'image',
+      description: 'Interactive map of all live webcams in Northern Maine and the NB border.',
+      type: 'iframe',
       group: 'cams',
-      imageUrl: '/api/cams/mdot-island-falls',
-      sourceUrl: 'https://www.maine.gov/mdot/cams/',
-      attribution: '© MaineDOT',
-    },
-    {
-      id: 'mdot-smyrna',
-      title: 'Smyrna (Rt 2)',
-      region: 'Aroostook County',
-      status: 'LIVE',
-      description: 'MaineDOT camera at Smyrna on Route 2.',
-      type: 'image',
-      group: 'cams',
-      imageUrl: '/api/cams/mdot-smyrna',
-      sourceUrl: 'https://www.maine.gov/mdot/cams/',
-      attribution: '© MaineDOT',
+      embedUrl: 'https://embed.windy.com/embed.html?type=map&location=coordinates&zoom=8&overlay=webcams&lat=46.7&lon=-68.2&marker=false',
+      sourceUrl: 'https://www.windy.com/',
+      attribution: '© Windy Webcams',
+      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://embed.windy.com/embed.html?type=map&location=coordinates&zoom=8&overlay=webcams&lat=46.7&lon=-68.2&marker=false'),
     },
 
     // === NOAA Satellite ===
