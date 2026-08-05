@@ -57,6 +57,15 @@ import { WeatherService } from '../../core/weather.service';
                     <div class="flex-1 min-w-0">
                       <h2 class="font-black font-sans text-white text-sm md:text-base leading-tight truncate">{{ alert.headline }}</h2>
                       <p class="text-[11px] text-base-content/50 font-bold mt-0.5 truncate">📍 {{ alert.area }}</p>
+                      <div class="flex gap-1 mt-1">
+                        <span class="badge badge-xs border-primary/40 bg-primary/10 text-primary font-black uppercase text-[8px]">{{ scopeLabel(alert.scope) }}</span>
+                        @if (alert.eventCode) {
+                          <span class="badge badge-xs border-secondary/40 bg-secondary/10 text-secondary font-black uppercase text-[8px]">{{ alert.eventCode }}</span>
+                        }
+                        @if (alert.source) {
+                          <span class="badge badge-xs border-accent/40 bg-accent/10 text-accent font-black uppercase text-[8px]">{{ alert.source }}</span>
+                        }
+                      </div>
                     </div>
                     <div class="text-right shrink-0 hidden sm:block">
                       <div class="text-[10px] text-error font-bold animate-pulse">{{ countdown(alert.endsAt) }}</div>
@@ -87,6 +96,21 @@ import { WeatherService } from '../../core/weather.service';
                         </div>
                       </div>
 
+                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] font-bold">
+                        <div class="bg-base-200/60 rounded-lg px-3 py-2">
+                          <div class="text-[8px] uppercase tracking-widest text-base-content/40">Issued</div>
+                          <div>{{ formatTimestamp(alert.startsAt) }}</div>
+                        </div>
+                        <div class="bg-base-200/60 rounded-lg px-3 py-2">
+                          <div class="text-[8px] uppercase tracking-widest text-base-content/40">Expires</div>
+                          <div>{{ formatTimestamp(alert.endsAt) }}</div>
+                        </div>
+                        <div class="bg-base-200/60 rounded-lg px-3 py-2">
+                          <div class="text-[8px] uppercase tracking-widest text-base-content/40">Office</div>
+                          <div>{{ alert.office || 'Not provided' }}</div>
+                        </div>
+                      </div>
+
                       @if (alert.why) {
                         <div class="bg-base-200/50 rounded-xl p-3 border border-base-300 border-dashed">
                           <div class="text-[9px] uppercase tracking-widest text-secondary font-black mb-1">Why this alert exists</div>
@@ -105,6 +129,11 @@ import { WeatherService } from '../../core/weather.service';
                           <div class="text-[9px] uppercase tracking-widest text-error font-black mb-1">What to do</div>
                           <p class="text-xs text-white font-bold">{{ alert.whatToDo }}</p>
                         </div>
+                      }
+                      @if (alert.sourceUrl) {
+                        <a [href]="alert.sourceUrl" target="_blank" rel="noopener noreferrer" class="inline-block text-[10px] font-black uppercase tracking-widest text-primary hover:underline" (click)="$event.stopPropagation()">
+                          Official source ↗
+                        </a>
                       }
                     </div>
                   }
@@ -156,6 +185,29 @@ export class AlertsComponent {
 
   formatTime(value: string): string {
     return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  formatTimestamp(value: string): string {
+    if (!value) return 'Not provided';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown';
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    });
+  }
+
+  scopeLabel(scope?: string): string {
+    switch ((scope || '').toLowerCase()) {
+      case 'maine': return 'Maine';
+      case 'usa': return 'USA';
+      case 'canada': return 'Canada';
+      case 'global': return 'Global';
+      default: return 'Regional';
+    }
   }
 
   getSeverityColorClass(severity: string): string {

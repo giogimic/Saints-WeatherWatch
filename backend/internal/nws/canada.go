@@ -103,6 +103,9 @@ func FetchCanadaAlerts() ([]Alert, error) {
 				Cause:         title,
 				WhatToDo:      "Follow Environment Canada guidance for your area.",
 				Scope:         "canada",
+				Source:        "Environment Canada",
+				SourceURL:     e.Link.Href,
+				Office:        feed.Label,
 			})
 		}
 	}

@@ -25,16 +25,17 @@ type nwsFeature struct {
 }
 
 type nwsProperties struct {
-	ID           string `json:"id"`
-	AreaDesc     string `json:"areaDesc"`
-	Effective    string `json:"effective"`
-	Expires      string `json:"expires"`
-	Severity     string `json:"severity"`
-	Urgency      string `json:"urgency"`
-	Event        string `json:"event"`
-	Headline     string `json:"headline"`
-	Description  string `json:"description"`
-	Instruction  string `json:"instruction"`
+	ID          string `json:"id"`
+	AreaDesc    string `json:"areaDesc"`
+	Effective   string `json:"effective"`
+	Expires     string `json:"expires"`
+	Severity    string `json:"severity"`
+	Urgency     string `json:"urgency"`
+	Event       string `json:"event"`
+	Headline    string `json:"headline"`
+	Description string `json:"description"`
+	Instruction string `json:"instruction"`
+	SenderName  string `json:"senderName"`
 }
 
 var severityWeight = map[string]int{
@@ -170,6 +171,40 @@ func mapFeature(f nwsFeature, scope string) Alert {
 		Cause:         p.Event,
 		WhatToDo:      truncateRunes(p.Instruction, 180),
 		Scope:         scope,
+		Source:        "NWS API",
+		SourceURL:     httpSourceURL(p.ID),
+		EventCode:     eventCodeFor(p.Event),
+		Office:        p.SenderName,
+	}
+}
+
+func httpSourceURL(value string) string {
+	if strings.HasPrefix(value, "https://") || strings.HasPrefix(value, "http://") {
+		return value
+	}
+	return ""
+}
+
+func eventCodeFor(event string) string {
+	switch strings.ToLower(event) {
+	case "tornado warning":
+		return "TO.W"
+	case "severe thunderstorm warning":
+		return "SV.W"
+	case "flash flood warning":
+		return "FF.W"
+	case "winter storm warning":
+		return "WS.W"
+	case "winter weather advisory":
+		return "WW.Y"
+	case "flood warning":
+		return "FL.W"
+	case "flood advisory":
+		return "FL.Y"
+	case "high wind warning":
+		return "HW.W"
+	default:
+		return ""
 	}
 }
 

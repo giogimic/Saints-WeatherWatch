@@ -123,6 +123,9 @@ func historyHandler(st *store.Store) http.HandlerFunc {
 			filters = append(filters, db.TrackerIncident.Or(
 				db.TrackerIncident.Headline.Contains(search),
 				db.TrackerIncident.Area.Contains(search),
+				db.TrackerIncident.Source.Contains(search),
+				db.TrackerIncident.Office.Contains(search),
+				db.TrackerIncident.EventCode.Contains(search),
 			))
 		}
 		if severity := r.URL.Query().Get("severity"); severity != "" {

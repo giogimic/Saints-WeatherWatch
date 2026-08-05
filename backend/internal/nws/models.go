@@ -14,7 +14,11 @@ type Alert struct {
 	Cause         string `json:"cause"`
 	WhatToDo      string `json:"whatToDo"`
 	// maine | usa | canada | global — used by archive + live grouping
-	Scope string `json:"scope"`
+	Scope     string `json:"scope"`
+	Source    string `json:"source"`
+	SourceURL string `json:"sourceUrl,omitempty"`
+	EventCode string `json:"eventCode,omitempty"`
+	Office    string `json:"office,omitempty"`
 }
 
 type HistoryLog struct {

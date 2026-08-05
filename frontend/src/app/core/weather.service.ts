@@ -16,6 +16,11 @@ export interface WeatherAlert {
   locationIndex: string;
   cause: string;
   whatToDo: string;
+  scope?: string;
+  source?: string;
+  sourceUrl?: string;
+  eventCode?: string;
+  office?: string;
 }
 
 export interface WeatherHistoryEntry {
@@ -35,6 +40,11 @@ export interface TrackerIncident {
   severity: string;
   area: string;
   scope?: string; // maine | usa | canada | global
+  source?: string;
+  sourceUrl?: string;
+  eventCode?: string;
+  office?: string;
+  status?: string;
   datePulled: string;
   startsAt?: string;
   endsAt?: string;

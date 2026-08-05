@@ -35,18 +35,36 @@ func (c *Cache) Set(data AlertsResponse) {
 
 func (c *Cache) StartPipeline(ctx context.Context, interval time.Duration) {
 	c.update(ctx)
+	go c.backfillIEM(ctx)
 	ticker := time.NewTicker(interval)
+	backfillTicker := time.NewTicker(24 * time.Hour)
 	go func() {
 		defer ticker.Stop()
+		defer backfillTicker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				c.update(ctx)
+			case <-backfillTicker.C:
+				c.backfillIEM(ctx)
 			}
 		}
 	}()
+}
+
+func (c *Cache) backfillIEM(ctx context.Context) {
+	if c.store == nil {
+		return
+	}
+	alerts, err := FetchIEMMaineHistory()
+	if err != nil {
+		log.Printf("nws.Cache: IEM backfill failed: %v", err)
+		return
+	}
+	log.Printf("nws.Cache: IEM Maine backfill candidates=%d", len(alerts))
+	c.processIncidents(ctx, alerts)
 }
 
 func (c *Cache) update(ctx context.Context) {
@@ -74,6 +92,18 @@ func (c *Cache) processIncidents(ctx context.Context, alerts []Alert) {
 			scope = classifyScope(a)
 		}
 		isTornado := IsTornado(a)
+		source := a.Source
+		if source == "" {
+			source = "NWS API"
+		}
+		status := a.Status
+		if status == "" {
+			status = "expired"
+		}
+		issuedAt := time.Now().UTC()
+		if parsed, err := time.Parse(time.RFC3339, a.StartsAt); err == nil {
+			issuedAt = parsed
+		}
 
 		_, err := c.store.Client.TrackerIncident.UpsertOne(
 			db.TrackerIncident.ID.Equals(a.ID),
@@ -84,6 +114,12 @@ func (c *Cache) processIncidents(ctx context.Context, alerts []Alert) {
 			db.TrackerIncident.Severity.Set(a.Severity),
 			db.TrackerIncident.Area.Set(a.Area),
 			db.TrackerIncident.Scope.Set(scope),
+			db.TrackerIncident.Source.Set(source),
+			db.TrackerIncident.SourceURL.Set(a.SourceURL),
+			db.TrackerIncident.EventCode.Set(a.EventCode),
+			db.TrackerIncident.Office.Set(a.Office),
+			db.TrackerIncident.Status.Set(status),
+			db.TrackerIncident.DatePulled.Set(issuedAt),
 			db.TrackerIncident.StartsAt.Set(a.StartsAt),
 			db.TrackerIncident.EndsAt.Set(a.EndsAt),
 			db.TrackerIncident.Description.Set(a.Why),
@@ -93,6 +129,12 @@ func (c *Cache) processIncidents(ctx context.Context, alerts []Alert) {
 			db.TrackerIncident.Severity.Set(a.Severity),
 			db.TrackerIncident.Area.Set(a.Area),
 			db.TrackerIncident.Scope.Set(scope),
+			db.TrackerIncident.Source.Set(source),
+			db.TrackerIncident.SourceURL.Set(a.SourceURL),
+			db.TrackerIncident.EventCode.Set(a.EventCode),
+			db.TrackerIncident.Office.Set(a.Office),
+			db.TrackerIncident.Status.Set(status),
+			db.TrackerIncident.DatePulled.Set(issuedAt),
 			db.TrackerIncident.EndsAt.Set(a.EndsAt),
 			db.TrackerIncident.Description.Set(a.Why),
 			db.TrackerIncident.IsTornado.Set(isTornado),

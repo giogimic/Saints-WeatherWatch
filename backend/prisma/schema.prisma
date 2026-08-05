@@ -57,6 +57,11 @@ model TrackerIncident {
   area        String
   // maine | usa | canada | global — archive sections
   scope       String   @default("maine")
+  source      String   @default("NWS API")
+  sourceUrl   String?
+  eventCode   String?
+  office      String?
+  status      String   @default("expired")
   datePulled  DateTime @default(now())
   startsAt    String?
   endsAt      String?
@@ -64,5 +69,6 @@ model TrackerIncident {
   isTornado   Boolean  @default(false)
 
   @@index([scope, datePulled])
+  @@index([source, office])
   @@index([category, datePulled])
 }

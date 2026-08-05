@@ -71,3 +71,31 @@ Fixes:
 - `deploy-preview.sh`: SQLite URL → `/app/data/weatherwatch.db`
 - `update.sh`: rewrites legacy `DATABASE_URL=file:/app/weatherwatch.db` in `.env`, and
   post-deploy verifies `/api/health` + `/api/cams`, flagging a stale build explicitly
+
+## 2026-08-05 — Historical backfill and alert metadata
+
+Symptom: the Maine archive remained empty after deployment. Persistence was working, but
+the app only stored alerts observed while they were active after the new database started.
+Maine had zero active alerts at startup, so there was nothing to show.
+
+Research:
+- `weather.im` is Iowa State/IEM's near-real-time IEMBot monitor. Its JSON service is
+  `https://weather.im/iembot-json/room/{room}?seqnum=#`, but it is a recent-message feed,
+  not the durable historical source needed here.
+- The same IEM system provides a structured VTEC archive at
+  `https://mesonet.agron.iastate.edu/json/vtec_events.py`. Verified 2026 CAR data includes
+  historical Aroostook severe-thunderstorm warnings with issue/expiry timestamps.
+
+Implementation:
+- Startup + daily IEM VTEC backfill for CAR and GYX, current/previous year filtered to the
+  most recent 18 months and locations explicitly containing `[ME]`
+- Stable IDs (`iem-{WFO}-{year}-{code}-{eventID}`) make reruns idempotent
+- New archive metadata: source, source URL, VTEC event code, issuing office, and status
+- `datePulled` now represents actual issue time; active NWS records are repaired on upsert
+- Archive cards now show region/source/code/office/status tags, issued and expiry timestamps,
+  relative age, source links, four sort modes, and 25-entry pagination
+- Live alert cards also show scope/source/event-code tags and explicit issue/expiry/office data
+
+Verification:
+- IEM backfill smoke test produced Maine rows with `IEM VTEC`, event codes such as `SV.W`,
+  CAR/GYX office tags, and distinct issue/expiry timestamps
