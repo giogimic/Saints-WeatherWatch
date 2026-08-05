@@ -248,9 +248,25 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       scrollWheelZoom: true,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Base Maps
+    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       attribution: '&copy; OpenStreetMap contributors',
+    });
+
+    const satelliteLayer = L.tileLayer(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${today}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg`, {
+      maxZoom: 9,
+      attribution: 'NASA GIBS',
+    });
+
+    // Default to satellite layer to showcase the new feature
+    satelliteLayer.addTo(this.map);
+
+    L.control.layers({
+      "Satellite (NASA)": satelliteLayer,
+      "Street Map": streetLayer
     }).addTo(this.map);
 
     this.buildLayers();

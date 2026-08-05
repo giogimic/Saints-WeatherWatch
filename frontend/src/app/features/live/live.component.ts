@@ -8,9 +8,16 @@ interface CameraFeed {
   region: string;
   description: string;
   status: string;
-  embedUrl: string;
+  type: 'iframe' | 'image';
   sourceUrl: string;
-  safeEmbedUrl: SafeResourceUrl;
+  
+  // For iframe feeds
+  embedUrl?: string;
+  safeEmbedUrl?: SafeResourceUrl;
+  
+  // For image feeds
+  imageUrl?: string;
+  refreshIntervalMs?: number;
 }
 
 @Component({
@@ -60,16 +67,25 @@ interface CameraFeed {
 
               @if (isOpen(camera.id)) {
                 <div class="mt-5 overflow-hidden rounded-[1.5rem] border-4 border-base-300 bg-base-300/40 shadow-inner">
-                  <iframe
-                    class="aspect-video w-full"
-                    [src]="camera.safeEmbedUrl"
-                    title="{{ camera.title }}"
-                    frameborder="0"
-                    loading="lazy"
-                    referrerpolicy="strict-origin-when-cross-origin"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowfullscreen
-                  ></iframe>
+                  @if (camera.type === 'iframe' && camera.safeEmbedUrl) {
+                    <iframe
+                      class="aspect-video w-full"
+                      [src]="camera.safeEmbedUrl"
+                      title="{{ camera.title }}"
+                      frameborder="0"
+                      loading="lazy"
+                      referrerpolicy="strict-origin-when-cross-origin"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowfullscreen
+                    ></iframe>
+                  } @else if (camera.type === 'image' && camera.imageUrl) {
+                    <img 
+                      class="aspect-video w-full object-cover" 
+                      [src]="camera.imageUrl + '?t=' + currentTimestamp" 
+                      alt="{{ camera.title }}" 
+                      loading="lazy"
+                    />
+                  }
                 </div>
               }
             </article>
@@ -84,37 +100,47 @@ export class LiveComponent {
   private readonly sanitizer = inject(DomSanitizer);
 
   openCameraId: string | null = null;
+  currentTimestamp: number = Date.now();
+
+  constructor() {
+    setInterval(() => {
+      this.currentTimestamp = Date.now();
+    }, 60000); // refresh images every minute
+  }
 
   cameras: CameraFeed[] = [
     {
-      id: 'portland-harbor',
-      title: 'Portland Harbor Cam',
-      region: 'South Coast',
+      id: 'fkoc-stadium',
+      title: 'FKOC Stadium Cam',
+      region: 'Fort Kent',
       status: 'LIVE',
-      description: 'Harbor visibility and coastal pass-through conditions for the Portland corridor.',
-      embedUrl: 'https://www.youtube.com/embed/x_ruIH2UmjQ?autoplay=1&mute=1',
-      sourceUrl: 'https://www.youtube.com/results?search_query=portland+harbor+weather+cam',
-      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/x_ruIH2UmjQ?autoplay=1&mute=1'),
+      description: 'Live view of the Fort Kent Outdoor Center biathlon stadium. Refreshes every minute. © FKOC',
+      type: 'image',
+      imageUrl: 'https://www.fortkentoc.org/webcam.jpg',
+      sourceUrl: 'https://www.fortkentoc.org/',
+      refreshIntervalMs: 60000
     },
     {
-      id: 'bangor-coast',
-      title: 'Bangor Coastal Feed',
-      region: 'Penobscot Bay',
+      id: 'mdot-dickey',
+      title: 'Dickey Bridge',
+      region: 'Allagash',
       status: 'LIVE',
-      description: 'Coastal motion, cloud deck behavior, and movement across the interstate corridor.',
-      embedUrl: 'https://www.youtube.com/embed/17b2pL34z0s?autoplay=1&mute=1',
-      sourceUrl: 'https://www.youtube.com/results?search_query=bangor+weather+cam',
-      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/17b2pL34z0s?autoplay=1&mute=1'),
+      description: 'MaineDOT camera at Dickey Bridge over the St. John River. © MaineDOT',
+      type: 'image',
+      imageUrl: 'https://www.maine.gov/mdot/cams/all/dickey_Public.jpg',
+      sourceUrl: 'https://www.maine.gov/mdot/cams/',
+      refreshIntervalMs: 60000
     },
     {
-      id: 'downeast-ridge',
-      title: 'Downeast Ridge Feed',
-      region: 'Mount Desert',
+      id: 'goes-east',
+      title: 'NOAA GOES-East',
+      region: 'Northeast',
       status: 'LIVE',
-      description: 'A high-exposure ridge view with rapid cloud changes and marine wind buildup.',
-      embedUrl: 'https://www.youtube.com/embed/z2XQPOmeSCU?autoplay=1&mute=1',
-      sourceUrl: 'https://www.youtube.com/results?search_query=downeast+storm+cam',
-      safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/z2XQPOmeSCU?autoplay=1&mute=1'),
+      description: 'Real-time true-color satellite imagery of the Northeast sector. Updates every 5 minutes. © NOAA',
+      type: 'image',
+      imageUrl: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/SECTOR/ne/GEOCOLOR/1000x1000.jpg',
+      sourceUrl: 'https://www.star.nesdis.noaa.gov/GOES/',
+      refreshIntervalMs: 300000
     },
     {
       id: 'maine-roadwatch',
@@ -122,6 +148,7 @@ export class LiveComponent {
       region: 'Statewide',
       status: 'UP NEXT',
       description: 'Road conditions and surface visibility updates for storm-sensitive highway runs.',
+      type: 'iframe',
       embedUrl: 'https://www.youtube.com/embed/SH63YaIWyK0?autoplay=1&mute=1',
       sourceUrl: 'https://www.youtube.com/results?search_query=maine+road+camera',
       safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/SH63YaIWyK0?autoplay=1&mute=1'),
