@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -37,6 +38,10 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Get("/chaselogs", getChaseLogsHandler(st))
 		r.Post("/chaselogs", createChaseLogHandler(st))
 		r.Delete("/chaselogs/{id}", deleteChaseLogHandler(st))
+
+		// Quiz attempts + leaderboard
+		r.Get("/quiz/leaderboard", getQuizLeaderboardHandler(st))
+		r.Post("/quiz/attempts", createQuizAttemptHandler(st))
 
 		// Camera proxy + listing
 		r.Get("/cams", camListHandler(camCache))
@@ -272,6 +277,101 @@ func deleteChaseLogHandler(st *store.Store) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+type createQuizAttemptReq struct {
+	PlayerName string `json:"playerName"`
+	Category   string `json:"category"` // science | radar | safety | history
+	Score      int    `json:"score"`
+	Total      int    `json:"total"`
+	Seconds    int    `json:"seconds"`
+}
+
+var allowedQuizCategories = map[string]struct{}{
+	"science": {},
+	"radar":   {},
+	"safety":  {},
+	"history": {},
+}
+
+func createQuizAttemptHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if st == nil {
+			http.Error(w, "DB not initialized", http.StatusInternalServerError)
+			return
+		}
+
+		var req createQuizAttemptReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid input", http.StatusBadRequest)
+			return
+		}
+
+		name := strings.TrimSpace(req.PlayerName)
+		if name == "" {
+			name = "Storm Expert"
+		}
+		if len(name) > 32 {
+			name = name[:32]
+		}
+		if _, ok := allowedQuizCategories[req.Category]; !ok {
+			http.Error(w, "Invalid category", http.StatusBadRequest)
+			return
+		}
+		if req.Total <= 0 || req.Score < 0 || req.Score > req.Total || req.Seconds < 0 {
+			http.Error(w, "Invalid score", http.StatusBadRequest)
+			return
+		}
+
+		entry, err := st.Client.QuizAttempt.CreateOne(
+			db.QuizAttempt.PlayerName.Set(name),
+			db.QuizAttempt.Category.Set(req.Category),
+			db.QuizAttempt.Score.Set(req.Score),
+			db.QuizAttempt.Total.Set(req.Total),
+			db.QuizAttempt.Seconds.Set(req.Seconds),
+		).Exec(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to save attempt", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(entry)
+	}
+}
+
+func getQuizLeaderboardHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if st == nil {
+			_ = json.NewEncoder(w).Encode([]any{})
+			return
+		}
+
+		limit := 10
+		category := strings.TrimSpace(r.URL.Query().Get("category"))
+
+		q := st.Client.QuizAttempt.FindMany()
+		if category != "" {
+			if _, ok := allowedQuizCategories[category]; !ok {
+				http.Error(w, "Invalid category", http.StatusBadRequest)
+				return
+			}
+			q = st.Client.QuizAttempt.FindMany(
+				db.QuizAttempt.Category.Equals(category),
+			)
+		}
+
+		attempts, err := q.OrderBy(
+			db.QuizAttempt.Score.Order(db.SortOrderDesc),
+			db.QuizAttempt.Seconds.Order(db.SortOrderAsc),
+			db.QuizAttempt.CreatedAt.Order(db.SortOrderDesc),
+		).Take(limit).Exec(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to fetch leaderboard", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(attempts)
 	}
 }
 

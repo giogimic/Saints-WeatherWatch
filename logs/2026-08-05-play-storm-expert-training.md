@@ -28,5 +28,5 @@ Simple original SVG diagrams (no third-party radar slides)
 - `frontend/src/app/features/play/play.questions.ts`
 
 ## Follow-ups (optional)
-- Wire `QuizAttempt` POST + leaderboard
+- Wire `QuizAttempt` POST + leaderboard — **done** (see `2026-08-05-play-quiz-leaderboard.md`)
 - Outbreak replay / SavedLocation / map chase mini-game

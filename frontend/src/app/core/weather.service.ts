@@ -196,4 +196,39 @@ export class WeatherService {
   deleteChaseLog(id: string): Observable<void> {
     return this.http.delete<void>(`/api/chaselogs/${id}`);
   }
+
+  saveQuizAttempt(attempt: {
+    playerName: string;
+    category: string;
+    score: number;
+    total: number;
+    seconds: number;
+  }): Observable<QuizAttempt> {
+    return this.http.post<QuizAttempt>('/api/quiz/attempts', attempt).pipe(
+      catchError(err => {
+        console.error('saveQuizAttempt error:', err);
+        return of(null as unknown as QuizAttempt);
+      })
+    );
+  }
+
+  getQuizLeaderboard(category?: string): Observable<QuizAttempt[]> {
+    const q = category ? `?category=${encodeURIComponent(category)}` : '';
+    return this.http.get<QuizAttempt[]>(`/api/quiz/leaderboard${q}`).pipe(
+      catchError(err => {
+        console.error('getQuizLeaderboard error:', err);
+        return of([]);
+      })
+    );
+  }
+}
+
+export interface QuizAttempt {
+  id: string;
+  playerName: string;
+  category: string;
+  score: number;
+  total: number;
+  seconds: number;
+  createdAt: string;
 }

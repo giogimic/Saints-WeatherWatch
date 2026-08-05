@@ -1,6 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { QuizAttempt, WeatherService } from '../../core/weather.service';
 import {
   QUIZ_TRACKS,
   QuizCategory,
@@ -20,11 +22,12 @@ interface TrackProgress {
 type View = 'hub' | 'quiz' | 'results';
 
 const STORAGE_KEY = 'ww-play-progress-v1';
+const CALLSIGN_KEY = 'ww-play-callsign';
 
 @Component({
   selector: 'app-play',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="min-h-[calc(100vh-4rem)] p-4 md:p-6">
       <div class="max-w-3xl mx-auto">
@@ -38,8 +41,21 @@ const STORAGE_KEY = 'ww-play-progress-v1';
             <p class="text-base-content/60 text-sm font-semibold mt-2 max-w-xl">
               Big buttons. Clear choices. Real chase knowledge. Pick a track and show what you know.
             </p>
+
+            <label class="storm-card mt-4 p-3 flex flex-col sm:flex-row sm:items-center gap-2 block">
+              <span class="text-[10px] font-black uppercase tracking-widest text-base-content/45 shrink-0">Your callsign</span>
+              <input
+                type="text"
+                maxlength="32"
+                [(ngModel)]="callsign"
+                (ngModelChange)="saveCallsign()"
+                placeholder="Storm Expert"
+                class="input input-sm input-bordered bg-base-200/80 border-base-300 rounded-lg font-bold w-full"
+              >
+            </label>
+
             @if (overallRank) {
-              <div class="mt-4 storm-card px-4 py-3 flex items-center gap-3">
+              <div class="mt-3 storm-card px-4 py-3 flex items-center gap-3">
                 <span class="text-2xl">🏆</span>
                 <div>
                   <div class="text-[10px] uppercase tracking-widest text-base-content/40 font-bold">Your rank</div>
@@ -79,6 +95,31 @@ const STORAGE_KEY = 'ww-play-progress-v1';
               </button>
             }
           </div>
+
+          <article class="storm-card mt-4 p-4">
+            <div class="flex items-center justify-between gap-2 mb-3">
+              <h2 class="text-xs font-black uppercase tracking-widest text-secondary">Top Experts</h2>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs font-bold uppercase"
+                (click)="loadLeaderboard()"
+              >Refresh</button>
+            </div>
+            @if (leaderboard.length === 0) {
+              <p class="text-xs text-base-content/50 font-semibold">No scores posted yet — be the first on the board.</p>
+            } @else {
+              <ol class="space-y-2">
+                @for (row of leaderboard; track row.id; let i = $index) {
+                  <li class="flex items-center gap-3 text-sm">
+                    <span class="font-black text-primary w-6">{{ i + 1 }}</span>
+                    <span class="font-bold text-white flex-1 truncate">{{ row.playerName }}</span>
+                    <span class="text-[10px] uppercase tracking-wider text-base-content/40 font-bold">{{ trackLabel(row.category) }}</span>
+                    <span class="font-black text-accent tabular-nums">{{ row.score }}/{{ row.total }}</span>
+                  </li>
+                }
+              </ol>
+            }
+          </article>
 
           <a
             routerLink="/archive"
@@ -241,6 +282,9 @@ const STORAGE_KEY = 'ww-play-progress-v1';
             <p class="text-sm font-bold text-accent uppercase tracking-widest">
               {{ percent }}% · {{ activeTrack.badge }} track
             </p>
+            @if (postedToBoard) {
+              <p class="text-xs font-bold text-success uppercase tracking-wider">Posted to Top Experts</p>
+            }
             <div class="flex flex-col sm:flex-row gap-2 justify-center pt-2">
               <button
                 type="button"
@@ -265,6 +309,8 @@ const STORAGE_KEY = 'ww-play-progress-v1';
   `,
 })
 export class PlayComponent implements OnInit {
+  private readonly weather = inject(WeatherService);
+
   readonly tracks = QUIZ_TRACKS;
 
   view: View = 'hub';
@@ -278,6 +324,10 @@ export class PlayComponent implements OnInit {
   selectedId: string | null = null;
   progress: Partial<Record<QuizCategory, TrackProgress>> = {};
   overallRank: { title: string; blurb: string } | null = null;
+  callsign = 'Storm Expert';
+  leaderboard: QuizAttempt[] = [];
+  postedToBoard = false;
+  private startedAt = 0;
 
   get current(): QuizQuestion | null {
     return this.deck[this.index] ?? null;
@@ -299,6 +349,26 @@ export class PlayComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadProgress();
+    this.loadCallsign();
+    this.loadLeaderboard();
+  }
+
+  saveCallsign(): void {
+    const cleaned = (this.callsign || '').trim().slice(0, 32) || 'Storm Expert';
+    this.callsign = cleaned;
+    try {
+      localStorage.setItem(CALLSIGN_KEY, cleaned);
+    } catch { /* ignore */ }
+  }
+
+  loadLeaderboard(): void {
+    this.weather.getQuizLeaderboard().subscribe(rows => {
+      this.leaderboard = rows || [];
+    });
+  }
+
+  trackLabel(category: string): string {
+    return this.tracks.find(t => t.id === category)?.title || category;
   }
 
   startTrack(track: QuizTrack): void {
@@ -309,6 +379,8 @@ export class PlayComponent implements OnInit {
     this.answered = false;
     this.selectedId = null;
     this.feedback = '';
+    this.postedToBoard = false;
+    this.startedAt = Date.now();
     this.view = 'quiz';
   }
 
@@ -317,6 +389,7 @@ export class PlayComponent implements OnInit {
     this.activeTrack = null;
     this.deck = [];
     this.refreshOverallRank();
+    this.loadLeaderboard();
   }
 
   pick(choiceId: string): void {
@@ -372,6 +445,27 @@ export class PlayComponent implements OnInit {
     this.progress = { ...this.progress, [cat]: next };
     this.saveProgress();
     this.view = 'results';
+
+    const seconds = Math.max(1, Math.round((Date.now() - this.startedAt) / 1000));
+    this.weather.saveQuizAttempt({
+      playerName: this.callsign || 'Storm Expert',
+      category: cat,
+      score: this.score,
+      total: this.deck.length,
+      seconds,
+    }).subscribe(row => {
+      if (row?.id) {
+        this.postedToBoard = true;
+        this.loadLeaderboard();
+      }
+    });
+  }
+
+  private loadCallsign(): void {
+    try {
+      const saved = localStorage.getItem(CALLSIGN_KEY);
+      if (saved) this.callsign = saved;
+    } catch { /* ignore */ }
   }
 
   private loadProgress(): void {
