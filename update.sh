@@ -17,8 +17,14 @@ echo -e "${CYAN}======================================================${NC}\n"
 
 # 1. Source ENV if exists
 if [ -f "$ROOT_DIR/.env" ]; then
-  # Source .env safely
-  export $(grep -v '^#' "$ROOT_DIR/.env" | xargs)
+  # Source .env safely, stripping carriage returns
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ ! "$line" =~ ^# ]] && [[ -n "$line" ]]; then
+      # Strip carriage return and export
+      clean_line="${line%$'\r'}"
+      export "$clean_line"
+    fi
+  done < "$ROOT_DIR/.env"
 else
   echo -e "${YELLOW}⚠️ No .env file found. Assuming fresh environment or SQLite.${NC}"
 fi
