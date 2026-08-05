@@ -33,6 +33,16 @@ export interface WeatherAlertsResponse {
   history: WeatherHistoryEntry[];
 }
 
+export interface WeatherOverviewResponse {
+  generatedAt: string;
+  totalAlerts: number;
+  severeAlerts: number;
+  watchCount: number;
+  categories: string[];
+  topHeadline: string;
+  mostAtRiskArea: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -41,5 +51,9 @@ export class WeatherService {
 
   getAlerts(): Observable<WeatherAlertsResponse> {
     return this.http.get<WeatherAlertsResponse>('/api/alerts');
+  }
+
+  getOverview(): Observable<WeatherOverviewResponse> {
+    return this.http.get<WeatherOverviewResponse>('/api/overview');
   }
 }

@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { map } from 'rxjs';
 
 import { WeatherService } from '../../core/weather.service';
 
@@ -23,17 +22,17 @@ import { WeatherService } from '../../core/weather.service';
           Live tornado tracking · Real-time alerts · Storm education · Chase logs
         </p>
 
-        @if (headlineAlerts$ | async; as alerts) {
+        @if (overview$ | async; as overview) {
           <div class="flex flex-wrap gap-3 justify-center mb-10">
             <div class="badge badge-error gap-2 text-lg py-4 px-4">
               <span class="loading loading-dot loading-sm"></span>
-              Tornado Warnings: <span class="font-bold">{{ alerts.total }}</span>
+              Active alerts: <span class="font-bold">{{ overview.totalAlerts }}</span>
             </div>
             <div class="badge badge-warning gap-2 text-lg py-4 px-4">
-              Severe T-Storm: <span class="font-bold">{{ alerts.severe }}</span>
+              Severe / extreme: <span class="font-bold">{{ overview.severeAlerts }}</span>
             </div>
             <div class="badge badge-info gap-2 text-lg py-4 px-4">
-              Watches: <span class="font-bold">{{ alerts.watches }}</span>
+              Watches: <span class="font-bold">{{ overview.watchCount }}</span>
             </div>
           </div>
         }
@@ -80,11 +79,5 @@ import { WeatherService } from '../../core/weather.service';
 export class HomeComponent {
   private readonly weatherService = inject(WeatherService);
 
-  headlineAlerts$ = this.weatherService.getAlerts().pipe(
-    map((response) => ({
-      total: response.alerts.length,
-      severe: response.alerts.filter((alert) => alert.severity === 'Severe').length,
-      watches: response.alerts.filter((alert) => alert.status === 'watch').length,
-    })),
-  );
+  overview$ = this.weatherService.getOverview();
 }

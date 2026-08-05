@@ -26,6 +26,9 @@ interface CameraFeed {
           <p class="text-base-content/60 max-w-3xl mx-auto">
             Watch storm chasers, road cams, and coastal weather cameras from the Maine and New England corridor.
           </p>
+          <div class="mt-4 inline-flex items-center gap-2 rounded-full bg-base-300/50 px-4 py-2 text-xs uppercase tracking-[0.25em] text-base-content/60">
+            Open one feed at a time to keep the page smooth and lightweight.
+          </div>
         </div>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -58,6 +61,8 @@ interface CameraFeed {
                       [src]="camera.safeEmbedUrl"
                       title="{{ camera.title }}"
                       frameborder="0"
+                      loading="lazy"
+                      referrerpolicy="strict-origin-when-cross-origin"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowfullscreen
                     ></iframe>
@@ -75,7 +80,7 @@ interface CameraFeed {
 export class LiveComponent {
   private readonly sanitizer = inject(DomSanitizer);
 
-  openCameraId: string | null = 'portland-harbor';
+  openCameraId: string | null = null;
 
   cameras: CameraFeed[] = [
     {

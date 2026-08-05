@@ -14,7 +14,7 @@ type Config struct {
 
 	// Polling intervals (seconds)
 	NWSAlertIntervalSec   int
-	IEMReportIntervalSec int
+	IEMReportIntervalSec  int
 	SPCOutlookIntervalSec int
 
 	// Upstream contact info (NWS requires a User-Agent)

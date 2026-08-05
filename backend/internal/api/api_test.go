@@ -51,3 +51,28 @@ func TestAlertsEndpointReturnsStructuredPayload(t *testing.T) {
 		}
 	}
 }
+
+func TestOverviewEndpointReturnsSummary(t *testing.T) {
+	r := chi.NewRouter()
+	Mount(r, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/overview", nil)
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d with body %s", rr.Code, rr.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected valid json, got error: %v", err)
+	}
+
+	for _, key := range []string{"generatedAt", "totalAlerts", "severeAlerts", "watchCount", "categories"} {
+		if _, ok := payload[key]; !ok {
+			t.Fatalf("expected overview to include %s, got: %v", key, payload)
+		}
+	}
+}
