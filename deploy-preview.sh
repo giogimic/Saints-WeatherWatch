@@ -39,8 +39,19 @@ read -rp "> " DB_CHOICE
 echo -e "\n${BLUE}Generating .env configuration...${NC}"
 if [ "$DB_CHOICE" = "2" ]; then
   echo -e "${GREEN}✓ Selected MariaDB${NC}"
-  # Generate a random password for root
-  RANDOM_PASS=$(openssl rand -hex 12)
+  # Reuse existing password if .env exists to prevent database lockouts
+  EXISTING_PASS=""
+  if [ -f "$ROOT_DIR/.env" ]; then
+    EXISTING_PASS=$(grep '^MARIADB_ROOT_PASSWORD=' "$ROOT_DIR/.env" | cut -d '=' -f2 | tr -d '\r')
+  fi
+  
+  if [ -n "$EXISTING_PASS" ]; then
+    RANDOM_PASS=$EXISTING_PASS
+    echo -e "${YELLOW}Reusing existing MariaDB password from .env${NC}"
+  else
+    RANDOM_PASS=$(openssl rand -hex 12)
+  fi
+
   cat <<EOF > "$ROOT_DIR/.env"
 DB_PROVIDER=mysql
 DATABASE_URL=mysql://root:${RANDOM_PASS}@mariadb:3306/weatherwatch

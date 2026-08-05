@@ -46,7 +46,8 @@ if [ "$DB_PROVIDER" = "mysql" ]; then
   if [ -n "$DB_PASS" ]; then
     echo -e "${YELLOW}Dumping MariaDB database to $BACKUP_DIR/weatherwatch_mariadb_$TIMESTAMP.sql...${NC}"
     if docker compose ps | grep -q mariadb; then
-      docker compose exec -T mariadb sh -c "exec mysqldump -u root -p\"$DB_PASS\" weatherwatch" > "$BACKUP_DIR/weatherwatch_mariadb_$TIMESTAMP.sql"
+      # Run mysqldump directly without sh -c to avoid quote mangling
+      docker compose exec -T mariadb mysqldump -u root -p"$DB_PASS" weatherwatch > "$BACKUP_DIR/weatherwatch_mariadb_$TIMESTAMP.sql"
       echo -e "${GREEN}✓ MariaDB backup complete!${NC}"
     else
       echo -e "${RED}❌ MariaDB container is not running. Cannot perform backup.${NC}"
