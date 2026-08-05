@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { switchMap, timer } from 'rxjs';
 
 import { WeatherService } from '../../core/weather.service';
@@ -7,7 +8,7 @@ import { WeatherService } from '../../core/weather.service';
 @Component({
   selector: 'app-alerts',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   template: `
     <div class="min-h-[calc(100vh-4rem)] p-6 storm-bg">
       <div class="max-w-5xl mx-auto">
@@ -24,7 +25,7 @@ import { WeatherService } from '../../core/weather.service';
           </div>
           <h1 class="text-5xl md:text-6xl font-black text-white mb-4 italic uppercase tracking-wider font-sans drop-shadow-[3px_3px_0_rgba(69,44,99,1)]">Storm Alerts</h1>
           <p class="text-base-content/80 mb-6 max-w-3xl mx-auto text-sm md:text-lg font-bold bg-base-200/50 p-4 rounded-2xl border-2 border-base-300 inline-block">
-            Watch this feed like a quick storm dashboard. If it says “warning,” it means the weather is acting up right now.
+            Watch this feed like a quick storm dashboard. If it says "warning," it means the weather is acting up right now.
           </p>
         </div>
 
@@ -55,81 +56,18 @@ import { WeatherService } from '../../core/weather.service';
                   <path d="M20 28h24M20 36h16" stroke="currentColor" />
                 </svg>
               </div>
-              <h2 class="text-2xl font-black text-primary uppercase italic font-sans tracking-wide">Field Cams</h2>
+              <h2 class="text-2xl font-black text-primary uppercase italic font-sans tracking-wide">Quick Links</h2>
             </div>
             <div class="flex flex-wrap gap-3 mt-4">
-              <a class="btn btn-primary border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase" href="https://www.youtube.com/results?search_query=portland+harbor+weather+cam" target="_blank" rel="noreferrer">Portland</a>
-              <a class="btn btn-secondary border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase" href="https://www.youtube.com/results?search_query=bangor+weather+cam" target="_blank" rel="noreferrer">Bangor</a>
-              <a class="btn btn-accent border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase" href="https://www.youtube.com/results?search_query=downeast+storm+cam" target="_blank" rel="noreferrer">Downeast</a>
-            </div>
-          </article>
-        </div>
-
-        <div class="grid gap-4 lg:grid-cols-2 mb-6">
-          <article class="storm-card">
-            <div class="card-body">
-              <h2 class="card-title text-secondary">How to read the zones</h2>
-              <p class="text-sm text-base-content/70 mt-2">
-                The location index is a plain-English way of saying where the storm is strongest right now.
-                Zone A is the area closest to the main storm core, while Zone D usually means the wider edge or exposed corridor.
-              </p>
-              <ul class="list-disc pl-5 text-sm text-base-content/70 mt-3 space-y-2">
-                <li><strong>Zone A / Core</strong> means the storm is right near that place and the danger is highest there.</li>
-                <li><strong>Zone B / Corridor</strong> means the storm is moving across a main travel path or line of motion.</li>
-                <li><strong>Zone C / Drainage</strong> means low spots or flood-prone roads are the real risk area.</li>
-                <li><strong>Zone D / Exposed</strong> means open roads, ridges, or coastal areas are getting the strongest gusts.</li>
-              </ul>
-            </div>
-          </article>
-
-          <article class="storm-card">
-            <div class="card-body">
-              <h2 class="card-title text-primary">Storm terms explained</h2>
-              <div class="grid gap-2 mt-3 text-sm text-base-content/70">
-                <div class="rounded-xl bg-base-300/30 p-3"><strong>Radar</strong> = the weather map that shows where rain, hail, and rotation are happening.</div>
-                <div class="rounded-xl bg-base-300/30 p-3"><strong>Rotation</strong> = the air is spinning, which is a big clue for tornado potential.</div>
-                <div class="rounded-xl bg-base-300/30 p-3"><strong>Outflow</strong> = cool air spreading out from a storm and pushing strong wind ahead of it.</div>
-                <div class="rounded-xl bg-base-300/30 p-3"><strong>Pressure gradient</strong> = a fast change in air pressure that can make wind stronger.</div>
-              </div>
+              <a class="btn btn-primary border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase" routerLink="/live">Live Cams</a>
+              <a class="btn btn-secondary border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase" routerLink="/archive">Archive</a>
+              <a class="btn btn-accent border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase" routerLink="/map">Storm Map</a>
             </div>
           </article>
         </div>
 
         @if (alerts$ | async; as response) {
           @if (response?.alerts?.length) {
-            <article class="storm-card mb-6">
-              <div class="card-body">
-                <div class="flex items-center justify-between mb-3">
-                  <h2 class="card-title text-secondary">Storm history heat chart</h2>
-                  <div class="badge badge-outline badge-secondary">last 6 hrs</div>
-                </div>
-                <div class="grid grid-cols-6 gap-2 mb-4">
-                  @for (slot of historySlots; track slot.label) {
-                    <div class="rounded-xl border border-base-300 p-2 text-center">
-                      <div class="h-20 rounded-lg {{ heatLevel(slot.value) }} flex items-end justify-center pb-2 text-xs font-semibold text-slate-950">
-                        {{ slot.value }}
-                      </div>
-                      <div class="mt-2 text-[11px] uppercase tracking-[0.2em] text-base-content/50">{{ slot.label }}</div>
-                    </div>
-                  }
-                </div>
-
-                <div class="grid gap-3 md:grid-cols-2">
-                  @for (entry of response.history; track entry.id) {
-                    <div class="rounded-2xl border border-base-300 bg-base-300/25 p-3">
-                      <div class="flex items-center justify-between gap-2">
-                        <div class="badge badge-outline badge-secondary">{{ entry.category }}</div>
-                        <div class="text-[11px] uppercase tracking-[0.22em] text-base-content/50">{{ entry.count }} hits</div>
-                      </div>
-                      <h3 class="mt-2 font-semibold text-primary">{{ entry.headline }}</h3>
-                      <p class="mt-1 text-sm text-base-content/70">{{ entry.whatItMeans }}</p>
-                      <p class="mt-2 text-xs text-base-content/60">Location index: {{ entry.locationIndex }}</p>
-                    </div>
-                  }
-                </div>
-              </div>
-            </article>
-
             <div class="grid gap-6 md:grid-cols-2">
               @for (alert of response.alerts; track alert.id) {
                 <article class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[8px_8px_0_0_rgba(69,44,99,1)] p-6 relative overflow-hidden group hover:-translate-y-2 transition-transform">
@@ -180,8 +118,10 @@ import { WeatherService } from '../../core/weather.service';
               }
             </div>
           } @else {
-            <div class="alert alert-info shadow-lg">
-              <span>Storm data is loading. Refresh in a moment if the feed is still blank.</span>
+            <div class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-12 text-center">
+              <span class="text-6xl block mb-4">☀️</span>
+              <h3 class="text-2xl font-black text-white uppercase italic font-sans mb-2">All Clear</h3>
+              <p class="text-base-content/70 font-bold">No active weather alerts for your region. Enjoy the calm!</p>
             </div>
           }
         }
@@ -194,15 +134,6 @@ export class AlertsComponent {
   private readonly weatherService = inject(WeatherService);
 
   alerts$ = timer(0, 60000).pipe(switchMap(() => this.weatherService.getAlerts()));
-
-  historySlots = [
-    { label: 'Now', value: 4 },
-    { label: '-1h', value: 2 },
-    { label: '-2h', value: 5 },
-    { label: '-3h', value: 3 },
-    { label: '-4h', value: 1 },
-    { label: '-5h', value: 4 },
-  ];
 
   getSeverityColorClass(severity: string): string {
     switch (severity?.toLowerCase()) {
@@ -226,29 +157,9 @@ export class AlertsComponent {
     return status.toUpperCase();
   }
 
-  formatTimestamp(value: string): string {
-    return new Date(value).toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  }
-
   countdown(value: string): string {
     const distance = new Date(value).getTime() - Date.now();
     const minutes = Math.max(0, Math.round(distance / 60000));
     return `${minutes} min remaining`;
-  }
-
-  heatLevel(value: number): string {
-    if (value >= 4) {
-      return 'bg-rose-400';
-    }
-    if (value >= 3) {
-      return 'bg-amber-300';
-    }
-    if (value >= 2) {
-      return 'bg-sky-300';
-    }
-    return 'bg-slate-200';
   }
 }

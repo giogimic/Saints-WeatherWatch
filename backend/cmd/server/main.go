@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/saints-weatherwatch/backend/internal/api"
+	"github.com/saints-weatherwatch/backend/internal/cams"
 	"github.com/saints-weatherwatch/backend/internal/config"
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/store"
@@ -52,8 +53,12 @@ func main() {
 	defer bgCancel()
 	nwsCache.StartPipeline(bgCtx, 3*time.Minute)
 
+	// Camera image cache
+	camCache := cams.NewCache()
+	camCache.Start(bgCtx)
+
 	// Routes
-	api.Mount(r, st, nwsCache)
+	api.Mount(r, st, nwsCache, camCache)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

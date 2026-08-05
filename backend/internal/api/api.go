@@ -2,11 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/saints-weatherwatch/backend/internal/cams"
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
@@ -23,7 +25,7 @@ type overviewResponse struct {
 }
 
 // Mount attaches all API routes to the provided router.
-func Mount(r chi.Router, st *store.Store, cache *nws.Cache) {
+func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache) {
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", healthHandler(st))
 		r.Get("/alerts", alertsHandler(cache))
@@ -35,6 +37,9 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache) {
 		r.Get("/chaselogs", getChaseLogsHandler(st))
 		r.Post("/chaselogs", createChaseLogHandler(st))
 		r.Delete("/chaselogs/{id}", deleteChaseLogHandler(st))
+
+		// Camera proxy
+		r.Get("/cams/{id}", camImageHandler(camCache))
 	})
 }
 
@@ -253,5 +258,22 @@ func deleteChaseLogHandler(st *store.Store) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func camImageHandler(camCache *cams.Cache) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		img, ok := camCache.GetImage(id)
+		if !ok {
+			http.Error(w, fmt.Sprintf("Camera %q not found or not yet cached", id), http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", img.ContentType)
+		w.Header().Set("Cache-Control", "public, max-age=30")
+		w.Header().Set("X-Last-Updated", img.LastUpdated.UTC().Format(time.RFC3339))
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(img.Data)))
+		_, _ = w.Write(img.Data)
 	}
 }

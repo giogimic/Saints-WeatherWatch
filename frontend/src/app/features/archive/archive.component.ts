@@ -9,39 +9,36 @@ import { Observable, BehaviorSubject, switchMap } from 'rxjs';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <!-- Chalkboard Container -->
-    <div class="min-h-[calc(100vh-4rem)] p-4 md:p-8 bg-[#1e2c24] text-[#e8f0e8] font-['Chalkboard_SE',_'Comic_Sans_MS',_sans-serif] relative overflow-hidden">
-      
-      <!-- Subtle eraser smudges background effect -->
-      <div class="absolute inset-0 opacity-20 pointer-events-none" style="background-image: radial-gradient(circle at 20% 30%, #ffffff 1px, transparent 15%), radial-gradient(circle at 80% 70%, #ffffff 1px, transparent 15%); background-size: 150px 150px; filter: blur(2px);"></div>
-      
-      <!-- Chalk dust overlay -->
-      <div class="absolute inset-0 opacity-10 pointer-events-none" style="background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.05) 10px, rgba(255,255,255,0.05) 20px);"></div>
-
-      <div class="max-w-6xl mx-auto relative z-10">
+    <div class="min-h-[calc(100vh-4rem)] p-6">
+      <div class="max-w-6xl mx-auto">
         
         <!-- Header -->
-        <div class="text-center mb-8 border-b-2 border-dashed border-[#e8f0e8]/50 pb-6">
-          <h1 class="text-5xl md:text-7xl font-bold tracking-wider mb-2 text-[#fff9e6] drop-shadow-[2px_2px_0_rgba(0,0,0,0.5)]">
-            <span class="opacity-80">~</span> Archive <span class="opacity-80">~</span>
-          </h1>
-          <p class="text-xl opacity-80 italic">Historical Threat Logs & Chase Records</p>
+        <div class="text-center mb-10 relative">
+          <div class="absolute inset-0 opacity-[0.05] pointer-events-none -z-10" style="background: repeating-linear-gradient(45deg, transparent, transparent 15px, #fff 15px, #fff 30px);"></div>
           
-          <!-- Tabs -->
-          <div class="flex justify-center gap-6 mt-8 text-lg">
-            <button 
-              class="px-4 py-2 border-2 border-dashed rounded-lg transition-all"
-              [class]="activeTab === 'nws' ? 'border-[#fffdcc] text-[#fffdcc] bg-white/10 scale-105' : 'border-transparent opacity-60 hover:opacity-100 hover:border-[#e8f0e8]/30'"
-              (click)="activeTab = 'nws'">
-              🌩️ NWS Alerts
-            </button>
-            <button 
-              class="px-4 py-2 border-2 border-dashed rounded-lg transition-all"
-              [class]="activeTab === 'chase' ? 'border-[#fffdcc] text-[#fffdcc] bg-white/10 scale-105' : 'border-transparent opacity-60 hover:opacity-100 hover:border-[#e8f0e8]/30'"
-              (click)="activeTab = 'chase'">
-              🚗 Chase Logs
-            </button>
+          <div class="mx-auto mb-6 flex h-28 w-28 items-center justify-center rounded-3xl bg-base-100 border-4 border-base-300 shadow-[6px_6px_0_0_rgba(69,44,99,1)] rotate-3 hover:-rotate-3 transition-transform">
+            <span class="text-6xl drop-shadow-md">🗄️</span>
           </div>
+          <h1 class="text-5xl md:text-6xl font-black text-white mb-4 italic uppercase tracking-wider font-sans drop-shadow-[3px_3px_0_rgba(69,44,99,1)]">Archive</h1>
+          <p class="text-base-content/80 max-w-3xl mx-auto text-sm md:text-lg font-bold bg-base-200/50 p-4 rounded-2xl border-2 border-base-300 inline-block">
+            Historical threat logs &amp; personal storm chase records. Search, filter, and relive past weather events.
+          </p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex justify-center gap-4 mb-8">
+          <button 
+            class="btn border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase text-lg px-6"
+            [ngClass]="activeTab === 'nws' ? 'btn-primary' : 'btn-ghost bg-base-200'"
+            (click)="activeTab = 'nws'">
+            🌩️ NWS Alerts
+          </button>
+          <button 
+            class="btn border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase text-lg px-6"
+            [ngClass]="activeTab === 'chase' ? 'btn-secondary' : 'btn-ghost bg-base-200'"
+            (click)="activeTab = 'chase'">
+            🚗 Chase Logs
+          </button>
         </div>
 
         <!-- NWS Alerts Tab -->
@@ -49,70 +46,86 @@ import { Observable, BehaviorSubject, switchMap } from 'rxjs';
           <div class="grid md:grid-cols-4 gap-6">
             
             <!-- Filters Panel -->
-            <div class="md:col-span-1 space-y-6 border-2 border-dashed border-[#e8f0e8]/30 p-5 rounded-xl bg-white/5">
-              <h3 class="text-2xl font-bold border-b-2 border-dashed border-[#e8f0e8]/30 pb-2 mb-4 text-[#fffdcc]">Filters</h3>
-              
-              <div class="space-y-2">
-                <label class="block text-sm opacity-80">Search (Headline or Area)</label>
-                <input type="text" [(ngModel)]="filters.search" (keyup.enter)="loadHistory()" class="w-full bg-transparent border-b-2 border-dashed border-[#e8f0e8]/50 p-2 text-white placeholder-white/30 focus:outline-none focus:border-white" placeholder="e.g. Penobscot...">
-              </div>
+            <div class="md:col-span-1">
+              <article class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-5 space-y-5">
+                <h3 class="text-xl font-black text-primary uppercase italic font-sans tracking-wide border-b-4 border-base-300 pb-3">Filters</h3>
+                
+                <div class="space-y-2">
+                  <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block">Search</label>
+                  <input type="text" [(ngModel)]="filters.search" (keyup.enter)="loadHistory()" placeholder="e.g. Penobscot..." class="input input-bordered w-full input-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                </div>
 
-              <div class="space-y-2">
-                <label class="block text-sm opacity-80">Severity</label>
-                <select [(ngModel)]="filters.severity" (change)="loadHistory()" class="w-full bg-[#2b3a32] border-2 border-dashed border-[#e8f0e8]/50 p-2 rounded-lg text-white focus:outline-none">
-                  <option value="">Any</option>
-                  <option value="Extreme">Extreme</option>
-                  <option value="Severe">Severe</option>
-                  <option value="Moderate">Moderate</option>
-                </select>
-              </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block">Severity</label>
+                  <select [(ngModel)]="filters.severity" (change)="loadHistory()" class="select select-bordered w-full select-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                    <option value="">Any</option>
+                    <option value="Extreme">Extreme</option>
+                    <option value="Severe">Severe</option>
+                    <option value="Moderate">Moderate</option>
+                  </select>
+                </div>
 
-              <div class="space-y-2">
-                <label class="block text-sm opacity-80">Category</label>
-                <input type="text" [(ngModel)]="filters.category" (keyup.enter)="loadHistory()" class="w-full bg-transparent border-b-2 border-dashed border-[#e8f0e8]/50 p-2 text-white placeholder-white/30 focus:outline-none focus:border-white" placeholder="e.g. Met">
-              </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block">Category</label>
+                  <input type="text" [(ngModel)]="filters.category" (keyup.enter)="loadHistory()" placeholder="e.g. Met" class="input input-bordered w-full input-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                </div>
 
-              <div class="flex items-center gap-3 mt-4">
-                <input type="checkbox" id="tornadoOnly" [(ngModel)]="filters.tornadoOnly" (change)="loadHistory()" class="w-5 h-5 accent-[#fffdcc] bg-transparent border-2 border-white">
-                <label for="tornadoOnly" class="opacity-90">Tornado Only</label>
-              </div>
+                <div class="flex items-center gap-3">
+                  <input type="checkbox" id="tornadoOnly" [(ngModel)]="filters.tornadoOnly" (change)="loadHistory()" class="checkbox checkbox-primary checkbox-sm border-2">
+                  <label for="tornadoOnly" class="font-bold text-sm">Tornado Only 🌪️</label>
+                </div>
 
-              <button (click)="loadHistory()" class="w-full mt-4 py-2 border-2 border-dashed border-[#fffdcc] text-[#fffdcc] rounded-lg hover:bg-[#fffdcc]/10 transition-colors">
-                Apply Filters
-              </button>
+                <button (click)="loadHistory()" class="btn btn-primary w-full border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase">
+                  Apply
+                </button>
+              </article>
             </div>
 
             <!-- Results Panel -->
             <div class="md:col-span-3 space-y-4">
               @if (history$ | async; as history) {
-                <div class="text-right opacity-70 text-sm mb-2">{{ history.length }} entries found</div>
+                <div class="text-right text-base-content/50 text-xs font-bold uppercase tracking-widest mb-2">{{ history.length }} entries found</div>
                 
                 @if (history.length === 0) {
-                  <div class="text-center p-12 opacity-50 border-2 border-dashed border-[#e8f0e8]/30 rounded-xl">
-                    <span class="text-4xl block mb-2">💨</span>
-                    Nothing found in the archives.
+                  <div class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-12 text-center">
+                    <span class="text-5xl block mb-3">💨</span>
+                    <h3 class="text-xl font-black text-white uppercase italic font-sans">Nothing found</h3>
+                    <p class="text-base-content/60 font-bold text-sm mt-2">Try adjusting your filters.</p>
                   </div>
                 }
 
                 @for (entry of history; track entry.id) {
-                  <div class="p-5 border-2 border-dashed border-[#e8f0e8]/40 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors relative group">
-                    <div class="flex justify-between items-start gap-4 mb-2">
-                      <h4 class="text-xl font-bold text-[#fffdcc]">{{ entry.headline }}</h4>
-                      <div class="flex items-center gap-2">
-                        <span class="px-2 py-1 text-xs border border-dashed border-[#e8f0e8]/50 rounded">{{ entry.severity }}</span>
-                        <button (click)="deleteHistory(entry.id)" class="opacity-0 group-hover:opacity-100 text-[#ffaaaa] hover:text-[#ff5555] transition-opacity" title="Erase Log">✕</button>
+                  <article class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-5 relative overflow-hidden group hover:-translate-y-1 transition-transform">
+                    <!-- Severity highlight bar -->
+                    <div class="absolute left-0 top-0 bottom-0 w-3" [ngClass]="getSeverityColorClass(entry.severity)"></div>
+
+                    <div class="pl-4">
+                      <div class="flex justify-between items-start gap-4 mb-3">
+                        <div>
+                          <div class="flex items-center gap-2 mb-2">
+                            <span class="text-2xl">{{ entry.isTornado ? '🌪️' : '⛈️' }}</span>
+                            <h4 class="text-xl font-black font-sans text-white uppercase italic drop-shadow-sm">{{ entry.headline }}</h4>
+                          </div>
+                          <p class="text-sm text-base-content/70 font-bold">📍 {{ entry.area }}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <span class="badge font-black uppercase border-2 shadow-sm px-3 py-3 text-[10px] rounded-xl" [ngClass]="getSeverityBgClass(entry.severity)">{{ entry.severity }}</span>
+                          <button (click)="deleteHistory(entry.id)" class="btn btn-circle btn-xs btn-ghost opacity-0 group-hover:opacity-100 transition-opacity text-error hover:bg-error/20" title="Delete">✕</button>
+                        </div>
+                      </div>
+
+                      @if (entry.description) {
+                        <div class="mt-3 text-sm text-base-content/80 font-semibold bg-base-200/50 p-3 rounded-xl border-l-4 border-primary italic">
+                          {{ entry.description }}
+                        </div>
+                      }
+
+                      <div class="mt-3 flex items-center justify-between text-[10px] uppercase tracking-widest text-base-content/40 font-bold">
+                        <span>{{ entry.category }}</span>
+                        <span>Logged: {{ formatDate(entry.datePulled) }}</span>
                       </div>
                     </div>
-                    <div class="text-sm opacity-80 mb-2">📍 {{ entry.area }}</div>
-                    @if (entry.description) {
-                      <div class="text-sm opacity-70 italic border-l-2 border-dashed border-[#e8f0e8]/30 pl-3 py-1">
-                        {{ entry.description }}
-                      </div>
-                    }
-                    <div class="text-xs opacity-50 mt-3 text-right">
-                      Logged: {{ formatDate(entry.datePulled) }}
-                    </div>
-                  </div>
+                  </article>
                 }
               }
             </div>
@@ -124,85 +137,88 @@ import { Observable, BehaviorSubject, switchMap } from 'rxjs';
           <div class="grid md:grid-cols-3 gap-6">
             
             <!-- New Entry Form -->
-            <div class="md:col-span-1 space-y-6 border-2 border-dashed border-[#fffdcc]/40 p-5 rounded-xl bg-[#fffdcc]/5">
-              <h3 class="text-2xl font-bold border-b-2 border-dashed border-[#fffdcc]/30 pb-2 mb-4 text-[#fffdcc]">New Log</h3>
-              
-              <div class="space-y-4">
-                <div>
-                  <label class="block text-sm opacity-80 mb-1">Title *</label>
-                  <input type="text" [(ngModel)]="newChaseLog.title" class="w-full bg-transparent border-b-2 border-dashed border-[#e8f0e8]/50 p-2 text-white focus:outline-none focus:border-white">
-                </div>
-                <div>
-                  <label class="block text-sm opacity-80 mb-1">Date *</label>
-                  <input type="datetime-local" [(ngModel)]="newChaseLog.chaseDate" class="w-full bg-transparent border-b-2 border-dashed border-[#e8f0e8]/50 p-2 text-white focus:outline-none focus:border-white" style="color-scheme: dark;">
-                </div>
-                <div>
-                  <label class="block text-sm opacity-80 mb-1">State *</label>
-                  <input type="text" [(ngModel)]="newChaseLog.state" class="w-full bg-transparent border-b-2 border-dashed border-[#e8f0e8]/50 p-2 text-white focus:outline-none focus:border-white">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
+            <div class="md:col-span-1">
+              <article class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-5 space-y-5">
+                <h3 class="text-xl font-black text-secondary uppercase italic font-sans tracking-wide border-b-4 border-base-300 pb-3">New Chase Log</h3>
+                
+                <div class="space-y-4">
                   <div>
-                    <label class="block text-sm opacity-80 mb-1">Miles</label>
-                    <input type="number" [(ngModel)]="newChaseLog.milesDriven" class="w-full bg-transparent border-b-2 border-dashed border-[#e8f0e8]/50 p-2 text-white focus:outline-none focus:border-white">
+                    <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block mb-1">Title *</label>
+                    <input type="text" [(ngModel)]="newChaseLog.title" class="input input-bordered w-full input-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
                   </div>
                   <div>
-                    <label class="block text-sm opacity-80 mb-1">EF Rating</label>
-                    <select [(ngModel)]="newChaseLog.efRating" class="w-full bg-[#2b3a32] border-2 border-dashed border-[#e8f0e8]/50 p-2 rounded-lg text-white focus:outline-none">
-                      <option [ngValue]="null">N/A</option>
-                      <option [ngValue]="0">EF0</option>
-                      <option [ngValue]="1">EF1</option>
-                      <option [ngValue]="2">EF2</option>
-                      <option [ngValue]="3">EF3</option>
-                      <option [ngValue]="4">EF4</option>
-                      <option [ngValue]="5">EF5</option>
-                    </select>
+                    <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block mb-1">Date *</label>
+                    <input type="datetime-local" [(ngModel)]="newChaseLog.chaseDate" class="input input-bordered w-full input-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold" style="color-scheme: dark;">
                   </div>
-                </div>
-                <div>
-                  <label class="block text-sm opacity-80 mb-1">Notes</label>
-                  <textarea [(ngModel)]="newChaseLog.notes" rows="3" class="w-full bg-transparent border-2 border-dashed border-[#e8f0e8]/50 rounded-lg p-2 text-white focus:outline-none focus:border-white custom-scrollbar"></textarea>
-                </div>
+                  <div>
+                    <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block mb-1">State *</label>
+                    <input type="text" [(ngModel)]="newChaseLog.state" class="input input-bordered w-full input-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block mb-1">Miles</label>
+                      <input type="number" [(ngModel)]="newChaseLog.milesDriven" class="input input-bordered w-full input-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                    </div>
+                    <div>
+                      <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block mb-1">EF Rating</label>
+                      <select [(ngModel)]="newChaseLog.efRating" class="select select-bordered w-full select-sm bg-base-200 border-2 border-base-300 rounded-xl font-bold">
+                        <option [ngValue]="null">N/A</option>
+                        <option [ngValue]="0">EF0</option>
+                        <option [ngValue]="1">EF1</option>
+                        <option [ngValue]="2">EF2</option>
+                        <option [ngValue]="3">EF3</option>
+                        <option [ngValue]="4">EF4</option>
+                        <option [ngValue]="5">EF5</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="text-[10px] uppercase tracking-widest text-base-content/50 font-bold block mb-1">Notes</label>
+                    <textarea [(ngModel)]="newChaseLog.notes" rows="3" class="textarea textarea-bordered w-full bg-base-200 border-2 border-base-300 rounded-xl font-bold text-sm"></textarea>
+                  </div>
 
-                <button (click)="submitChaseLog()" class="w-full py-3 border-2 border-dashed border-[#aaffaa] text-[#aaffaa] rounded-lg hover:bg-[#aaffaa]/10 transition-colors font-bold text-lg mt-2">
-                  + Add Log
-                </button>
-              </div>
+                  <button (click)="submitChaseLog()" class="btn btn-secondary w-full border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:-translate-y-1 transition-all rounded-xl font-black uppercase">
+                    + Add Log
+                  </button>
+                </div>
+              </article>
             </div>
 
             <!-- Chase Logs List -->
             <div class="md:col-span-2 space-y-4">
               @if (chaseLogs$ | async; as logs) {
                 @if (logs.length === 0) {
-                  <div class="text-center p-12 opacity-50 border-2 border-dashed border-[#e8f0e8]/30 rounded-xl">
-                    <span class="text-4xl block mb-2">🌪️</span>
-                    No chase logs yet. Write one down!
+                  <div class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-12 text-center">
+                    <span class="text-5xl block mb-3">🌪️</span>
+                    <h3 class="text-xl font-black text-white uppercase italic font-sans">No Chase Logs Yet</h3>
+                    <p class="text-base-content/60 font-bold text-sm mt-2">Write your first one!</p>
                   </div>
                 }
 
                 @for (log of logs; track log.id) {
-                  <div class="p-5 border-2 border-dashed border-[#e8f0e8]/40 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors relative group">
-                    <div class="flex justify-between items-start gap-4 mb-2">
-                      <h4 class="text-2xl font-bold text-[#fffdcc]">{{ log.title }}</h4>
+                  <article class="bg-base-100 border-4 border-base-300 rounded-[2rem] shadow-[6px_6px_0_0_rgba(69,44,99,1)] p-5 relative overflow-hidden group hover:-translate-y-1 transition-transform">
+                    <div class="flex justify-between items-start gap-4 mb-3">
+                      <h4 class="text-2xl font-black font-sans text-white uppercase italic drop-shadow-sm">{{ log.title }}</h4>
                       <div class="flex items-center gap-2">
                         @if (log.efRating !== null && log.efRating !== undefined) {
-                          <span class="px-2 py-1 text-sm font-bold border-2 border-dashed border-[#ffaaaa] text-[#ffaaaa] rounded rotate-3">EF{{ log.efRating }}</span>
+                          <span class="badge badge-error font-black border-2 shadow-sm px-3 py-3 text-xs rounded-xl">EF{{ log.efRating }}</span>
                         }
-                        <button (click)="deleteChaseLog(log.id)" class="opacity-0 group-hover:opacity-100 text-[#ffaaaa] hover:text-[#ff5555] transition-opacity ml-2" title="Erase Log">✕</button>
+                        <button (click)="deleteChaseLog(log.id)" class="btn btn-circle btn-xs btn-ghost opacity-0 group-hover:opacity-100 transition-opacity text-error hover:bg-error/20" title="Delete">✕</button>
                       </div>
                     </div>
                     
-                    <div class="flex flex-wrap gap-4 text-sm opacity-90 mb-3 border-b-2 border-dashed border-[#e8f0e8]/20 pb-3">
+                    <div class="flex flex-wrap gap-4 text-sm font-bold text-base-content/70 mb-3 pb-3 border-b-4 border-base-300">
                       <span>📅 {{ formatDate(log.chaseDate) }}</span>
                       <span>📍 {{ log.state }}</span>
                       <span>🚗 {{ log.milesDriven }} miles</span>
                     </div>
 
                     @if (log.notes) {
-                      <div class="text-base opacity-80 leading-relaxed whitespace-pre-line">
+                      <div class="text-sm text-base-content/80 font-semibold bg-base-200/50 p-3 rounded-xl border-l-4 border-secondary italic whitespace-pre-line">
                         {{ log.notes }}
                       </div>
                     }
-                  </div>
+                  </article>
                 }
               }
             </div>
@@ -212,11 +228,7 @@ import { Observable, BehaviorSubject, switchMap } from 'rxjs';
       </div>
     </div>
   `,
-  styles: [`
-    input, select, textarea {
-      font-family: inherit;
-    }
-  `]
+  styles: ``
 })
 export class ArchiveComponent implements OnInit {
   private weatherService = inject(WeatherService);
@@ -258,7 +270,7 @@ export class ArchiveComponent implements OnInit {
   }
 
   deleteHistory(id: string) {
-    if (confirm('Erase this alert from the chalkboard?')) {
+    if (confirm('Delete this archived alert?')) {
       this.weatherService.deleteHistory(id).subscribe(() => this.loadHistory());
     }
   }
@@ -273,14 +285,12 @@ export class ArchiveComponent implements OnInit {
       return;
     }
 
-    // Ensure date is ISO8601 string for backend
     const logToSubmit = {
       ...this.newChaseLog,
       chaseDate: new Date(this.newChaseLog.chaseDate).toISOString()
     };
 
     this.weatherService.createChaseLog(logToSubmit).subscribe(() => {
-      // Reset form
       this.newChaseLog = {
         title: '',
         chaseDate: '',
@@ -294,7 +304,7 @@ export class ArchiveComponent implements OnInit {
   }
 
   deleteChaseLog(id: string) {
-    if (confirm('Erase this chase log from the chalkboard?')) {
+    if (confirm('Delete this chase log?')) {
       this.weatherService.deleteChaseLog(id).subscribe(() => this.loadChaseLogs());
     }
   }
@@ -303,5 +313,23 @@ export class ArchiveComponent implements OnInit {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  getSeverityColorClass(severity: string): string {
+    switch (severity?.toLowerCase()) {
+      case 'extreme': return 'bg-error';
+      case 'severe': return 'bg-accent';
+      case 'moderate': return 'bg-warning';
+      default: return 'bg-primary';
+    }
+  }
+
+  getSeverityBgClass(severity: string): string {
+    switch (severity?.toLowerCase()) {
+      case 'extreme': return 'bg-error/20 text-error border-error/50';
+      case 'severe': return 'bg-accent/20 text-accent border-accent/50';
+      case 'moderate': return 'bg-warning/20 text-warning border-warning/50';
+      default: return 'bg-primary/20 text-primary border-primary/50';
+    }
   }
 }

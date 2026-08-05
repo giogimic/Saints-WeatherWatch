@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, OnDestroy, inject } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 interface CameraFeed {
@@ -10,12 +10,13 @@ interface CameraFeed {
   status: string;
   type: 'iframe' | 'image';
   sourceUrl: string;
-  
+  attribution: string;
+
   // For iframe feeds
   embedUrl?: string;
   safeEmbedUrl?: SafeResourceUrl;
-  
-  // For image feeds
+
+  // For image feeds (proxied through /api/cams/{id})
   imageUrl?: string;
   refreshIntervalMs?: number;
 }
@@ -36,10 +37,10 @@ interface CameraFeed {
           </div>
           <h1 class="text-5xl md:text-6xl font-black text-white mb-4 italic uppercase tracking-wider font-sans drop-shadow-[3px_3px_0_rgba(69,44,99,1)]">Chaser Live</h1>
           <p class="text-base-content/80 max-w-3xl mx-auto text-sm md:text-lg font-bold bg-base-200/50 p-4 rounded-2xl border-2 border-base-300 inline-block mb-2">
-            Watch storm chasers, road cams, and coastal weather cameras from the Maine and New England corridor.
+            Real-time webcams, road cams, and NOAA satellite imagery — proxied through our server for lightning-fast loads.
           </p>
           <div class="mt-4 mx-auto w-fit flex items-center gap-2 rounded-xl bg-accent/20 px-4 py-2 text-xs uppercase font-black text-accent border-2 border-accent/50 shadow-sm">
-            <span>⚡ Open one feed at a time to keep the page smooth and lightweight.</span>
+            <span>⚡ Images refresh automatically every 60 seconds. Open one feed at a time for best performance.</span>
           </div>
         </div>
 
@@ -79,12 +80,17 @@ interface CameraFeed {
                       allowfullscreen
                     ></iframe>
                   } @else if (camera.type === 'image' && camera.imageUrl) {
-                    <img 
-                      class="aspect-video w-full object-cover" 
-                      [src]="camera.imageUrl + '?t=' + currentTimestamp" 
-                      alt="{{ camera.title }}" 
-                      loading="lazy"
-                    />
+                    <div class="relative">
+                      <img 
+                        class="aspect-video w-full object-cover" 
+                        [src]="camera.imageUrl + '?t=' + currentTimestamp" 
+                        alt="{{ camera.title }}" 
+                        loading="lazy"
+                      />
+                      <div class="absolute bottom-2 right-2 bg-black/70 px-3 py-1.5 rounded-xl text-[10px] text-white font-bold uppercase tracking-wider backdrop-blur-sm">
+                        {{ camera.attribution }}
+                      </div>
+                    </div>
                   }
                 </div>
               }
@@ -96,16 +102,22 @@ interface CameraFeed {
   `,
   styles: ``
 })
-export class LiveComponent {
+export class LiveComponent implements OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
+  private refreshTimer: ReturnType<typeof setInterval>;
 
   openCameraId: string | null = null;
   currentTimestamp: number = Date.now();
 
   constructor() {
-    setInterval(() => {
+    // Refresh the timestamp every 60 seconds to bust image cache
+    this.refreshTimer = setInterval(() => {
       this.currentTimestamp = Date.now();
-    }, 60000); // refresh images every minute
+    }, 60000);
+  }
+
+  ngOnDestroy(): void {
+    clearInterval(this.refreshTimer);
   }
 
   cameras: CameraFeed[] = [
@@ -114,10 +126,11 @@ export class LiveComponent {
       title: 'FKOC Stadium Cam',
       region: 'Fort Kent',
       status: 'LIVE',
-      description: 'Live view of the Fort Kent Outdoor Center biathlon stadium. Refreshes every minute. © FKOC',
+      description: 'Fort Kent Outdoor Center biathlon stadium. Auto-refreshes every 60s via our server proxy.',
       type: 'image',
-      imageUrl: 'https://www.fortkentoc.org/webcam.jpg',
+      imageUrl: '/api/cams/fkoc-stadium',
       sourceUrl: 'https://www.fortkentoc.org/',
+      attribution: '© Fort Kent Outdoor Center',
       refreshIntervalMs: 60000
     },
     {
@@ -125,21 +138,35 @@ export class LiveComponent {
       title: 'Dickey Bridge',
       region: 'Allagash',
       status: 'LIVE',
-      description: 'MaineDOT camera at Dickey Bridge over the St. John River. © MaineDOT',
+      description: 'MaineDOT highway camera at Dickey Bridge over the St. John River.',
       type: 'image',
-      imageUrl: 'https://www.maine.gov/mdot/cams/all/dickey_Public.jpg',
+      imageUrl: '/api/cams/mdot-dickey',
       sourceUrl: 'https://www.maine.gov/mdot/cams/',
+      attribution: '© MaineDOT',
+      refreshIntervalMs: 60000
+    },
+    {
+      id: 'mdot-soucy',
+      title: 'Route 11 Soucy Hill',
+      region: 'Oakfield',
+      status: 'LIVE',
+      description: 'MaineDOT highway camera on Route 11 near Soucy Hill.',
+      type: 'image',
+      imageUrl: '/api/cams/mdot-soucy',
+      sourceUrl: 'https://www.maine.gov/mdot/cams/',
+      attribution: '© MaineDOT',
       refreshIntervalMs: 60000
     },
     {
       id: 'goes-east',
       title: 'NOAA GOES-East',
-      region: 'Northeast',
+      region: 'Northeast US',
       status: 'LIVE',
-      description: 'Real-time true-color satellite imagery of the Northeast sector. Updates every 5 minutes. © NOAA',
+      description: 'Real-time GeoColor satellite imagery of the Northeast sector. Updates every ~5 minutes.',
       type: 'image',
-      imageUrl: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/SECTOR/ne/GEOCOLOR/1000x1000.jpg',
+      imageUrl: '/api/cams/goes-east',
       sourceUrl: 'https://www.star.nesdis.noaa.gov/GOES/',
+      attribution: '© NOAA / GOES-East',
       refreshIntervalMs: 300000
     },
     {
@@ -151,6 +178,7 @@ export class LiveComponent {
       type: 'iframe',
       embedUrl: 'https://www.youtube.com/embed/SH63YaIWyK0?autoplay=1&mute=1',
       sourceUrl: 'https://www.youtube.com/results?search_query=maine+road+camera',
+      attribution: '© YouTube',
       safeEmbedUrl: this.sanitizer.bypassSecurityTrustResourceUrl('https://www.youtube.com/embed/SH63YaIWyK0?autoplay=1&mute=1'),
     },
   ];
