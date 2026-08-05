@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:alpine AS builder
 
 # Install dependencies for Prisma Client Go (needs openssl)
 RUN apk add --no-cache openssl nodejs npm
