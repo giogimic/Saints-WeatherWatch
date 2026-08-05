@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+dist/
+frontend/dist/
+backend/bin/
+
+# Database
+*.db
+*.db-journal
+backend/saints-weatherwatch.db
+
+# Environment
+.env
+.env.local
+*.env
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Go
+backend/vendor/
+
+# Prisma generated (regenerated on build)
+backend/internal/store/gen/
+!backend/internal/store/gen/.gitkeep
+
+# Angular
+frontend/.angular/cache/
+
+# Logs
+*.log
+npm-debug.log*

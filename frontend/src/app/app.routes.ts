@@ -1,0 +1,41 @@
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  {
+    path: '',
+    loadComponent: () =>
+      import('./features/home/home.component').then((m) => m.HomeComponent),
+    title: 'Saints Weather Watch — Storm Tracking & Education',
+  },
+  {
+    path: 'map',
+    loadComponent: () =>
+      import('./features/map/map.component').then((m) => m.MapComponent),
+    title: 'Live Map — Saints Weather Watch',
+  },
+  {
+    path: 'alerts',
+    loadComponent: () =>
+      import('./features/alerts/alerts.component').then((m) => m.AlertsComponent),
+    title: 'Alerts — Saints Weather Watch',
+  },
+  {
+    path: 'live',
+    loadComponent: () =>
+      import('./features/live/live.component').then((m) => m.LiveComponent),
+    title: 'Chaser Live — Saints Weather Watch',
+  },
+  {
+    path: 'learn',
+    loadComponent: () =>
+      import('./features/learn/learn.component').then((m) => m.LearnComponent),
+    title: 'Learn — Saints Weather Watch',
+  },
+  {
+    path: 'play',
+    loadComponent: () =>
+      import('./features/play/play.component').then((m) => m.PlayComponent),
+    title: 'Play — Saints Weather Watch',
+  },
+  { path: '**', redirectTo: '' },
+];

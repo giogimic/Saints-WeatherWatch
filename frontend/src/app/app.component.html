@@ -1,0 +1,48 @@
+<!-- Desktop Navbar (hidden on mobile) -->
+<div class="navbar bg-base-200/80 backdrop-blur-sm border-b border-base-300 sticky top-0 z-50 hidden md:flex">
+  <div class="navbar-start">
+    <a routerLink="/" class="btn btn-ghost text-xl gap-2 normal-case">
+      <span class="text-2xl">🌪️</span>
+      <span class="font-extrabold">Weather<span class="text-primary">Watch</span></span>
+    </a>
+  </div>
+  <div class="navbar-center">
+    @for (item of navItems; track item.path) {
+      <a
+        [routerLink]="item.path"
+        routerLinkActive="btn-primary"
+        [routerLinkActiveOptions]="{ exact: item.path === '' }"
+        class="btn btn-ghost btn-sm gap-1"
+      >
+        <span>{{ item.icon }}</span>
+        {{ item.label }}
+      </a>
+    }
+  </div>
+  <div class="navbar-end">
+    <div class="badge badge-error gap-1 text-xs">
+      <span class="loading loading-dot loading-xs"></span>
+      LIVE
+    </div>
+  </div>
+</div>
+
+<!-- Main content area -->
+<main class="pb-16 md:pb-0">
+  <router-outlet />
+</main>
+
+<!-- Mobile Bottom Tab Bar (hidden on desktop) -->
+<div class="btm-nav btm-nav-sm bg-base-200 border-t border-base-300 md:hidden fixed bottom-0 z-50">
+  @for (item of navItems; track item.path) {
+    <a
+      [routerLink]="item.path"
+      routerLinkActive="active text-primary"
+      [routerLinkActiveOptions]="{ exact: item.path === '' }"
+      class="flex flex-col items-center gap-0.5"
+    >
+      <span class="text-lg">{{ item.icon }}</span>
+      <span class="text-[10px] font-medium">{{ item.label }}</span>
+    </a>
+  }
+</div>
