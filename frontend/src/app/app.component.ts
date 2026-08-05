@@ -17,6 +17,7 @@ export class AppComponent {
     { path: 'map', label: 'Map', icon: '🗺️' },
     { path: 'alerts', label: 'Alerts', icon: '🚨' },
     { path: 'live', label: 'Live', icon: '📹' },
+    { path: 'archive', label: 'Archive', icon: '🗄️' },
     { path: 'learn', label: 'Learn', icon: '📚' },
     { path: 'play', label: 'Play', icon: '🎮' },
   ];

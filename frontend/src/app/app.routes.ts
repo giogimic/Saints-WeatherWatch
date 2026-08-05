@@ -37,5 +37,11 @@ export const routes: Routes = [
       import('./features/play/play.component').then((m) => m.PlayComponent),
     title: 'Play — Saints Weather Watch',
   },
+  {
+    path: 'archive',
+    loadComponent: () =>
+      import('./features/archive/archive.component').then((m) => m.ArchiveComponent),
+    title: 'Archive — Saints Weather Watch',
+  },
   { path: '**', redirectTo: '' },
 ];

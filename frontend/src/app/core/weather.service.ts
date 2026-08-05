@@ -41,6 +41,19 @@ export interface TrackerIncident {
   isTornado: boolean;
 }
 
+export interface ChaseLogEntry {
+  id: string;
+  title: string;
+  chaseDate: string;
+  state: string;
+  lat?: number;
+  lon?: number;
+  efRating?: number;
+  milesDriven: number;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface WeatherAlertsResponse {
   generatedAt: string;
   alerts: WeatherAlert[];
@@ -81,12 +94,42 @@ export class WeatherService {
     );
   }
 
-  getHistory(): Observable<TrackerIncident[]> {
-    return this.http.get<TrackerIncident[]>('/api/history').pipe(
+  getHistory(filters?: { search?: string, severity?: string, category?: string, tornadoOnly?: boolean }): Observable<TrackerIncident[]> {
+    let params = new URLSearchParams();
+    if (filters) {
+      if (filters.search) params.set('search', filters.search);
+      if (filters.severity) params.set('severity', filters.severity);
+      if (filters.category) params.set('category', filters.category);
+      if (filters.tornadoOnly) params.set('tornadoOnly', 'true');
+    }
+    const query = params.toString() ? `?${params.toString()}` : '';
+    
+    return this.http.get<TrackerIncident[]>(`/api/history${query}`).pipe(
       catchError(err => {
         console.error('getHistory error:', err);
         return of([]);
       })
     );
+  }
+
+  deleteHistory(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/history/${id}`);
+  }
+
+  getChaseLogs(): Observable<ChaseLogEntry[]> {
+    return this.http.get<ChaseLogEntry[]>('/api/chaselogs').pipe(
+      catchError(err => {
+        console.error('getChaseLogs error:', err);
+        return of([]);
+      })
+    );
+  }
+
+  createChaseLog(log: Partial<ChaseLogEntry>): Observable<ChaseLogEntry> {
+    return this.http.post<ChaseLogEntry>('/api/chaselogs', log);
+  }
+
+  deleteChaseLog(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/chaselogs/${id}`);
   }
 }

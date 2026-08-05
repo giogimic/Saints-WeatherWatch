@@ -29,6 +29,12 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache) {
 		r.Get("/alerts", alertsHandler(cache))
 		r.Get("/overview", overviewHandler(cache))
 		r.Get("/history", historyHandler(st))
+		r.Delete("/history/{id}", deleteHistoryHandler(st))
+
+		// Chase Logs
+		r.Get("/chaselogs", getChaseLogsHandler(st))
+		r.Post("/chaselogs", createChaseLogHandler(st))
+		r.Delete("/chaselogs/{id}", deleteChaseLogHandler(st))
 	})
 }
 
@@ -103,7 +109,27 @@ func historyHandler(st *store.Store) http.HandlerFunc {
 		}
 
 		ctx := r.Context()
-		incidents, err := st.Client.TrackerIncident.FindMany().OrderBy(
+		
+		var filters []db.TrackerIncidentWhereParam
+
+		// Optional filters
+		if search := r.URL.Query().Get("search"); search != "" {
+			filters = append(filters, db.TrackerIncident.Or(
+				db.TrackerIncident.Headline.Contains(search),
+				db.TrackerIncident.Area.Contains(search),
+			))
+		}
+		if severity := r.URL.Query().Get("severity"); severity != "" {
+			filters = append(filters, db.TrackerIncident.Severity.Equals(severity))
+		}
+		if category := r.URL.Query().Get("category"); category != "" {
+			filters = append(filters, db.TrackerIncident.Category.Equals(category))
+		}
+		if tornadoOnly := r.URL.Query().Get("tornadoOnly"); tornadoOnly == "true" {
+			filters = append(filters, db.TrackerIncident.IsTornado.Equals(true))
+		}
+
+		incidents, err := st.Client.TrackerIncident.FindMany(filters...).OrderBy(
 			db.TrackerIncident.DatePulled.Order(db.SortOrderDesc),
 		).Exec(ctx)
 
@@ -113,5 +139,119 @@ func historyHandler(st *store.Store) http.HandlerFunc {
 		}
 
 		_ = json.NewEncoder(w).Encode(incidents)
+	}
+}
+
+func deleteHistoryHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if st == nil {
+			http.Error(w, "DB not initialized", http.StatusInternalServerError)
+			return
+		}
+		id := chi.URLParam(r, "id")
+		_, err := st.Client.TrackerIncident.FindUnique(db.TrackerIncident.ID.Equals(id)).Delete().Exec(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to delete incident", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+type createChaseLogReq struct {
+	Title       string  `json:"title"`
+	ChaseDate   string  `json:"chaseDate"` // ISO8601
+	State       string  `json:"state"`
+	Lat         *float64 `json:"lat,omitempty"`
+	Lon         *float64 `json:"lon,omitempty"`
+	EfRating    *int    `json:"efRating,omitempty"`
+	MilesDriven int     `json:"milesDriven"`
+	Notes       *string  `json:"notes,omitempty"`
+}
+
+func getChaseLogsHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if st == nil {
+			_ = json.NewEncoder(w).Encode([]any{})
+			return
+		}
+
+		logs, err := st.Client.ChaseLogEntry.FindMany().OrderBy(
+			db.ChaseLogEntry.ChaseDate.Order(db.SortOrderDesc),
+		).Exec(r.Context())
+
+		if err != nil {
+			http.Error(w, "Failed to fetch logs", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(logs)
+	}
+}
+
+func createChaseLogHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if st == nil {
+			http.Error(w, "DB not initialized", http.StatusInternalServerError)
+			return
+		}
+
+		var req createChaseLogReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid input", http.StatusBadRequest)
+			return
+		}
+
+		date, err := time.Parse(time.RFC3339, req.ChaseDate)
+		if err != nil {
+			http.Error(w, "Invalid date format", http.StatusBadRequest)
+			return
+		}
+
+		optionalFields := []db.ChaseLogEntrySetParam{
+			db.ChaseLogEntry.MilesDriven.Set(req.MilesDriven),
+		}
+
+		if req.Lat != nil {
+			optionalFields = append(optionalFields, db.ChaseLogEntry.Lat.Set(*req.Lat))
+		}
+		if req.Lon != nil {
+			optionalFields = append(optionalFields, db.ChaseLogEntry.Lon.Set(*req.Lon))
+		}
+		if req.EfRating != nil {
+			optionalFields = append(optionalFields, db.ChaseLogEntry.EfRating.Set(*req.EfRating))
+		}
+		if req.Notes != nil {
+			optionalFields = append(optionalFields, db.ChaseLogEntry.Notes.Set(*req.Notes))
+		}
+
+		entry, err := st.Client.ChaseLogEntry.CreateOne(
+			db.ChaseLogEntry.Title.Set(req.Title),
+			db.ChaseLogEntry.ChaseDate.Set(date),
+			db.ChaseLogEntry.State.Set(req.State),
+			optionalFields...,
+		).Exec(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to create log", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(entry)
+	}
+}
+
+func deleteChaseLogHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if st == nil {
+			http.Error(w, "DB not initialized", http.StatusInternalServerError)
+			return
+		}
+		id := chi.URLParam(r, "id")
+		_, err := st.Client.ChaseLogEntry.FindUnique(db.ChaseLogEntry.ID.Equals(id)).Delete().Exec(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to delete log", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
