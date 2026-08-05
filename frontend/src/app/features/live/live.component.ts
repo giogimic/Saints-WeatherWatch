@@ -173,7 +173,7 @@ export class LiveComponent implements OnDestroy {
       title: 'Portland Head Light',
       region: 'Cape Elizabeth',
       status: 'LIVE',
-      description: 'Live view of Maine\\'s most iconic lighthouse and the entrance to Portland Harbor.',
+      description: "Live view of Maine's most iconic lighthouse and the entrance to Portland Harbor.",
       type: 'iframe',
       group: 'cams',
       embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC4g3pL34z6Z6p16kP014Nwg&autoplay=1&mute=1',
