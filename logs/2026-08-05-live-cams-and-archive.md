@@ -71,10 +71,3 @@ Fixes:
 - `deploy-preview.sh`: SQLite URL → `/app/data/weatherwatch.db`
 - `update.sh`: rewrites legacy `DATABASE_URL=file:/app/weatherwatch.db` in `.env`, and
   post-deploy verifies `/api/health` + `/api/cams`, flagging a stale build explicitly
-
-## 2026-08-05 later — Wine starter
-
-Added `start-backend-wine.sh` for running `backend/server.exe` under Wine on Linux
-when Docker isn't used. Preferred production path remains `./update.sh` (Docker builds
-a native Linux `server` binary). Wine script supports `start|stop|restart|status|logs`.
-`update.sh` SQLite backup now also checks `backend/data/weatherwatch.db`.

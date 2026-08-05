@@ -41,8 +41,3 @@ frontend/.angular/cache/
 # Logs
 *.log
 npm-debug.log*
-
-# Wine (Linux helper for Windows server.exe)
-.wine-weatherwatch/
-backend/server.wine.pid
-backend/server.wine.log

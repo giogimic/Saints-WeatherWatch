@@ -78,17 +78,6 @@ docker compose up -d
 docker compose logs --tail=80 backend
 ```
 
-### Running server.exe under Wine
-
-Only needed if you run the Windows binary outside Docker:
-
-```bash
-chmod +x start-backend-wine.sh
-./start-backend-wine.sh start     # also: stop | restart | status | logs
-```
-
-Docker is preferred, since it builds a native Linux binary.
-
 ## Linux preview deployment
 
 Use the repo root script:
