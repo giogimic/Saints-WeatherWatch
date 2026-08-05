@@ -27,17 +27,34 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        - DB_PROVIDER=${DB_PROVIDER:-sqlite}
     container_name: weatherwatch_backend
     restart: unless-stopped
     environment:
-      - DATABASE_URL=file:/app/weatherwatch.db
+      - DATABASE_URL=${DATABASE_URL:-file:/app/weatherwatch.db}
       - PORT=8080
     expose:
       - "8080"
     volumes:
       - weatherwatch_db:/app
 
+  mariadb:
+    image: mariadb:10.11
+    container_name: weatherwatch_mariadb
+    restart: unless-stopped
+    profiles:
+      - mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-supersecret}
+      MARIADB_DATABASE: weatherwatch
+    expose:
+      - "3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
 volumes:
   caddy_data:
   caddy_config:
   weatherwatch_db:
+  mariadb_data:

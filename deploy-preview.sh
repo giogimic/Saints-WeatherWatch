@@ -37,7 +37,36 @@ echo -e "${GREEN}✓ Docker detected${NC}"
 echo -e "${GREEN}✓ Compose config found${NC}"
 echo -e "${GREEN}✓ Caddyfile found${NC}\n"
 
+# --- Prompt for Database ---
+echo -e "${BLUE}Which Database Engine would you like to use?${NC}"
+echo -e "  [1] SQLite  (Simple, file-based, great for development)"
+echo -e "  [2] MariaDB (Robust, scalable, runs in a container)"
+read -rp "> " DB_CHOICE
+
+echo -e "\n${BLUE}Generating .env configuration...${NC}"
+if [ "$DB_CHOICE" = "2" ]; then
+  echo -e "${GREEN}✓ Selected MariaDB${NC}"
+  # Generate a random password for root
+  RANDOM_PASS=$(openssl rand -hex 12)
+  cat <<EOF > "$ROOT_DIR/.env"
+DB_PROVIDER=mysql
+DATABASE_URL=mysql://root:${RANDOM_PASS}@mariadb:3306/weatherwatch
+MARIADB_ROOT_PASSWORD=${RANDOM_PASS}
+COMPOSE_PROFILES=mariadb
+EOF
+  COMPOSE_CMD="docker compose --profile mariadb up -d --build"
+else
+  echo -e "${GREEN}✓ Selected SQLite${NC}"
+  cat <<EOF > "$ROOT_DIR/.env"
+DB_PROVIDER=sqlite
+DATABASE_URL=file:/app/weatherwatch.db
+COMPOSE_PROFILES=
+EOF
+  COMPOSE_CMD="docker compose up -d --build"
+fi
+
 # --- Prompt for Subdomain ---
+echo ""
 while [ -z "$SUBDOMAIN" ]; do
   echo -e "${YELLOW}Please enter the target subdomain (e.g., 'weather' for weather.saintsgamingweb.com):${NC}"
   read -rp "> " SUBDOMAIN
@@ -62,7 +91,7 @@ echo -e "${GREEN}✓ Caddyfile updated successfully.${NC}\n"
 echo -e "${BLUE}➔ Launching Docker containers...${NC}"
 echo -e "${YELLOW}(This may take a minute if building images for the first time)${NC}\n"
 
-docker compose up -d --build
+eval "$COMPOSE_CMD"
 
 echo -e "\n${CYAN}======================================================${NC}"
 echo -e "${GREEN}🎉 Deployment Complete!${NC}"
