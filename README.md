@@ -79,7 +79,7 @@ Open `http://localhost:4200` in your browser.
 - [x] **Phase 1** — Project scaffold, Go server, Prisma DB, Angular app with storm theme
 - [x] **Phase 2** — NWS alerts pipeline + home dashboard + alerts feed
 - [x] **Phase 3** — Live map with radar/warnings WMS, LSR + SPC layers, cam pins, ops layer chips
-- [ ] **Phase 4** — WebSocket live updates + new-warning banner
+- [x] **Phase 4** — WebSocket live updates (`/ws`) + new-warning banner
 - [x] **Phase 5** — Learn hub (storm science, EF-scale, radar reading — plain-language)
 - [x] **Phase 6** — Play quizzes + Prisma `QuizAttempt` leaderboard; chase logs in Archive
 - [x] **Phase 7** — Live cams from `/api/cams` (opencctv/FAA/GOES) + responsive mobile ops nav
@@ -92,6 +92,8 @@ Open `http://localhost:4200` in your browser.
 - Storm Expert Training quizzes + Top Experts board
 - Saved locations / home-base pins on Map
 - Chaser accounts, cartoon vehicle garage, SPA Dashboard with watched-area radius alerts
+- WebSocket alert pushes + sticky new-warning banner (Phase 4)
+- Radar Chase mini-game + profile loot collectables
 
 ## Data Sources (all free, no API keys)
 

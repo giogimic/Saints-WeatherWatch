@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Subscription, interval, startWith, switchMap } from 'rxjs';
+import { EMPTY, Subscription, switchMap, timer } from 'rxjs';
 import {
   CameraFeedDto,
   QuizAttempt,
@@ -10,6 +10,7 @@ import {
   WeatherService,
 } from './weather.service';
 import { AuthService } from './auth.service';
+import { RealtimeService } from './realtime.service';
 
 /**
  * Shared live ops cache so Dashboard / Map / Live / Alerts feel like one app
@@ -19,8 +20,10 @@ import { AuthService } from './auth.service';
 export class OpsStateService {
   private readonly weather = inject(WeatherService);
   private readonly auth = inject(AuthService);
+  private readonly realtime = inject(RealtimeService);
   private started = false;
   private sub?: Subscription;
+  private bannerTimer?: ReturnType<typeof setTimeout>;
 
   readonly alerts = signal<WeatherAlert[]>([]);
   readonly alertsGeneratedAt = signal('');
@@ -30,30 +33,47 @@ export class OpsStateService {
   readonly savedLocations = signal<SavedLocation[]>([]);
   readonly myAttempts = signal<QuizAttempt[]>([]);
   readonly refreshing = signal(false);
+  /** Newest warning pushed over WebSocket (banner). */
+  readonly bannerAlert = signal<WeatherAlert | null>(null);
+  readonly wsConnected = this.realtime.connected;
 
   start(): void {
     if (this.started) return;
     this.started = true;
-    this.sub = interval(60_000).pipe(
-      startWith(0),
-      switchMap(() => {
+
+    // HTTP poll as fallback (slower when WS is healthy).
+    this.sub = timer(0, 60_000).pipe(
+      switchMap((tick) => {
+        // First tick always loads via HTTP; later ticks skip when WS is healthy.
+        if (tick > 0 && this.realtime.connected() && this.alerts().length > 0) {
+          return EMPTY;
+        }
         this.refreshing.set(true);
         return this.weather.getAlerts();
       }),
     ).subscribe({
       next: (res: WeatherAlertsResponse) => {
-        this.alerts.set(res.alerts || []);
-        this.alertsGeneratedAt.set(res.generatedAt || '');
+        this.applyAlerts(res.alerts || [], res.generatedAt || '');
         this.refreshing.set(false);
       },
       error: () => this.refreshing.set(false),
     });
 
+    this.realtime.connect(env => {
+      if (env.type === 'ping') return;
+      if (env.type === 'snapshot' || env.type === 'new_alerts') {
+        if (env.alerts) {
+          this.applyAlerts(env.alerts, env.generatedAt || '');
+        }
+      }
+      if (env.type === 'new_alerts' && env.newAlerts?.length) {
+        this.showBanner(this.pickBannerAlert(env.newAlerts));
+      }
+    });
+
     this.weather.getCams().subscribe(list => this.cams.set(list || []));
-    // Reload account-owned caches when auth changes
     const tick = () => this.reloadAccountData();
     tick();
-    // Poll auth-tied data less often
     setInterval(() => {
       if (this.auth.isLoggedIn()) this.reloadAccountData();
     }, 90_000);
@@ -86,8 +106,39 @@ export class OpsStateService {
     }
   }
 
+  dismissBanner(): void {
+    if (this.bannerTimer) clearTimeout(this.bannerTimer);
+    this.bannerAlert.set(null);
+  }
+
   stop(): void {
     this.sub?.unsubscribe();
+    this.realtime.disconnect();
+    this.dismissBanner();
     this.started = false;
+  }
+
+  private applyAlerts(alerts: WeatherAlert[], generatedAt: string): void {
+    this.alerts.set(alerts);
+    if (generatedAt) this.alertsGeneratedAt.set(generatedAt);
+  }
+
+  private pickBannerAlert(list: WeatherAlert[]): WeatherAlert {
+    const rank = (s: string) => {
+      switch ((s || '').toLowerCase()) {
+        case 'extreme': return 4;
+        case 'severe': return 3;
+        case 'moderate': return 2;
+        case 'elevated': return 1;
+        default: return 0;
+      }
+    };
+    return [...list].sort((a, b) => rank(b.severity) - rank(a.severity))[0];
+  }
+
+  private showBanner(alert: WeatherAlert): void {
+    this.bannerAlert.set(alert);
+    if (this.bannerTimer) clearTimeout(this.bannerTimer);
+    this.bannerTimer = setTimeout(() => this.bannerAlert.set(null), 20_000);
   }
 }

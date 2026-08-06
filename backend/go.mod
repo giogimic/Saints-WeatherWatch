@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/gorilla/websocket v1.5.3 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.0.1 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 )

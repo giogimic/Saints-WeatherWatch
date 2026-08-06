@@ -19,6 +19,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/config"
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/store"
+	"github.com/saints-weatherwatch/backend/internal/ws"
 )
 
 func main() {
@@ -38,7 +39,6 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -51,7 +51,17 @@ func main() {
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	defer bgCancel()
 
+	hub := ws.NewHub(cfg.AllowedOrigins)
+	go hub.Run(bgCtx.Done())
+
 	nwsCache := nws.NewCache(st)
+	nwsCache.OnUpdate(func(live nws.AlertsResponse, newAlerts []nws.Alert) {
+		if len(newAlerts) > 0 {
+			hub.PublishNewAlerts(live, newAlerts)
+			return
+		}
+		hub.PublishSnapshot(live)
+	})
 	alertEvery := time.Duration(cfg.NWSAlertIntervalSec) * time.Second
 	if alertEvery < 30*time.Second {
 		alertEvery = 3 * time.Minute
@@ -62,7 +72,15 @@ func main() {
 	discoverEvery := time.Duration(cfg.CamDiscoverIntervalSec) * time.Second
 	camCache.Start(bgCtx.Done(), discoverEvery)
 
-	api.Mount(r, st, nwsCache, camCache)
+	// WebSocket stays outside Timeout middleware so long-lived connections work.
+	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		hub.ServeHTTP(w, r, nwsCache.Get)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Timeout(60 * time.Second))
+		api.Mount(r, st, nwsCache, camCache)
+	})
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
