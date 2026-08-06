@@ -33,7 +33,7 @@ const CENTER: [number, number] = [47.05, -68.35];
 /** Expanded Maine / St. John Valley corridor (matches server world.Bounds). */
 const BOUNDS = { minLat: 44.6, maxLat: 47.5, minLng: -71.2, maxLng: -66.9 };
 const MOVE_SPEED = 0.14;
-const PICKUP_DIST = 0.055;
+const PICKUP_DIST = 0.06; // match server PickupRadiusDeg
 const DROP_COUNT = 12;
 const DEFAULT_ZOOM = 10;
 

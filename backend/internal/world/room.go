@@ -19,6 +19,7 @@ import (
 
 	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/loot"
+	"github.com/saints-weatherwatch/backend/internal/progress"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 )
@@ -34,9 +35,13 @@ const (
 	MaxDrops         = 55
 	DropRespawnEvery = 12 * time.Second
 	EventEvery       = 55 * time.Second
-	// PresenceTickHz: classic casual MMO-style snapshot rate (Gaffer / Gambetta).
-	// Clients send moves whenever; server broadcasts authoritative positions on a tick.
+	// PresenceTick: casual authoritative snapshot rate (~10 Hz).
 	PresenceTick = 100 * time.Millisecond
+	// Soft anti-cheat (Phase 2): action cooldowns + no free teleport via hello/pickup.
+	MinPickupInterval = 400 * time.Millisecond
+	MinEventInterval  = 800 * time.Millisecond
+	// MaxActionSnapDeg: allow tiny catch-up before distance check (lag), not miles.
+	MaxActionSnapDeg = 0.06
 )
 
 type ItemDef struct {
@@ -255,16 +260,19 @@ type clientMsg struct {
 }
 
 type client struct {
-	room     *Room
-	conn     *websocket.Conn
-	send     chan []byte
-	userID   string
-	name     string
-	veh      string
-	lat      float64
-	lng      float64
-	lastMove time.Time
-	dirty    bool // moved since last presence tick
+	room       *Room
+	conn       *websocket.Conn
+	send       chan []byte
+	userID     string
+	name       string
+	veh        string
+	lat        float64
+	lng        float64
+	lastMove   time.Time
+	lastPickup time.Time
+	lastEvent  time.Time
+	dirty      bool // moved since last presence tick
+	welcomed   bool // first hello may snap; later hellos are clamped moves
 }
 
 // Room is the single shared Phase 1 world instance.
@@ -472,10 +480,15 @@ func (c *client) readPump() {
 		}
 		switch msg.Type {
 		case "hello":
-			// First join / respawn: accept position (within bounds) so client/server stay aligned.
-			c.snapPosition(msg.Lat, msg.Lng)
-			c.dirty = true
-			c.room.broadcastPresence()
+			if !c.welcomed {
+				c.snapPosition(msg.Lat, msg.Lng)
+				c.welcomed = true
+				c.dirty = true
+				c.room.broadcastPresence()
+			} else {
+				// Later hellos (reconnect/resume) cannot teleport — speed clamp only.
+				c.handleMove(msg.Lat, msg.Lng)
+			}
 		case "move":
 			c.handleMove(msg.Lat, msg.Lng)
 		case "pickup":
@@ -548,6 +561,10 @@ func (r *Room) handlePickup(c *client, dropID string, lat, lng float64) {
 	if c.userID == "" || dropID == "" || r.st == nil {
 		return
 	}
+	now := time.Now()
+	if !c.lastPickup.IsZero() && now.Sub(c.lastPickup) < MinPickupInterval {
+		return
+	}
 	// Align server pos with client before the distance check (soft anti-desync).
 	if lat != 0 || lng != 0 {
 		c.syncForAction(lat, lng)
@@ -580,12 +597,18 @@ func (r *Room) handlePickup(c *client, dropID string, lat, lng float64) {
 		r.broadcastDrops()
 		return
 	}
+	c.lastPickup = now
 	r.publish(Envelope{Type: "drop_gone", DropID: dropID})
 	r.toastBag(c, "Bagged "+name, dropID, itemKey)
 	r.broadcastDrops()
+	r.awardPickupXP(c.userID, itemKey)
 }
 
 func (r *Room) handleEventPlace(c *client, eventID string, lat, lng float64) {
+	now := time.Now()
+	if !c.lastEvent.IsZero() && now.Sub(c.lastEvent) < MinEventInterval {
+		return
+	}
 	if lat != 0 || lng != 0 {
 		c.syncForAction(lat, lng)
 	}
@@ -617,8 +640,10 @@ func (r *Room) handleEventPlace(c *client, eventID string, lat, lng float64) {
 		r.publish(Envelope{Type: "event", Event: r.snapshotEvent()})
 		return
 	}
+	c.lastEvent = now
 	r.publish(Envelope{Type: "event_done", Event: ev, Toast: c.name + " secured: " + label, ItemKey: reward})
 	r.toastBag(c, "Event secured — reward bagged.", eventID, reward)
+	r.awardPickupXP(c.userID, reward)
 }
 
 func (r *Room) snapshotEvent() *SimEvent {
@@ -627,19 +652,37 @@ func (r *Room) snapshotEvent() *SimEvent {
 	return r.event
 }
 
-// syncForAction lets the client catch the server up within a soft radius so
-// pickups aren't rejected purely from move-message lag.
+// syncForAction lets the client catch the server up within a tiny radius so
+// pickups aren't rejected purely from move-message lag — never a long teleport.
 func (c *client) syncForAction(lat, lng float64) {
 	lat = clamp(lat, Bounds.MinLat, Bounds.MaxLat)
 	lng = clamp(lng, Bounds.MinLng, Bounds.MaxLng)
 	dist := math.Hypot(lat-c.lat, lng-c.lng)
-	if dist <= 0.12 {
+	if dist <= MaxActionSnapDeg {
 		c.lat, c.lng = lat, lng
 		c.lastMove = time.Now()
 		c.dirty = true
 		return
 	}
 	c.handleMove(lat, lng)
+}
+
+func (r *Room) awardPickupXP(userID, itemKey string) {
+	if r.st == nil || userID == "" {
+		return
+	}
+	xp := 0
+	if d, ok := LookupItem(itemKey); ok {
+		xp = d.XP
+	} else if d, ok := loot.Lookup(itemKey); ok {
+		xp = d.XP
+	}
+	if xp <= 0 {
+		return
+	}
+	if _, err := progress.AwardFlat(r.st, context.Background(), userID, xp); err != nil {
+		log.Printf("world.pickup xp failed user=%s item=%s: %v", userID, itemKey, err)
+	}
 }
 
 func (r *Room) maybeSpawnEvent() {
