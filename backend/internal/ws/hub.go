@@ -50,7 +50,7 @@ func NewHub(allowedOrigins []string) *Hub {
 		clients:    make(map[*client]struct{}),
 		register:   make(chan *client),
 		unregister: make(chan *client),
-		broadcast:  make(chan []byte, 16),
+		broadcast:  make(chan []byte, 64),
 		origins:    origins,
 	}
 	h.upgrader = websocket.Upgrader{
@@ -158,7 +158,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request, getLive func() n
 	c := &client{
 		hub:  h,
 		conn: conn,
-		send: make(chan []byte, 8),
+		send: make(chan []byte, 32),
 	}
 	h.register <- c
 
