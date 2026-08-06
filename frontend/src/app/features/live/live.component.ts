@@ -66,6 +66,14 @@ export interface CameraFeed {
             >
               Collapse all
             </button>
+            <button
+              type="button"
+              class="btn btn-sm rounded-xl font-bold uppercase text-[10px] min-h-11"
+              [ngClass]="ops.impactMode() ? 'btn-warning' : 'btn-ghost border border-base-300'"
+              (click)="ops.toggleImpactMode()"
+            >
+              Impact mode
+            </button>
           </div>
           @if (nearWarningCams.length) {
             <div class="mt-4 storm-card p-3 border-warning/40">
@@ -278,7 +286,7 @@ export class LiveComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
-  private readonly ops = inject(OpsStateService);
+  readonly ops = inject(OpsStateService);
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
   private listTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -387,7 +395,17 @@ export class LiveComponent implements OnInit, OnDestroy {
   }
 
   getCamsByGroup(group: string): CameraFeed[] {
-    return this.cameras.filter(c => c.group === group);
+    let list = this.cameras.filter(c => c.group === group);
+    if (this.ops.impactMode() && group === 'cams') {
+      const focused = list.filter(c =>
+        (c.nearAlertCount || 0) > 0 ||
+        ['stale', 'black', 'error'].includes((c.health || '').toLowerCase())
+      );
+      if (focused.length) {
+        list = focused.sort((a, b) => (b.nearAlertCount || 0) - (a.nearAlertCount || 0));
+      }
+    }
+    return list;
   }
 
   toggleCamera(cameraId: string, group: string): void {

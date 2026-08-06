@@ -118,7 +118,7 @@ Long-term vision (grain of salt — do not rewrite the ops app to chase it):
 
 - [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- [docs/OPS_EXPANSION_ROADMAP.md](docs/OPS_EXPANSION_ROADMAP.md) — weather / outage / disaster expansion (A→F)
+- [docs/OPS_EXPANSION_ROADMAP.md](docs/OPS_EXPANSION_ROADMAP.md) — weather / outage / disaster expansion (A→F); Impact mode + desk scores + storm packages
 - [docs/STORM_CHASER_VISION.md](docs/STORM_CHASER_VISION.md) · [PHASE1](docs/STORM_CHASER_PHASE1.md) · [ROADMAP](docs/STORM_CHASER_ROADMAP.md)
 - Build notes: [`logs/`](logs/)
 

@@ -19,6 +19,19 @@ import { Observable, BehaviorSubject, switchMap, map } from 'rxjs';
           <p class="text-base-content/60 text-sm font-semibold mt-1">
             Historical threat logs — Maine first, then USA &amp; Canada — plus chase records.
           </p>
+          <div class="mt-3">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost border border-base-300 rounded-xl font-black uppercase text-[10px] min-h-11"
+              (click)="exportPackage()"
+              [disabled]="exporting"
+            >
+              {{ exporting ? 'Exporting…' : 'Export storm package' }}
+            </button>
+            @if (exportMsg) {
+              <p class="text-[10px] text-base-content/50 font-semibold mt-1">{{ exportMsg }}</p>
+            }
+          </div>
         </div>
 
         <div class="flex gap-2 mb-6">
@@ -286,6 +299,8 @@ export class ArchiveComponent implements OnInit {
 
   activeTab: 'nws' | 'chase' = 'nws';
   filtersOpen = false;
+  exporting = false;
+  exportMsg = '';
 
   private refreshHistoryTrigger = new BehaviorSubject<void>(undefined);
   history$: Observable<TrackerIncident[]> = this.refreshHistoryTrigger.pipe(
@@ -334,6 +349,32 @@ export class ArchiveComponent implements OnInit {
   };
 
   ngOnInit() {}
+
+  exportPackage(): void {
+    if (this.exporting) return;
+    this.exporting = true;
+    this.exportMsg = '';
+    const days = this.timeRange === '24h' ? 1 : this.timeRange === '7d' ? 7 : this.timeRange === '30d' ? 30 : 90;
+    this.weatherService.exportStormPackage({
+      scope: this.filters.scope || 'maine',
+      days,
+      limit: 200,
+    }).subscribe(pkg => {
+      this.exporting = false;
+      if (!pkg) {
+        this.exportMsg = 'Export failed.';
+        return;
+      }
+      const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `storm-package-${pkg.scope}-${(pkg.generatedAt || '').slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.exportMsg = `Downloaded ${pkg.incidentCount || 0} incidents.`;
+    });
+  }
 
   loadHistory(resetPage = true) {
     if (resetPage) this.currentPage = 1;

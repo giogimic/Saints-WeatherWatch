@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import { Subscription } from 'rxjs';
 
+import { OpsStateService } from '../../core/ops-state.service';
 import {
   CameraFeedDto,
   RadarProductDef,
@@ -129,6 +130,13 @@ const STORAGE_KEY = 'ww-map-view';
           <!-- Desktop layer chips -->
           <div class="hidden md:flex absolute bottom-4 left-4 right-4 z-[1000] flex-wrap gap-1.5 pointer-events-none">
             <div class="pointer-events-auto storm-card p-2 flex flex-wrap gap-1.5 max-w-full">
+              <button
+                type="button"
+                class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-9"
+                [ngClass]="ops.impactMode() ? 'btn-warning' : 'btn-ghost border border-base-300'"
+                (click)="toggleImpactMode()"
+                title="Focus warnings, outages, flood, cams"
+              >Impact</button>
               @for (chip of layerChips; track chip.key) {
                 <button
                   type="button"
@@ -354,6 +362,7 @@ const STORAGE_KEY = 'ww-map-view';
 })
 export class MapComponent implements AfterViewInit, OnDestroy {
   private readonly weather = inject(WeatherService);
+  readonly ops = inject(OpsStateService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private subs = new Subscription();
@@ -454,6 +463,20 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         this.radarProduct = 'n0q';
       }
     }
+    // Unified prefs: hydrate from dashboard mapLayers when logged in (async overlay).
+    this.weather.getDashboardPrefs().subscribe(prefs => {
+      const csv = (prefs?.mapLayers || '').trim();
+      if (!csv || saved) return; // session wins for this visit
+      const set = new Set(csv.split(',').map(s => s.trim()).filter(Boolean));
+      for (const key of Object.keys(this.layers) as LayerChip[]) {
+        this.layers[key] = set.has(key);
+      }
+      if (this.ops.impactMode()) this.applyImpactLayers();
+      else this.applyLayerVisibility();
+    });
+    if (this.ops.impactMode()) {
+      this.applyImpactLayers();
+    }
 
     this.map = L.map('maine-map', {
       center,
@@ -546,6 +569,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     }
     this.applyLayerVisibility();
     this.persistView();
+    this.persistLayersToPrefs();
   }
 
   setRadarProduct(id: RadarProductId): void {
@@ -1164,6 +1188,30 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         }
       })
     );
+  }
+
+  toggleImpactMode(): void {
+    this.ops.toggleImpactMode();
+    this.applyImpactLayers();
+    this.persistView();
+    this.persistLayersToPrefs();
+  }
+
+  private applyImpactLayers(): void {
+    if (!this.ops.impactMode()) return;
+    const keep: LayerChip[] = ['radar', 'warnings', 'cams', 'outages', 'flood'];
+    for (const key of Object.keys(this.layers) as LayerChip[]) {
+      this.layers[key] = keep.includes(key);
+    }
+    this.applyLayerVisibility();
+  }
+
+  private persistLayersToPrefs(): void {
+    const csv = (Object.keys(this.layers) as LayerChip[]).filter(k => this.layers[k]).join(',');
+    this.weather.getDashboardPrefs().subscribe(prefs => {
+      if (!prefs) return;
+      this.weather.saveDashboardPrefs({ ...prefs, mapLayers: csv }).subscribe();
+    });
   }
 
   private persistView(): void {

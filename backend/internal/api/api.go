@@ -90,6 +90,9 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		// Phase D — multi-hazard (flood gauges + quakes)
 		mountHazardRoutes(r, hazardCache)
 
+		// Phase E — storm package export
+		mountStormPackageRoutes(r, st, cache, outageCache)
+
 		// Dashboard (login required handlers enforce auth)
 		r.Get("/favorites", getFavoritesHandler(st))
 		r.Post("/favorites", addFavoriteHandler(st))
