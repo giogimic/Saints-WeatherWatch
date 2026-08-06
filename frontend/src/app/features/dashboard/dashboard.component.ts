@@ -31,7 +31,7 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | '
       <div class="max-w-6xl mx-auto space-y-4">
         <div class="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p class="text-[10px] font-black uppercase tracking-[0.25em] text-primary">Live ops desk</p>
+            <p class="text-[10px] font-black uppercase tracking-[0.25em] text-primary">Chaser profile</p>
             <h1 class="text-3xl font-black text-white italic uppercase tracking-wider font-sans">Dashboard</h1>
             <p class="text-sm text-base-content/55 font-semibold mt-1">
               Your cams, watch zones, scores, and garage — updates without reloading the app.

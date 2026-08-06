@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -21,6 +22,10 @@ func mountWorldRoutes(r chi.Router, st *store.Store, hub *world.Hub) {
 	r.Get("/world/lobbies", worldLobbiesHandler(hub))
 	r.Get("/world/inventory", worldInventoryHandler(st))
 	r.Get("/world/research", worldResearchHandler(st))
+	r.Get("/world/wallet", worldWalletHandler(st))
+	r.Get("/world/vendor", worldVendorCatalogHandler())
+	r.Post("/world/vendor/sell", worldVendorSellHandler(st))
+	r.Post("/world/vendor/buy", worldVendorBuyHandler(st))
 	r.Post("/world/craft", worldCraftHandler(st))
 	r.Get("/world/trades", worldTradesHandler(st))
 	r.Post("/world/trades", worldCreateTradeHandler(st))
@@ -46,14 +51,22 @@ func worldCatalogHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"items":   world.ItemCatalog,
+			"items":   world.CatalogWithValues(),
 			"recipes": world.Recipes,
 			"bounds": map[string]float64{
 				"minLat": world.Bounds.MinLat, "maxLat": world.Bounds.MaxLat,
 				"minLng": world.Bounds.MinLng, "maxLng": world.Bounds.MaxLng,
 			},
-			"loot":  loot.Catalog,
-			"zones": world.ZoneCatalog,
+			"loot":   loot.Catalog,
+			"zones":  world.ZoneCatalog,
+			"vendor": world.VendorCatalog(),
+			"economy": map[string]any{
+				"currency":       "Storm Credits",
+				"starting":       world.StartingCredits,
+				"vendorBuyRatio": world.VendorBuyRatio,
+				"maxTradeQty":    world.MaxTradeOfferQty,
+				"maxVendorQty":   world.MaxVendorQty,
+			},
 		})
 	}
 }
@@ -66,7 +79,122 @@ func worldInventoryHandler(st *store.Store) http.HandlerFunc {
 			http.Error(w, "Login required", http.StatusUnauthorized)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(mergedInventory(st, r, user.ID))
+		credits, _ := world.GetCredits(st, r.Context(), user.ID)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"stormCredits": credits,
+			"items":        mergedInventory(st, r, user.ID),
+		})
+	}
+}
+
+func worldWalletHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		credits, err := world.GetCredits(st, r.Context(), user.ID)
+		if err != nil {
+			http.Error(w, "Wallet unavailable", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"stormCredits": credits,
+			"currency":     "Storm Credits",
+		})
+	}
+}
+
+func worldVendorCatalogHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"vendor": "Storm Market",
+			"note":   "NPC vendor. Buys your scrap below base value; sells commons at list price.",
+			"stock":  world.VendorCatalog(),
+		})
+	}
+}
+
+type vendorQtyReq struct {
+	ItemKey string `json:"itemKey"`
+	Qty     int    `json:"qty"`
+}
+
+func worldVendorSellHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		if ok, retry := world.AllowVendor(user.ID); !ok {
+			world.WriteSlowDown(w, retry)
+			return
+		}
+		var req vendorQtyReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.ItemKey) == "" {
+			http.Error(w, "Invalid input", http.StatusBadRequest)
+			return
+		}
+		gain, bal, err := world.VendorSellFromPlayer(st, r.Context(), user.ID, req.ItemKey, req.Qty)
+		if err != nil {
+			writeVendorErr(w, err)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true, "creditsGained": gain, "stormCredits": bal,
+			"inventory": mergedInventory(st, r, user.ID),
+		})
+	}
+}
+
+func worldVendorBuyHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		if ok, retry := world.AllowVendor(user.ID); !ok {
+			world.WriteSlowDown(w, retry)
+			return
+		}
+		var req vendorQtyReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.ItemKey) == "" {
+			http.Error(w, "Invalid input", http.StatusBadRequest)
+			return
+		}
+		spent, bal, err := world.VendorBuyToPlayer(st, r.Context(), user.ID, req.ItemKey, req.Qty)
+		if err != nil {
+			writeVendorErr(w, err)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true, "creditsSpent": spent, "stormCredits": bal,
+			"inventory": mergedInventory(st, r, user.ID),
+		})
+	}
+}
+
+func writeVendorErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, world.ErrInsufficientCredits):
+		http.Error(w, "Not enough Storm Credits", http.StatusConflict)
+	case errors.Is(err, world.ErrInsufficientItems):
+		http.Error(w, "Not enough items", http.StatusConflict)
+	case errors.Is(err, world.ErrNotVendorStock):
+		http.Error(w, "Vendor does not sell that item", http.StatusBadRequest)
+	case errors.Is(err, world.ErrUnknownItem):
+		http.Error(w, "Unknown item", http.StatusBadRequest)
+	case errors.Is(err, world.ErrBadQty):
+		http.Error(w, "Invalid quantity", http.StatusBadRequest)
+	default:
+		http.Error(w, "Vendor trade failed", http.StatusInternalServerError)
 	}
 }
 
@@ -105,6 +233,9 @@ func mergedInventory(st *store.Store, r *http.Request, userID string) []map[stri
 		}
 		out = append(out, map[string]any{
 			"key": row.ItemKey, "name": name, "rarity": rarity, "kind": kind, "count": row.Count,
+			"value":      world.ItemValue(row.ItemKey),
+			"vendorBuy":  world.VendorBuyPrice(row.ItemKey),
+			"vendorSell": world.VendorSellPrice(row.ItemKey),
 		})
 	}
 	return out
@@ -120,6 +251,10 @@ func worldCraftHandler(st *store.Store) http.HandlerFunc {
 		user, ok := auth.UserFromContext(r.Context())
 		if !ok {
 			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		if ok, retry := world.AllowCraft(user.ID); !ok {
+			world.WriteSlowDown(w, retry)
 			return
 		}
 		var req craftReq
@@ -149,18 +284,17 @@ func worldCraftHandler(st *store.Store) http.HandlerFunc {
 			}
 		}
 		if err := world.GrantStack(st, r.Context(), user.ID, recipe.Output.Key, recipe.Output.Qty); err != nil {
-			// Refund consumed inputs so a grant failure cannot burn materials.
 			for _, in := range recipe.Inputs {
 				_ = world.GrantStack(st, r.Context(), user.ID, in.Key, in.Qty)
 			}
 			http.Error(w, "Craft grant failed", http.StatusInternalServerError)
 			return
 		}
+		credits, _ := world.GetCredits(st, r.Context(), user.ID)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok":        true,
-			"recipeId":  recipe.ID,
-			"output":    recipe.Output,
-			"inventory": mergedInventory(st, r, user.ID),
+			"ok": true, "recipeId": recipe.ID, "output": recipe.Output,
+			"stormCredits": credits,
+			"inventory":    mergedInventory(st, r, user.ID),
 		})
 	}
 }
@@ -193,6 +327,8 @@ func worldTradesHandler(st *store.Store) http.HandlerFunc {
 				"offerKey": row.OfferKey, "offerQty": row.OfferQty,
 				"askKey": row.AskKey, "askQty": row.AskQty,
 				"status": row.Status, "createdAt": row.CreatedAt.UTC().Format(time.RFC3339),
+				"offerValue": world.ItemValue(row.OfferKey) * row.OfferQty,
+				"askValue":   world.ItemValue(row.AskKey) * row.AskQty,
 			})
 		}
 		_ = json.NewEncoder(w).Encode(out)
@@ -207,6 +343,10 @@ func worldCreateTradeHandler(st *store.Store) http.HandlerFunc {
 			http.Error(w, "Login required", http.StatusUnauthorized)
 			return
 		}
+		if ok, retry := world.AllowTrade(user.ID); !ok {
+			world.WriteSlowDown(w, retry)
+			return
+		}
 		var req createTradeReq
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid input", http.StatusBadRequest)
@@ -214,6 +354,14 @@ func worldCreateTradeHandler(st *store.Store) http.HandlerFunc {
 		}
 		if req.OfferQty < 1 || req.AskQty < 1 || req.OfferKey == "" || req.AskKey == "" || req.OfferKey == req.AskKey {
 			http.Error(w, "Invalid trade", http.StatusBadRequest)
+			return
+		}
+		if req.OfferQty > world.MaxTradeOfferQty || req.AskQty > world.MaxTradeOfferQty {
+			http.Error(w, "Quantity too high", http.StatusBadRequest)
+			return
+		}
+		if world.CountOpenListings(st, r.Context(), user.ID) >= world.MaxOpenListings {
+			http.Error(w, "Too many open listings", http.StatusConflict)
 			return
 		}
 		if _, ok := world.LookupItem(req.OfferKey); !ok {
@@ -228,7 +376,6 @@ func worldCreateTradeHandler(st *store.Store) http.HandlerFunc {
 				return
 			}
 		}
-		// Reserve offer by consuming into escrow (listing holds the goods).
 		if !world.ConsumeStack(st, r.Context(), user.ID, req.OfferKey, req.OfferQty) {
 			http.Error(w, "Not enough items to list", http.StatusConflict)
 			return
@@ -242,7 +389,7 @@ func worldCreateTradeHandler(st *store.Store) http.HandlerFunc {
 			db.TradeListing.Status.Set("open"),
 		).Exec(r.Context())
 		if err != nil {
-			_ = world.GrantStack(st, r.Context(), user.ID, req.OfferKey, req.OfferQty) // refund
+			_ = world.GrantStack(st, r.Context(), user.ID, req.OfferKey, req.OfferQty)
 			http.Error(w, "Could not create listing", http.StatusInternalServerError)
 			return
 		}
@@ -258,6 +405,10 @@ func worldBuyTradeHandler(st *store.Store) http.HandlerFunc {
 			http.Error(w, "Login required", http.StatusUnauthorized)
 			return
 		}
+		if ok, retry := world.AllowTrade(user.ID); !ok {
+			world.WriteSlowDown(w, retry)
+			return
+		}
 		id := chi.URLParam(r, "id")
 		listing, err := st.Client.TradeListing.FindUnique(db.TradeListing.ID.Equals(id)).Exec(r.Context())
 		if err != nil || listing == nil || listing.Status != "open" {
@@ -268,7 +419,6 @@ func worldBuyTradeHandler(st *store.Store) http.HandlerFunc {
 			http.Error(w, "Cannot buy your own listing", http.StatusBadRequest)
 			return
 		}
-		// CAS: only one buyer can flip open → sold.
 		now := time.Now().UTC()
 		claimed, err := st.Client.TradeListing.FindMany(
 			db.TradeListing.ID.Equals(id),
@@ -306,8 +456,10 @@ func worldBuyTradeHandler(st *store.Store) http.HandlerFunc {
 				id, listing.SellerID, listing.AskKey, listing.AskQty, err)
 		}
 		updated, _ := st.Client.TradeListing.FindUnique(db.TradeListing.ID.Equals(id)).Exec(r.Context())
+		credits, _ := world.GetCredits(st, r.Context(), user.ID)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok": true, "listing": updated, "inventory": mergedInventory(st, r, user.ID),
+			"ok": true, "listing": updated, "stormCredits": credits,
+			"inventory": mergedInventory(st, r, user.ID),
 		})
 	}
 }
@@ -318,6 +470,10 @@ func worldCancelTradeHandler(st *store.Store) http.HandlerFunc {
 		user, ok := auth.UserFromContext(r.Context())
 		if !ok {
 			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		if ok, retry := world.AllowTrade(user.ID); !ok {
+			world.WriteSlowDown(w, retry)
 			return
 		}
 		id := chi.URLParam(r, "id")

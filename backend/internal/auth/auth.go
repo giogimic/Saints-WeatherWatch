@@ -37,6 +37,7 @@ type UserView struct {
 	XPIntoLevel        int             `json:"xpIntoLevel"`
 	XPForNext          int             `json:"xpForNext"`
 	LevelTitle         string          `json:"levelTitle"`
+	StormCredits       int             `json:"stormCredits"`
 	CreatedAt          string          `json:"createdAt"`
 	VehicleKeys        []string        `json:"vehicleKeys"`
 	Loot               []loot.ItemView `json:"loot"`
@@ -204,6 +205,7 @@ func ToUserView(st *store.Store, ctx context.Context, u *db.UserModel) UserView 
 		XPIntoLevel:        into,
 		XPForNext:          need,
 		LevelTitle:         progress.Title(level),
+		StormCredits:       u.StormCredits,
 		CreatedAt:          u.CreatedAt.UTC().Format(time.RFC3339),
 		VehicleKeys:        keys,
 		Loot:               lootItems,

@@ -7,7 +7,7 @@
     </a>
   </div>
   <div class="navbar-center font-sans font-bold">
-    @for (item of navItems; track item.path) {
+    @for (item of navItems(); track item.path) {
       <a
         [routerLink]="item.path"
         routerLinkActive="btn-primary border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] scale-105 -translate-y-1"
@@ -45,7 +45,7 @@
 @if (moreOpen) {
   <div class="md:hidden fixed inset-0 z-[60] bg-black/50" (click)="closeMore()"></div>
   <div class="md:hidden fixed bottom-20 left-3 right-3 z-[61] storm-card p-3 space-y-1">
-    @for (item of mobileMore; track item.path) {
+    @for (item of mobileMore(); track item.path) {
       <a
         [routerLink]="item.path"
         routerLinkActive="bg-primary/20 text-primary"
@@ -87,4 +87,5 @@
 
 <!-- Field Logbook Floating UI -->
 <app-logbook />
+<app-bag-market-dock />
 <app-auth-modal />

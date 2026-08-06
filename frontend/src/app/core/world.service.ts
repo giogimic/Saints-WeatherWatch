@@ -10,6 +10,10 @@ export interface WorldItem {
   kind?: string;
   count?: number;
   xp?: number;
+  value?: number;
+  vendorBuy?: number;
+  vendorSell?: number;
+  price?: number;
 }
 
 export interface WorldRecipe {
@@ -162,8 +166,22 @@ export class WorldService {
   private selectedLobby = 'main';
   private socketLobby = '';
 
-  getCatalog(): Observable<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number>; zones?: WorldZone[] }> {
-    return this.http.get<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number>; zones?: WorldZone[] }>('/api/world/catalog').pipe(
+  getCatalog(): Observable<{
+    items: WorldItem[];
+    recipes: WorldRecipe[];
+    bounds: Record<string, number>;
+    zones?: WorldZone[];
+    vendor?: WorldItem[];
+    economy?: { currency?: string; starting?: number; maxTradeQty?: number; maxVendorQty?: number };
+  }> {
+    return this.http.get<{
+      items: WorldItem[];
+      recipes: WorldRecipe[];
+      bounds: Record<string, number>;
+      zones?: WorldZone[];
+      vendor?: WorldItem[];
+      economy?: { currency?: string; starting?: number; maxTradeQty?: number; maxVendorQty?: number };
+    }>('/api/world/catalog').pipe(
       catchError(() => of({ items: [], recipes: [], bounds: {} })),
     );
   }
@@ -174,8 +192,14 @@ export class WorldService {
     );
   }
 
-  getInventory(): Observable<WorldItem[]> {
-    return this.http.get<WorldItem[]>('/api/world/inventory').pipe(catchError(() => of([])));
+  getInventory(): Observable<{ stormCredits: number; items: WorldItem[] }> {
+    return this.http.get<{ stormCredits: number; items: WorldItem[] } | WorldItem[]>('/api/world/inventory').pipe(
+      map(res => {
+        if (Array.isArray(res)) return { stormCredits: 0, items: res };
+        return { stormCredits: res.stormCredits || 0, items: res.items || [] };
+      }),
+      catchError(() => of({ stormCredits: 0, items: [] })),
+    );
   }
 
   getResearchLog(): Observable<{ note?: string; items: ResearchLogEntry[] }> {
@@ -184,12 +208,31 @@ export class WorldService {
     );
   }
 
-  refreshInventory(): Observable<WorldItem[]> {
+  refreshInventory(): Observable<{ stormCredits: number; items: WorldItem[] }> {
     return this.getInventory();
   }
 
-  craft(recipeId: string): Observable<{ ok?: boolean; inventory?: WorldItem[]; error?: string } | null> {
-    return this.http.post<{ ok?: boolean; inventory?: WorldItem[] }>('/api/world/craft', { recipeId }).pipe(
+  getVendorStock(): Observable<WorldItem[]> {
+    return this.http.get<{ stock: WorldItem[] }>('/api/world/vendor').pipe(
+      map(res => res.stock || []),
+      catchError(() => of([])),
+    );
+  }
+
+  vendorSell(itemKey: string, qty: number): Observable<{ ok?: boolean; stormCredits?: number; creditsGained?: number; inventory?: WorldItem[] } | null> {
+    return this.http.post<{ ok?: boolean; stormCredits?: number; creditsGained?: number; inventory?: WorldItem[] }>(
+      '/api/world/vendor/sell', { itemKey, qty },
+    ).pipe(catchError(() => of(null)));
+  }
+
+  vendorBuy(itemKey: string, qty: number): Observable<{ ok?: boolean; stormCredits?: number; creditsSpent?: number; inventory?: WorldItem[] } | null> {
+    return this.http.post<{ ok?: boolean; stormCredits?: number; creditsSpent?: number; inventory?: WorldItem[] }>(
+      '/api/world/vendor/buy', { itemKey, qty },
+    ).pipe(catchError(() => of(null)));
+  }
+
+  craft(recipeId: string): Observable<{ ok?: boolean; inventory?: WorldItem[]; stormCredits?: number; error?: string } | null> {
+    return this.http.post<{ ok?: boolean; inventory?: WorldItem[]; stormCredits?: number }>('/api/world/craft', { recipeId }).pipe(
       catchError(() => of(null)),
     );
   }
@@ -202,8 +245,8 @@ export class WorldService {
     return this.http.post<TradeListing>('/api/world/trades', body).pipe(catchError(() => of(null)));
   }
 
-  buyTrade(id: string): Observable<{ ok?: boolean; inventory?: WorldItem[] } | null> {
-    return this.http.post<{ ok?: boolean; inventory?: WorldItem[] }>(`/api/world/trades/${id}/buy`, {}).pipe(
+  buyTrade(id: string): Observable<{ ok?: boolean; inventory?: WorldItem[]; stormCredits?: number } | null> {
+    return this.http.post<{ ok?: boolean; inventory?: WorldItem[]; stormCredits?: number }>(`/api/world/trades/${id}/buy`, {}).pipe(
       catchError(() => of(null)),
     );
   }

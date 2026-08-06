@@ -33,6 +33,9 @@ import { TradeListing, ResearchLogEntry, WorldItem, WorldRecipe, WorldService } 
         } @else {
           <article class="storm-card p-4 space-y-2">
             <h2 class="text-xs font-black uppercase tracking-widest text-primary">Your packs</h2>
+            <p class="text-[10px] text-base-content/45 font-semibold">
+              Tip: use the floating <span class="text-amber-200">Bag</span> and <span class="text-sky-200">Storm Market</span> buttons for loot + vendor trades.
+            </p>
             @if (inventory.length === 0) {
               <p class="text-xs text-base-content/50 font-semibold">Empty — drive Storm World and bag shared drops.</p>
             } @else {
@@ -187,8 +190,8 @@ export class TradeCenterComponent implements OnInit {
 
   reload(): void {
     if (!this.auth.isLoggedIn()) return;
-    this.world.getInventory().subscribe(rows => {
-      this.inventory = rows || [];
+    this.world.getInventory().subscribe(res => {
+      this.inventory = res.items || [];
       for (const it of this.inventory) this.nameByKey.set(it.key, it.name);
       if (!this.offerKey && this.inventory.length) this.offerKey = this.inventory[0].key;
       if (this.offerKey && !this.inventory.some(i => i.key === this.offerKey)) {
@@ -210,7 +213,7 @@ export class TradeCenterComponent implements OnInit {
     this.world.craft(id).subscribe(res => {
       if (!res?.ok) {
         this.craftOk = false;
-        this.craftMsg = 'Craft failed — check level and materials.';
+        this.craftMsg = 'Craft failed — check level/materials, or slow down (rate-limited).';
         return;
       }
       this.craftOk = true;

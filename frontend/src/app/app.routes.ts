@@ -49,10 +49,11 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () =>
       import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
-    title: 'Dashboard — Saints Weather Watch',
+    title: 'Profile — Saints Weather Watch',
   },
   {
     path: 'trade',
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./features/trade/trade-center.component').then((m) => m.TradeCenterComponent),
     title: 'Trade & Craft — Saints Weather Watch',

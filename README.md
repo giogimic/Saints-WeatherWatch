@@ -94,6 +94,7 @@ Open `http://localhost:4200` in your browser.
 - Chaser accounts, cartoon vehicle garage, SPA Dashboard with watched-area radius alerts
 - WebSocket alert pushes + sticky new-warning banner (Phase 4)
 - Radar Chase → **Storm World** Phase 1 (shared presence, drops, SIM events, craft, trade)
+- Storm Credits economy + Bag / Storm Market overlays (vendor + player barter)
 
 ## Storm Chaser living world (game layer)
 

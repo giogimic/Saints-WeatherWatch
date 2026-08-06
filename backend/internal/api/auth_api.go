@@ -9,8 +9,9 @@ import (
 
 	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/store"
-	"github.com/saints-weatherwatch/backend/internal/vehicles"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
+	"github.com/saints-weatherwatch/backend/internal/vehicles"
+	"github.com/saints-weatherwatch/backend/internal/world"
 )
 
 type authBody struct {
@@ -79,7 +80,7 @@ func signupHandler(st *store.Store, limiter *auth.PINLimiter) http.HandlerFunc {
 			db.User.ChaserName.Set(name),
 			db.User.ChaserNameNorm.Set(norm),
 			db.User.PinHash.Set(pinHash),
-			opts...,
+			append(opts, db.User.StormCredits.Set(world.StartingCredits))...,
 		).Exec(r.Context())
 		if err != nil {
 			http.Error(w, "Could not create account", http.StatusInternalServerError)
