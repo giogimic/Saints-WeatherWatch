@@ -5,7 +5,8 @@ Status: **implemented**
 ## Game (Play → Radar Chase)
 - Leaflet mini-map over northern Maine with live IEM NEXRAD radar
 - Player marker = equipped garage truck SVG
-- Big D-pad movement; 60s runs; auto-pickup when close
+- Floating virtual joystick (bottom-left, low opacity) + WASD / arrow keys
+- Continuous movement via rAF; 60s runs; auto-pickup when close
 - Random weighted drops (common / uncommon / rare)
 
 ## Collectables
