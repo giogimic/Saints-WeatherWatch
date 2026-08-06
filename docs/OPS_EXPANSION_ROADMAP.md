@@ -35,18 +35,20 @@ Storm World / game stays a separate labeled SIM layer.
 - [ ] Fire/smoke when a stable open feed is available
 - [ ] Winter roads / marine as feeds allow
 
-## Phase E — Product surfaces — **in progress**
+## Phase E — Product surfaces — **done**
 
 - [x] Map layer toggles unified (session + dashboard prefs CSV)
 - [x] Live / Map “Impact mode”
 - [x] Desk watch-zone score (alert + outage + cam + flood)
 - [x] Archive storm package export (`GET /api/storm-packages/export`)
 
-## Phase F — Reliability
+## Phase F — Reliability — **done**
 
-- Cache / WS / stale banners
-- Attribution + rate limits
-- No address-level scraping; county/muni max unless licensed
+- [x] Cache freshness on alerts / outages / hazards + overview `freshness` block
+- [x] Stale banner (last-good data) + WS reconnect hint
+- [x] Attribution strip (Home / Map / Live) + `GET /api/policy`
+- [x] Soft per-IP GET rate limit (`X-RateLimit-*`, 429 + `Retry-After`)
+- [x] Policy note: official APIs only; county/muni max; no address-level scraping
 
 ## Guardrails
 
@@ -54,3 +56,4 @@ Storm World / game stays a separate labeled SIM layer.
 2. Prefer official/licensed APIs over scrapers.
 3. Cite source + timestamp on every overlay.
 4. Maine corridor first; national secondary.
+5. No address-level outage scraping — county/municipality max unless licensed.

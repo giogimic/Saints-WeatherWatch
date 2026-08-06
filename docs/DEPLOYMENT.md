@@ -83,6 +83,13 @@ docker compose up -d
 If an outer reverse proxy sits in front of port 5080, it must also pass through WebSocket
 upgrades (or only terminate TLS and forward to the frontend container).
 
+### Rate limits (Phase F)
+
+Public `GET` `/api/*` routes (except `/api/health` and WebSocket paths) are soft-limited
+per client IP (~120 req/min). Responses include `X-RateLimit-Limit`,
+`X-RateLimit-Remaining`, and `X-RateLimit-Reset`. On `429`, honor `Retry-After`.
+CORS exposes these headers. Policy / attribution: `GET /api/policy`.
+
 
 If the backend appears to be missing new routes (for example `/api/cams` returning 404 while
 the frontend clearly updated), force a clean rebuild:

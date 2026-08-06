@@ -21,6 +21,8 @@ type Cache struct {
 	prevIDs  map[string]struct{}
 	store    *store.Store
 	onUpdate UpdateHook
+	lastOK   time.Time
+	lastErr  string
 }
 
 func NewCache(st *store.Store) *Cache {
@@ -37,7 +39,32 @@ func (c *Cache) OnUpdate(hook UpdateHook) {
 func (c *Cache) Get() AlertsResponse {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.data
+	out := c.data
+	age := 0
+	stale := out.GeneratedAt == ""
+	if out.GeneratedAt != "" {
+		if t, err := time.Parse(time.RFC3339, out.GeneratedAt); err == nil {
+			age = int(time.Since(t).Seconds())
+			if age < 0 {
+				age = 0
+			}
+			stale = time.Duration(age)*time.Second > 5*time.Minute
+		} else {
+			stale = true
+		}
+	}
+	if c.lastErr != "" {
+		stale = true
+	}
+	out.FetchedAt = out.GeneratedAt
+	if !c.lastOK.IsZero() {
+		out.FetchedAt = c.lastOK.UTC().Format(time.RFC3339)
+	}
+	out.AgeSec = age
+	out.StaleAfterSec = int((5 * time.Minute).Seconds())
+	out.Stale = stale
+	out.LastError = c.lastErr
+	return out
 }
 
 func (c *Cache) Set(data AlertsResponse) {
@@ -84,6 +111,9 @@ func (c *Cache) update(ctx context.Context) {
 	bundle, err := FetchAlerts()
 	if err != nil {
 		log.Printf("nws.Cache: error fetching alerts: %v", err)
+		c.mu.Lock()
+		c.lastErr = err.Error()
+		c.mu.Unlock()
 		return
 	}
 
@@ -105,6 +135,8 @@ func (c *Cache) update(ctx context.Context) {
 	}
 	c.data = bundle.Live
 	c.prevIDs = nextIDs
+	c.lastOK = time.Now().UTC()
+	c.lastErr = ""
 	hook := c.onUpdate
 	c.mu.Unlock()
 

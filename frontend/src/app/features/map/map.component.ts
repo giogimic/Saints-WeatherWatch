@@ -44,6 +44,10 @@ const STORAGE_KEY = 'ww-map-view';
         <p class="text-base-content/55 text-sm font-semibold mt-0.5">
           Northern Maine / St. John Valley · radar, flood, quakes, outages, cams
         </p>
+        <p class="text-[10px] text-base-content/45 font-semibold mt-1 max-w-3xl leading-relaxed"
+          [title]="ops.policyNote() || 'Official/licensed feeds only'">
+          {{ ops.attribution() }}
+        </p>
       </div>
 
       <div class="flex-1 flex flex-col md:flex-row gap-0 md:gap-4 max-w-7xl mx-auto w-full md:px-2 min-h-0">

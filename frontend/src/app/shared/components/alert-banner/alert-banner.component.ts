@@ -8,6 +8,23 @@ import { OpsStateService } from '../../../core/ops-state.service';
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
+    @if (ops.staleSummary(); as stale) {
+      <div
+        class="sticky top-0 md:top-[4.5rem] z-[54] border-b px-3 py-1.5 bg-amber-950/90 text-amber-100 border-amber-700/50"
+        role="status"
+        aria-live="polite"
+      >
+        <div class="max-w-6xl mx-auto flex items-center gap-2 text-[11px] font-bold">
+          <span class="uppercase tracking-[0.18em] text-amber-200/90 shrink-0">Stale</span>
+          <span class="truncate opacity-90">
+            Cached {{ stale }} may be outdated — showing last-good data. Check source timestamps on Map / Live.
+          </span>
+          @if (!ops.wsConnected()) {
+            <span class="opacity-70 shrink-0">· reconnecting…</span>
+          }
+        </div>
+      </div>
+    }
     @if (ops.bannerAlert(); as a) {
       <div
         class="sticky top-0 md:top-[4.5rem] z-[55] border-b-2 px-3 py-2.5"

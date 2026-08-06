@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { OpsStateService } from '../../core/ops-state.service';
 import { WeatherService } from '../../core/weather.service';
 
 @Component({
@@ -59,11 +60,20 @@ import { WeatherService } from '../../core/weather.service';
               <span class="text-white">{{ overview.quakeCount || 0 }}</span>
             </div>
           </div>
+          @if (overview.freshness?.anyStale) {
+            <p class="text-[10px] text-amber-200/80 font-semibold mb-4 max-w-xl mx-auto">
+              One or more feeds are stale — showing last-good cached data.
+            </p>
+          }
           @if (overview.outageNote && !overview.maineOutageCovered) {
             <p class="text-[10px] text-base-content/50 font-semibold mb-8 max-w-xl mx-auto">
               * Maine utilities may not report to ODIN yet — use Versant/CMP maps from the Live Map outage layer.
             </p>
           }
+          <p class="text-[10px] text-base-content/45 font-semibold mb-8 max-w-2xl mx-auto leading-relaxed"
+            [title]="overview.policyNote || ops.policyNote()">
+            {{ overview.attribution || ops.attribution() }}
+          </p>
         }
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
@@ -107,6 +117,7 @@ import { WeatherService } from '../../core/weather.service';
 })
 export class HomeComponent {
   private readonly weatherService = inject(WeatherService);
+  readonly ops = inject(OpsStateService);
 
   overview$ = this.weatherService.getOverview();
 }

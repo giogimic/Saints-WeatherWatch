@@ -36,7 +36,25 @@ func NewCache(userAgent string) *Cache {
 func (c *Cache) Get() Snapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.snap
+	out := c.snap
+	age := 0
+	stale := c.lastOK.IsZero()
+	if !c.lastOK.IsZero() {
+		age = int(time.Since(c.lastOK).Seconds())
+		if age < 0 {
+			age = 0
+		}
+		stale = time.Duration(age)*time.Second > 30*time.Minute
+		out.FetchedAt = c.lastOK.UTC().Format(time.RFC3339)
+	}
+	if c.err != "" {
+		stale = true
+	}
+	out.AgeSec = age
+	out.StaleAfterSec = int((30 * time.Minute).Seconds())
+	out.Stale = stale
+	out.LastError = c.err
+	return out
 }
 
 func (c *Cache) LastError() string {
