@@ -20,5 +20,6 @@ roadmaps in [`docs/`](../docs/) are the living plans.
 | [phase3-landcover-lobbies](./2026-08-06-phase3-landcover-lobbies.md) | Zones + lobby shards |
 | [phase2-complete](./2026-08-06-phase2-complete.md) | Soft anti-cheat |
 | [branch-hygiene](./2026-08-06-branch-hygiene.md) | Merged-branch cleanup |
+| [legal-footer-bg](./2026-08-06-legal-footer-bg.md) | Copyright, footer, long-scroll bg |
 
 Older notes (2026-08-05 and early Storm World) remain in this folder by date prefix.

@@ -22,6 +22,7 @@ export class AppComponent implements OnInit {
   readonly ops = inject(OpsStateService);
 
   title = 'Saints Weather Watch';
+  readonly year = new Date().getFullYear();
   moreOpen = false;
 
   private readonly baseNav = [

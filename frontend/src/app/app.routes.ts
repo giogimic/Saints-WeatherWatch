@@ -64,5 +64,11 @@ export const routes: Routes = [
       import('./features/archive/archive.component').then((m) => m.ArchiveComponent),
     title: 'Archive — Saints Weather Watch',
   },
+  {
+    path: 'legal',
+    loadComponent: () =>
+      import('./features/legal/legal.component').then((m) => m.LegalComponent),
+    title: 'Legal — Saints Weather Watch',
+  },
   { path: '**', redirectTo: '' },
 ];

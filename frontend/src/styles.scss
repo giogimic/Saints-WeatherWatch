@@ -4,22 +4,56 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Saints Weather Watch global styles */
+/* Saints Weather Watch global styles — © 2026 Saints Gaming */
 html,
 body {
   height: 100%;
   margin: 0;
   font-family: 'Inter', system-ui, sans-serif;
-  background:
-    radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 20%),
-    radial-gradient(circle at bottom right, rgba(250, 204, 21, 0.16), transparent 24%),
-    linear-gradient(135deg, #020617 0%, #0f172a 38%, #111827 100%);
+  background-color: #0b1220;
   color: #e2e8f0;
 }
 
 /* Smooth scrolling for the whole app */
 html {
   scroll-behavior: smooth;
+}
+
+/*
+ * Fixed atmospheric layer (viewport-locked).
+ * Soft large ellipses + slow opacity drift — no 400% tiled gradient,
+ * so long pages scroll cleanly without a repeating seam.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 110% 75% at 12% -5%, rgba(56, 189, 248, 0.20), transparent 52%),
+    radial-gradient(ellipse 85% 65% at 92% 18%, rgba(239, 68, 68, 0.11), transparent 48%),
+    radial-gradient(ellipse 95% 55% at 48% 105%, rgba(250, 204, 21, 0.09), transparent 52%),
+    radial-gradient(ellipse 55% 40% at 72% 55%, rgba(56, 189, 248, 0.05), transparent 55%),
+    linear-gradient(165deg, #020617 0%, #0f172a 42%, #111827 72%, #0b1220 100%);
+  animation: storm-atmosphere 32s ease-in-out infinite alternate;
+}
+
+/* Soft vignette so tall content stays grounded without a hatch pattern */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 40%, transparent 40%, rgba(2, 6, 23, 0.35) 100%);
+  opacity: 0.85;
+}
+
+@keyframes storm-atmosphere {
+  0% { opacity: 1; }
+  100% { opacity: 0.90; }
 }
 
 ::selection {
@@ -46,20 +80,9 @@ html {
   background: theme('colors.primary');
 }
 
-/* Animated storm cloud background utility */
+/* Page sections inherit the fixed atmosphere — no local tile/repeat */
 .storm-bg {
-  background:
-    radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 22%),
-    radial-gradient(circle at bottom right, rgba(239, 68, 68, 0.12), transparent 26%),
-    linear-gradient(135deg, #0f172a 0%, #111827 50%, #0f172a 100%);
-  background-size: 400% 400%;
-  animation: storm-gradient 15s ease infinite;
-}
-
-@keyframes storm-gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  background: transparent;
 }
 
 .storm-card {
