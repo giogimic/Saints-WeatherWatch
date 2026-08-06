@@ -86,23 +86,24 @@ Open `http://localhost:4200` in your browser.
 - [x] **Phase 8** — Docker compose deploy (see `update.sh` / deployment docs)
 - [x] **Phase 9** — Chaser accounts (name+PIN), vehicle rewards, live Dashboard (favorites / watch zones)
 
-### Recently shipped (see `logs/`)
+### Recently shipped (see [`logs/`](logs/))
 - Storm Ops UI overhaul (quiet Archive, Live accordion, Map hub, deep links)
 - Maine alert archive backfill from IEM VTEC
 - Storm Expert Training quizzes + Top Experts board
 - Saved locations / home-base pins on Map
-- Chaser accounts, cartoon vehicle garage, SPA Dashboard with watched-area radius alerts
-- WebSocket alert pushes + sticky new-warning banner (Phase 4)
-- Radar Chase → **Storm World** Phase 1 (shared presence, drops, SIM events, craft, trade)
-- Storm Credits economy + Bag / Storm Market overlays (vendor + player barter)
+- Chaser accounts, cartoon vehicle garage, SPA **Profile** (favorites / watch zones)
+- WebSocket alert pushes + sticky new-warning / stale banners
+- Radar Chase → **Storm World** (presence, drops, SIM events, craft, lobbies, research)
+- Storm Credits + Bag / Storm Market (vendor + player barter) + craft/trade rate limits
+- Discrete Storm Map search + bottom-right radar desk
 
 ## Storm Chaser living world (game layer)
 
 Long-term vision (grain of salt — do not rewrite the ops app to chase it):
 
 - [docs/STORM_CHASER_VISION.md](docs/STORM_CHASER_VISION.md) — full living-world north star + trust boundary  
-- [docs/STORM_CHASER_PHASE1.md](docs/STORM_CHASER_PHASE1.md) — **current** shared-world build contract  
-- [docs/STORM_CHASER_ROADMAP.md](docs/STORM_CHASER_ROADMAP.md) — ordered later slices (biomes done · research in progress · deployables next)
+- [docs/STORM_CHASER_PHASE1.md](docs/STORM_CHASER_PHASE1.md) — shared-world build contract  
+- [docs/STORM_CHASER_ROADMAP.md](docs/STORM_CHASER_ROADMAP.md) — Phase 1–4 core done · deployables next
 
 ## Data Sources (all free, no API keys)
 
@@ -119,9 +120,9 @@ Long-term vision (grain of salt — do not rewrite the ops app to chase it):
 
 - [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- [docs/OPS_EXPANSION_ROADMAP.md](docs/OPS_EXPANSION_ROADMAP.md) — weather / outage / disaster expansion (A→F done); Impact mode, desk scores, storm packages, freshness / attribution / rate limits
+- [docs/OPS_EXPANSION_ROADMAP.md](docs/OPS_EXPANSION_ROADMAP.md) — ops expansion A→F **done**
 - [docs/STORM_CHASER_VISION.md](docs/STORM_CHASER_VISION.md) · [PHASE1](docs/STORM_CHASER_PHASE1.md) · [ROADMAP](docs/STORM_CHASER_ROADMAP.md)
-- Build notes: [`logs/`](logs/)
+- Build notes index: [`logs/README.md`](logs/README.md)
 
 ## Database
 

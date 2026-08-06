@@ -50,6 +50,11 @@ Storm World / game stays a separate labeled SIM layer.
 - [x] Soft per-IP GET rate limit (`X-RateLimit-*`, 429 + `Retry-After`)
 - [x] Policy note: official APIs only; county/muni max; no address-level scraping
 
+## Follow-ons (ops UI polish)
+
+- [x] Discrete Storm Map search + bottom-right collapsed radar desk
+- [x] Profile nav (was Desk) — logged-in only
+
 ## Guardrails
 
 1. Real products stay trustworthy — no severity inflation.

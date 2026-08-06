@@ -29,9 +29,10 @@ See [STORM_CHASER_PHASE1.md](./STORM_CHASER_PHASE1.md).
 - [x] Biased material tables per zone
 - [x] Lobby select + sharding (parallel rooms, same map; inventory/craft/trade stay global)
 - [x] Presence rendezvous + lobby chat (mobile)
+- [x] Login required for Storm World (no guest solo chase that looks like broken multiplayer)
 - [ ] Optional: GIS land-cover tiles / finer region polygons
 
-## Phase 4 — Weather-linked research (real phenomena) — **in progress**
+## Phase 4 — Weather-linked research (real phenomena) — **done** (core)
 
 - [x] Server reads live alerts context (NWS cache → world room, read-only)
 - [x] Awards **research_sample** stacks for time-on-station near alert cells
@@ -39,6 +40,12 @@ See [STORM_CHASER_PHASE1.md](./STORM_CHASER_PHASE1.md).
 - [x] Personal research log (`GET /api/world/research` + Trade Center panel)
 - [ ] Optional: radar-freshness bonus tick
 - [ ] Optional: richer research database UI / filters
+
+## Economy + market surfaces (shipped alongside Phase 4+)
+
+- [x] Storm Credits on accounts + item values
+- [x] Bag + Storm Market overlays (vendor buy/sell + player barter)
+- [x] Craft / trade / vendor rate limits
 
 ## Phase 5 — Deployables & field networks
 
