@@ -84,8 +84,8 @@ Environments naturally bias what you find (encourages road trips):
 | Industrial | Steel, wiring, machinery |
 | Farms | Fuel, chemicals, vehicle parts |
 
-**Today:** uniform corridor spawn weights.  
-**Later:** lat/lon biome tables tied to land-cover / hand-authored zones.
+**Today (Phase 3 start):** approximate forest / coast / town / farm tables + lobby shards.  
+**Later:** true GIS land-cover / finer free-roam regions.
 
 ---
 

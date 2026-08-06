@@ -16,6 +16,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 	"github.com/saints-weatherwatch/backend/internal/vehicles"
+	"github.com/saints-weatherwatch/backend/internal/world"
 )
 
 type overviewResponse struct {
@@ -29,7 +30,7 @@ type overviewResponse struct {
 }
 
 // Mount attaches all API routes to the provided router.
-func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache) {
+func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache, worldHub *world.Hub) {
 	limiter := auth.NewPINLimiter()
 	r.Route("/api", func(r chi.Router) {
 		r.Use(auth.Middleware(st))
@@ -65,8 +66,8 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Get("/chase/loot", myLootHandler(st))
 		r.Post("/chase/runs", createChaseRunHandler(st))
 
-		// Storm World — craft / trade / inventory
-		mountWorldRoutes(r, st)
+		// Storm World — craft / trade / inventory / lobbies
+		mountWorldRoutes(r, st, worldHub)
 
 		// Dashboard (login required handlers enforce auth)
 		r.Get("/favorites", getFavoritesHandler(st))

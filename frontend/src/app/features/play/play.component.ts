@@ -96,12 +96,12 @@ const CALLSIGN_KEY = 'ww-play-callsign';
           >
             <div class="flex items-start gap-3">
               <div class="min-w-0 flex-1">
-                <p class="text-[10px] font-black uppercase tracking-widest text-accent mb-1">New · Shared world</p>
+                <p class="text-[10px] font-black uppercase tracking-widest text-accent mb-1">Shared world · lobbies</p>
                 <h2 class="font-black uppercase italic text-white text-lg leading-tight group-hover:text-accent transition-colors">
                   Storm World
                 </h2>
                 <p class="text-xs text-base-content/55 font-semibold mt-1">
-                  Drive the Maine corridor on live radar. See other chasers, race for the same drops and simulated events.
+                  Pick a lobby shard, then drive the Maine corridor. Land cover biases what you find.
                 </p>
               </div>
               <span class="text-base-content/30 text-sm self-center">▶</span>

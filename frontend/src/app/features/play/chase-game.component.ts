@@ -16,9 +16,10 @@ import * as L from 'leaflet';
 import { AuthService } from '../../core/auth.service';
 import { vehicleSvg } from '../../core/vehicles';
 import { QuizAward, WeatherService } from '../../core/weather.service';
-import { WorldService } from '../../core/world.service';
+import { WorldLobby, WorldService } from '../../core/world.service';
 
 type ChasePhase = 'ready' | 'running' | 'done';
+type LandZone = 'forest' | 'coast' | 'city' | 'farm';
 
 interface DropMarker {
   key: string;
@@ -137,7 +138,43 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
             Zoom with wheel / pinch. Use <span class="text-white font-black">Follow</span> or
             <span class="text-white font-black">Free</span> cam while driving.
             Logged-in chasers share server drops and SIM events (first bag wins).
+            Drops bias by land cover (forest · coast · town · farm).
           </p>
+          @if (auth.isLoggedIn()) {
+            <div class="space-y-2">
+              <p class="text-[10px] font-black uppercase tracking-widest text-base-content/45">Lobby / shard</p>
+              <p class="text-xs font-semibold text-base-content/60">
+                Stay on <span class="text-accent font-black">Main Corridor</span> to see each other.
+                Other shards are separate rooms on the same map.
+              </p>
+              <div class="grid gap-2 sm:grid-cols-2">
+                @for (lobby of lobbies; track lobby.id) {
+                  <button
+                    type="button"
+                    class="text-left px-3 py-2 rounded-xl border transition-colors border-base-300"
+                    [class.border-primary]="selectedLobby === lobby.id"
+                    [class.bg-base-200]="selectedLobby === lobby.id"
+                    [class.opacity-50]="lobby.full && selectedLobby !== lobby.id"
+                    [disabled]="lobby.full && selectedLobby !== lobby.id"
+                    (click)="selectLobby(lobby.id)"
+                  >
+                    <div class="font-black uppercase text-sm text-white italic leading-tight">{{ lobby.name }}</div>
+                    <div class="text-[10px] font-semibold text-base-content/50 mt-0.5">{{ lobby.blurb }}</div>
+                    <div
+                      class="text-[10px] font-black uppercase tracking-wider mt-1"
+                      [class.text-accent]="!lobby.full"
+                      [class.text-error]="lobby.full"
+                    >
+                      {{ lobby.players }}/{{ lobby.maxPlayers }}{{ lobby.full ? ' · full' : '' }}
+                    </div>
+                  </button>
+                }
+              </div>
+              @if (!lobbies.length) {
+                <p class="text-xs text-base-content/50 font-semibold">Loading lobbies… (defaults to Main Corridor)</p>
+              }
+            </div>
+          }
           <div class="flex flex-col sm:flex-row gap-2">
             <button
               type="button"
@@ -170,6 +207,8 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
               @if (worldMode) {
                 <span class="text-base-content/40 mx-2">·</span>
                 <span class="text-primary">{{ onlineLabel() }}</span>
+                <span class="text-base-content/40 mx-2">·</span>
+                <span class="text-secondary">{{ zoneHud() }}</span>
               }
             </div>
             @if (toast) {
@@ -203,6 +242,15 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
                 >
                   Center
                 </button>
+                @if (worldMode) {
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
+                    (click)="findChasers()"
+                  >
+                    Find
+                  </button>
+                }
                 @if (!immersive) {
                   <button
                     type="button"
@@ -232,6 +280,52 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
                   <p class="text-[10px] font-semibold text-base-content/70 mt-0.5">{{ activeSimHint }}</p>
                 }
               </div>
+            </div>
+          }
+
+          @if (phase === 'running' && worldMode) {
+            <div
+              class="chase-chat pointer-events-auto absolute z-[1000]"
+              [class.chase-chat-open]="chatOpen"
+            >
+              <button
+                type="button"
+                class="chase-chat-toggle"
+                (click)="toggleChat()"
+                [attr.aria-expanded]="chatOpen"
+              >
+                Chat
+                @if (!chatOpen && world.chatLines().length) {
+                  <span class="chase-chat-badge">{{ world.chatLines().length > 9 ? '9+' : world.chatLines().length }}</span>
+                }
+              </button>
+              @if (chatOpen) {
+                <div class="chase-chat-panel">
+                  <div class="chase-chat-log" #chatLog>
+                    @for (line of world.chatLines(); track line.id) {
+                      <div class="chase-chat-line">
+                        <span class="chase-chat-name">{{ line.name }}</span>
+                        <span class="chase-chat-text">{{ line.text }}</span>
+                      </div>
+                    } @empty {
+                      <p class="chase-chat-empty">Say hi — lobby chat stays on this shard.</p>
+                    }
+                  </div>
+                  <form class="chase-chat-form" (submit)="submitChat($event)">
+                    <input
+                      class="chase-chat-input"
+                      type="text"
+                      maxlength="140"
+                      autocomplete="off"
+                      enterkeyhint="send"
+                      placeholder="Message…"
+                      [value]="chatDraft"
+                      (input)="chatDraft = $any($event.target).value"
+                    >
+                    <button type="submit" class="chase-chat-send" [disabled]="!chatDraft.trim()">Send</button>
+                  </form>
+                </div>
+              }
             </div>
           }
 
@@ -329,6 +423,7 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
 export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   @Output() exit = new EventEmitter<void>();
   @ViewChild('shell') shellRef?: ElementRef<HTMLElement>;
+  @ViewChild('chatLog') chatLogRef?: ElementRef<HTMLElement>;
 
   readonly auth = inject(AuthService);
   private readonly weather = inject(WeatherService);
@@ -349,6 +444,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   followCam = true;
   activeSimLabel = '';
   activeSimHint = '';
+  lobbies: WorldLobby[] = [];
+  selectedLobby = 'main';
+  chatOpen = false;
+  chatDraft = '';
 
   private map?: L.Map;
   private playerMarker?: L.Marker;
@@ -358,6 +457,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private lng = CENTER[1];
   private toastTimer?: ReturnType<typeof setTimeout>;
   private startedAt = 0;
+  private lobbyPoll?: ReturnType<typeof setInterval>;
+  private adoptedServerSpawn = false;
+  private fittedPeers = false;
+  private lastChatCount = 0;
 
   private keys = new Set<string>();
   private stickX = 0;
@@ -384,15 +487,34 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.refreshVehicle();
+    this.refreshLobbies();
+    this.lobbyPoll = setInterval(() => {
+      if (this.phase === 'ready') this.refreshLobbies();
+    }, 8000);
   }
 
   ngOnDestroy(): void {
+    if (this.lobbyPoll) clearInterval(this.lobbyPoll);
     this.stopLoop();
     this.stopWorldSync();
     this.world.disconnectWorld();
     this.destroyMap();
     this.keys.clear();
     this.teardownImmersive(false);
+  }
+
+  selectLobby(id: string): void {
+    this.selectedLobby = id;
+  }
+
+  refreshLobbies(): void {
+    if (!this.auth.isLoggedIn()) return;
+    this.world.getLobbies().subscribe(res => {
+      this.lobbies = res.lobbies ?? [];
+      if (!this.lobbies.some(l => l.id === this.selectedLobby) && this.lobbies.length) {
+        this.selectedLobby = this.lobbies[0].id;
+      }
+    });
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -467,10 +589,15 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.savedLoot = false;
     this.keys.clear();
     this.resetStick();
-    this.lat = CENTER[0] + (Math.random() - 0.5) * 0.1;
-    this.lng = CENTER[1] + (Math.random() - 0.5) * 0.1;
+    this.lat = CENTER[0] + (Math.random() - 0.5) * (this.auth.isLoggedIn() ? 0.03 : 0.1);
+    this.lng = CENTER[1] + (Math.random() - 0.5) * (this.auth.isLoggedIn() ? 0.03 : 0.1);
     this.startedAt = Date.now();
     this.stopLoop();
+    this.adoptedServerSpawn = false;
+    this.fittedPeers = false;
+    this.chatOpen = false;
+    this.chatDraft = '';
+    this.world.you.set(null);
 
     if (preferFullscreen) {
       this.enterFullscreen();
@@ -487,14 +614,14 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.activeSimLabel = '';
     this.activeSimHint = '';
     if (this.worldMode) {
-      this.world.connectWorld(this.lat, this.lng);
+      this.world.connectWorld(this.lat, this.lng, this.selectedLobby);
     }
 
     setTimeout(() => {
       this.ensureMap();
       if (this.worldMode) {
         this.clearDrops();
-        this.world.connectWorld(this.lat, this.lng);
+        this.world.connectWorld(this.lat, this.lng, this.selectedLobby);
         this.startWorldSync();
       } else {
         this.spawnDrops();
@@ -578,9 +705,38 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   onlineLabel(): string {
     if (!this.world.connected()) return 'connecting…';
+    const lobby = this.world.lobbyName() || this.selectedLobby;
     const n = this.world.players().length;
-    if (n <= 1) return '1 online (you)';
-    return `${n} online`;
+    const who = n <= 1 ? '1 online' : `${n} online`;
+    return `${lobby} · ${who}`;
+  }
+
+  zoneHud(): string {
+    const z = this.zoneAt(this.lat, this.lng);
+    switch (z) {
+      case 'coast': return 'coast';
+      case 'city': return 'town';
+      case 'farm': return 'farm';
+      default: return 'forest';
+    }
+  }
+
+  /** Mirrors server ZoneAt (approximate Maine land cover). */
+  private zoneAt(lat: number, lng: number): LandZone {
+    const cities: [number, number, number][] = [
+      [44.80, -68.77, 0.12],
+      [46.68, -68.02, 0.08],
+      [46.86, -68.01, 0.07],
+      [46.13, -67.84, 0.07],
+      [47.25, -68.59, 0.06],
+    ];
+    for (const [clat, clng, r] of cities) {
+      if (Math.hypot(lat - clat, lng - clng) <= r) return 'city';
+    }
+    if (lng >= -67.45 && lat <= 45.85) return 'coast';
+    if (lng >= -67.15) return 'coast';
+    if (lat >= 46.15 && lat <= 47.15 && lng >= -68.85 && lng <= -67.55) return 'farm';
+    return 'forest';
   }
 
   setFollowCam(on: boolean): void {
@@ -592,6 +748,50 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   centerOnTruck(): void {
     if (!this.map) return;
     this.map.setView([this.lat, this.lng], Math.max(this.map.getZoom(), DEFAULT_ZOOM), { animate: true });
+  }
+
+  findChasers(): void {
+    this.fitPeers(true);
+  }
+
+  toggleChat(): void {
+    this.chatOpen = !this.chatOpen;
+    if (this.chatOpen) {
+      setTimeout(() => this.scrollChat(), 40);
+    }
+  }
+
+  submitChat(ev: Event): void {
+    ev.preventDefault();
+    const text = this.chatDraft.trim();
+    if (!text) return;
+    this.world.sendChat(text);
+    this.chatDraft = '';
+    setTimeout(() => this.scrollChat(), 60);
+  }
+
+  private scrollChat(): void {
+    const el = this.chatLogRef?.nativeElement;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  private fitPeers(force = false): void {
+    if (!this.map || !this.worldMode) return;
+    const me = this.auth.user()?.id;
+    const pts: L.LatLngExpression[] = [[this.lat, this.lng]];
+    for (const p of this.world.players()) {
+      if (!p.userId || p.userId === me) continue;
+      pts.push([p.lat, p.lng]);
+    }
+    if (pts.length < 2) {
+      if (force) this.showToast('No other chasers in this lobby yet');
+      return;
+    }
+    if (!force && this.fittedPeers) return;
+    this.fittedPeers = true;
+    this.followCam = false;
+    this.applyCameraMode();
+    this.map.fitBounds(L.latLngBounds(pts), { padding: [48, 48], maxZoom: 11, animate: true });
   }
 
   private applyCameraMode(): void {
@@ -715,10 +915,22 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   private syncWorldMarkers(): void {
     if (!this.map || !this.worldMode) return;
+
+    // Adopt server rendezvous spawn once so joiners land near peers.
+    const you = this.world.you();
+    if (you && !this.adoptedServerSpawn) {
+      this.adoptedServerSpawn = true;
+      this.lat = you.lat;
+      this.lng = you.lng;
+      this.placePlayer(true);
+    }
+
     const me = this.auth.user()?.id;
     const seen = new Set<string>();
+    let peerCount = 0;
     for (const p of this.world.players()) {
       if (!p.userId || p.userId === me) continue;
+      peerCount += 1;
       seen.add(p.userId);
       const name = p.chaserName || 'Chaser';
       const veh = p.vehicleKey || 'starter_car';
@@ -745,6 +957,16 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
         this.otherMarkers.delete(id);
         this.peerMeta.delete(id);
       }
+    }
+
+    if (peerCount > 0) {
+      this.fitPeers(false);
+    }
+
+    const chatN = this.world.chatLines().length;
+    if (chatN !== this.lastChatCount) {
+      this.lastChatCount = chatN;
+      if (this.chatOpen) setTimeout(() => this.scrollChat(), 30);
     }
 
     const dropSeen = new Set<string>();

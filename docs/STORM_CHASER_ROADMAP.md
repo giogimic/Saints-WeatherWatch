@@ -23,11 +23,13 @@ See [STORM_CHASER_PHASE1.md](./STORM_CHASER_PHASE1.md).
 
 **Out of scope here:** deployables, weather-typed research ticks, full region biomes.
 
-## Phase 3 — Regional spawn tables — **next**
+## Phase 3 — Regional spawn tables + lobbies — **in progress**
 
-- Hand-authored or land-cover zones (forest / coast / city / farm …)
-- Biased material tables per zone
-- Still one authoritative room (or sharding later if needed)
+- [x] Hand-authored land-cover zones (forest / coast / town / farm) — approximate Maine match
+- [x] Biased material tables per zone
+- [x] Lobby select + sharding (parallel rooms, same map; inventory/craft/trade stay global)
+- [x] Presence rendezvous + lobby chat (mobile)
+- [ ] Optional: GIS land-cover tiles / finer region polygons
 
 ## Phase 4 — Weather-linked research (real phenomena)
 

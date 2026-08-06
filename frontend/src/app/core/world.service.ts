@@ -47,6 +47,7 @@ export interface WorldDrop {
   rarity: string;
   lat: number;
   lng: number;
+  zone?: string;
 }
 
 export interface WorldEvent {
@@ -60,6 +61,21 @@ export interface WorldEvent {
   active: boolean;
 }
 
+export interface WorldLobby {
+  id: string;
+  name: string;
+  blurb: string;
+  maxPlayers: number;
+  players: number;
+  full: boolean;
+}
+
+export interface WorldZone {
+  id: string;
+  name: string;
+  blurb: string;
+}
+
 export interface WorldEnvelope {
   type: string;
   players?: WorldPlayer[];
@@ -68,6 +84,19 @@ export interface WorldEnvelope {
   itemKey?: string;
   event?: WorldEvent;
   toast?: string;
+  lobbyId?: string;
+  lobbyName?: string;
+  you?: WorldPlayer;
+  chat?: WorldChatLine;
+  chats?: WorldChatLine[];
+}
+
+export interface WorldChatLine {
+  id: string;
+  userId: string;
+  name: string;
+  text: string;
+  at: number;
 }
 
 /**
@@ -84,6 +113,11 @@ export class WorldService {
   readonly event = signal<WorldEvent | null>(null);
   readonly toast = signal('');
   readonly connected = signal(false);
+  readonly lobbyId = signal('main');
+  readonly lobbyName = signal('');
+  /** Server-assigned spawn (rendezvous near peers). */
+  readonly you = signal<WorldPlayer | null>(null);
+  readonly chatLines = signal<WorldChatLine[]>([]);
   /** Latest successful server bag (for UI). */
   readonly lastBag = signal<{ seq: number; itemKey: string; dropId?: string } | null>(null);
 
@@ -99,10 +133,18 @@ export class WorldService {
   private lastMoveSent = 0;
   private bagSeq = 0;
   private visibilityBound = false;
+  private selectedLobby = 'main';
+  private socketLobby = '';
 
-  getCatalog(): Observable<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number> }> {
-    return this.http.get<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number> }>('/api/world/catalog').pipe(
+  getCatalog(): Observable<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number>; zones?: WorldZone[] }> {
+    return this.http.get<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number>; zones?: WorldZone[] }>('/api/world/catalog').pipe(
       catchError(() => of({ items: [], recipes: [], bounds: {} })),
+    );
+  }
+
+  getLobbies(): Observable<{ lobbies: WorldLobby[]; zones: WorldZone[] }> {
+    return this.http.get<{ lobbies: WorldLobby[]; zones: WorldZone[] }>('/api/world/lobbies').pipe(
+      catchError(() => of({ lobbies: [], zones: [] })),
     );
   }
 
@@ -141,13 +183,23 @@ export class WorldService {
     );
   }
 
-  connectWorld(lat?: number, lng?: number): void {
+  connectWorld(lat?: number, lng?: number, lobbyId?: string): void {
     if (typeof lat === 'number' && typeof lng === 'number') {
       this.lastLat = lat;
       this.lastLng = lng;
     }
+    if (lobbyId) {
+      this.selectedLobby = lobbyId;
+      this.lobbyId.set(lobbyId);
+    }
     this.intentionalClose = false;
     this.bindVisibility();
+    // Lobby change on a live socket must reopen — hello alone cannot switch shards.
+    const want = this.selectedLobby || 'main';
+    if (this.socket && this.socketLobby && this.socketLobby !== want) {
+      this.teardownSocket();
+      this.opening = false;
+    }
     this.open();
   }
 
@@ -163,6 +215,10 @@ export class WorldService {
     this.players.set([]);
     this.drops.set([]);
     this.event.set(null);
+    this.you.set(null);
+    this.chatLines.set([]);
+    this.lobbyName.set('');
+    this.socketLobby = '';
   }
 
   sendMove(lat: number, lng: number): void {
@@ -184,6 +240,12 @@ export class WorldService {
     this.lastLat = lat;
     this.lastLng = lng;
     this.send({ type: 'event_place', eventId, lat, lng });
+  }
+
+  sendChat(text: string): void {
+    const t = text.trim();
+    if (!t) return;
+    this.send({ type: 'chat', text: t.slice(0, 140) });
   }
 
   private bindVisibility(): void {
@@ -216,8 +278,10 @@ export class WorldService {
 
     try {
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${proto}//${window.location.host}/api/world/ws`);
+      const lobby = encodeURIComponent(this.selectedLobby || 'main');
+      const ws = new WebSocket(`${proto}//${window.location.host}/api/world/ws?lobby=${lobby}`);
       this.socket = ws;
+      this.socketLobby = this.selectedLobby || 'main';
 
       ws.onopen = () => {
         this.opening = false;
@@ -280,8 +344,25 @@ export class WorldService {
   }
 
   private apply(env: WorldEnvelope): void {
+    if (env.lobbyId) this.lobbyId.set(env.lobbyId);
+    if (env.lobbyName) this.lobbyName.set(env.lobbyName);
     if (env.type === 'snapshot' || env.type === 'presence') {
-      if (env.players) this.players.set(env.players);
+      this.players.set(env.players ?? []);
+    }
+    if (env.type === 'snapshot' && env.you) {
+      this.you.set(env.you);
+      this.lastLat = env.you.lat;
+      this.lastLng = env.you.lng;
+    }
+    if (env.type === 'snapshot' && env.chats) {
+      this.chatLines.set(env.chats);
+    }
+    if (env.type === 'chat' && env.chat) {
+      const line = env.chat;
+      this.chatLines.update(list => {
+        if (list.some(x => x.id === line.id)) return list;
+        return [...list, line].slice(-40);
+      });
     }
     if (env.type === 'snapshot' || env.type === 'drops') {
       if (env.drops) this.drops.set(env.drops);
