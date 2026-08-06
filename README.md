@@ -109,6 +109,7 @@ Long-term vision (grain of salt — do not rewrite the ops app to chase it):
 - **Iowa State IEM** — NEXRAD WMS, LSR GeoJSON, VTEC archive
 - **SPC** — day-1 categorical outlook GeoJSON
 - **NOAA Event-Driven WMS** — watch/warning polygons
+- **ODIN (ORNL)** — public power outage estimates (`/api/outages`); ME county grid + Versant/CMP links when ODIN has no Maine reporters
 - **GOES / FAA / regional cams** — via backend `/api/cams` proxy
 - **OpenStreetMap / CARTO / Esri** — map basemaps
 
@@ -116,6 +117,7 @@ Long-term vision (grain of salt — do not rewrite the ops app to chase it):
 
 - [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- [docs/OPS_EXPANSION_ROADMAP.md](docs/OPS_EXPANSION_ROADMAP.md) — weather / outage / disaster expansion (A→F)
 - [docs/STORM_CHASER_VISION.md](docs/STORM_CHASER_VISION.md) · [PHASE1](docs/STORM_CHASER_PHASE1.md) · [ROADMAP](docs/STORM_CHASER_ROADMAP.md)
 - Build notes: [`logs/`](logs/)
 
