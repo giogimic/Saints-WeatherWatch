@@ -15,7 +15,7 @@ import {
   WeatherService,
 } from '../../core/weather.service';
 
-type CardKey = 'profile' | 'progress' | 'garage' | 'cams' | 'areas' | 'map';
+type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | 'map';
 
 @Component({
   selector: 'app-dashboard',
@@ -75,9 +75,32 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'cams' | 'areas' | 'map';
                         </div>
                         <div class="text-[10px] uppercase tracking-wider text-base-content/45 font-bold mt-1">
                           {{ u.xpIntoLevel }}/{{ u.xpForNext }} XP · {{ u.vehicleKeys.length }} vehicles
+                          · {{ lootCount(u) }} loot
                         </div>
                       </div>
                     </div>
+                  }
+                </article>
+              }
+              @case ('loot') {
+                <article class="storm-card p-4 space-y-2">
+                  <h2 class="text-xs font-black uppercase tracking-widest text-accent">Field loot</h2>
+                  @if (!(auth.user()?.loot?.length)) {
+                    <p class="text-xs text-base-content/50 font-semibold">
+                      Bag drops in <a routerLink="/play" class="text-primary underline">Radar Chase</a>.
+                    </p>
+                  } @else {
+                    <ul class="space-y-1.5 max-h-40 overflow-y-auto">
+                      @for (item of auth.user()!.loot!; track item.key) {
+                        <li class="flex items-center justify-between gap-2 text-sm">
+                          <div class="min-w-0">
+                            <div class="font-bold text-white truncate">{{ item.name }}</div>
+                            <div class="text-[10px] uppercase tracking-wider text-base-content/40 font-bold">{{ item.rarity }}</div>
+                          </div>
+                          <span class="font-black text-accent tabular-nums">×{{ item.count }}</span>
+                        </li>
+                      }
+                    </ul>
                   }
                 </article>
               }
@@ -212,7 +235,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly weather = inject(WeatherService);
   private readonly sanitizer = inject(DomSanitizer);
 
-  allCards: CardKey[] = ['profile', 'progress', 'garage', 'cams', 'areas', 'map'];
+  allCards: CardKey[] = ['profile', 'progress', 'garage', 'loot', 'cams', 'areas', 'map'];
   visibleCards: CardKey[] = [...this.allCards];
   hidden = new Set<string>();
   editLayout = false;
@@ -256,6 +279,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   xpBarPct(into: number, need: number): number {
     if (!need || need <= 0) return 0;
     return Math.max(0, Math.min(100, Math.round((into / need) * 100)));
+  }
+
+  lootCount(u: { loot?: { count: number }[] }): number {
+    return (u.loot || []).reduce((sum, item) => sum + (item.count || 0), 0);
   }
 
   owned(key: string): boolean {

@@ -1,4 +1,4 @@
-/** Stable vehicle keys for rewards + future map chase game.
+/** Stable vehicle keys for rewards + Radar Chase map game.
  * Compact side-view storm-chase trucks — small footprint, bold outline, chase gear.
  */
 

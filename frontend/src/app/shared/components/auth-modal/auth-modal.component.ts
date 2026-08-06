@@ -90,6 +90,7 @@ export class AuthModalComponent {
         this.busy = false;
         this.ops.reloadAccountData();
         this.flushPendingQuiz();
+        this.flushPendingChase();
       },
       error: (err) => {
         this.busy = false;
@@ -104,6 +105,17 @@ export class AuthModalComponent {
     if (!pending) return;
     this.weather.saveQuizAttempt(pending).subscribe(res => {
       this.auth.pendingQuiz = null;
+      if (res) {
+        this.auth.refreshMe().subscribe(() => this.ops.reloadAccountData());
+      }
+    });
+  }
+
+  private flushPendingChase(): void {
+    const pending = this.auth.pendingChase;
+    if (!pending?.items?.length) return;
+    this.weather.saveChaseRun(pending).subscribe(res => {
+      this.auth.pendingChase = null;
       if (res) {
         this.auth.refreshMe().subscribe(() => this.ops.reloadAccountData());
       }

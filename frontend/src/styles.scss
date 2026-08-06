@@ -83,3 +83,22 @@ html {
     box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
   }
 }
+
+/* Radar Chase mini-game markers */
+.chase-truck-icon,
+.chase-drop-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.chase-truck {
+  width: 72px;
+  height: 40px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.65));
+}
+
+.chase-truck svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

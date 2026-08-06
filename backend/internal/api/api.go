@@ -60,6 +60,11 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Post("/quiz/attempts", createQuizAttemptHandler(st))
 		r.Get("/quiz/mine", myQuizStatsHandler(st))
 
+		// Radar Chase mini-game loot
+		r.Get("/chase/catalog", chaseLootCatalogHandler())
+		r.Get("/chase/loot", myLootHandler(st))
+		r.Post("/chase/runs", createChaseRunHandler(st))
+
 		// Dashboard (login required handlers enforce auth)
 		r.Get("/favorites", getFavoritesHandler(st))
 		r.Post("/favorites", addFavoriteHandler(st))

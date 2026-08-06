@@ -13,6 +13,7 @@ import {
   expertRank,
   questionsFor,
 } from './play.questions';
+import { ChaseGameComponent } from './chase-game.component';
 
 interface TrackProgress {
   bestPercent: number;
@@ -21,7 +22,7 @@ interface TrackProgress {
   plays: number;
 }
 
-type View = 'hub' | 'quiz' | 'results';
+type View = 'hub' | 'quiz' | 'results' | 'chase';
 
 const STORAGE_KEY = 'ww-play-progress-v1';
 const CALLSIGN_KEY = 'ww-play-callsign';
@@ -29,10 +30,10 @@ const CALLSIGN_KEY = 'ww-play-callsign';
 @Component({
   selector: 'app-play',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, ChaseGameComponent],
   template: `
     <div class="min-h-[calc(100vh-4rem)] p-4 md:p-6">
-      <div class="max-w-3xl mx-auto">
+      <div class="mx-auto" [class.max-w-3xl]="view !== 'chase'" [class.max-w-5xl]="view === 'chase'">
 
         @if (view === 'hub') {
           <div class="mb-6 md:mb-8">
@@ -87,6 +88,25 @@ const CALLSIGN_KEY = 'ww-play-callsign';
               </div>
             }
           </div>
+
+          <button
+            type="button"
+            class="storm-card w-full text-left p-4 mb-3 hover:border-accent/50 transition-colors group"
+            (click)="openChase()"
+          >
+            <div class="flex items-start gap-3">
+              <div class="min-w-0 flex-1">
+                <p class="text-[10px] font-black uppercase tracking-widest text-accent mb-1">New · Map game</p>
+                <h2 class="font-black uppercase italic text-white text-lg leading-tight group-hover:text-accent transition-colors">
+                  Radar Chase
+                </h2>
+                <p class="text-xs text-base-content/55 font-semibold mt-1">
+                  Drive your garage truck on live radar. Bag random field drops for your profile.
+                </p>
+              </div>
+              <span class="text-base-content/30 text-sm self-center">▶</span>
+            </div>
+          </button>
 
           <div class="grid gap-3 sm:grid-cols-2">
             @for (track of tracks; track track.id) {
@@ -147,15 +167,18 @@ const CALLSIGN_KEY = 'ww-play-callsign';
             routerLink="/archive"
             class="storm-card mt-3 p-4 flex items-center gap-3 hover:border-secondary/40 transition-colors block"
           >
-            <span class="text-2xl">📒</span>
             <div class="flex-1 min-w-0">
               <div class="font-black uppercase italic text-sm text-white">Chase Reports</div>
               <p class="text-xs text-base-content/50 font-semibold">
-                Log real intercepts in Archive · map chase game coming later
+                Log real intercepts in Archive
               </p>
             </div>
             <span class="text-base-content/30 text-sm">→</span>
           </a>
+        }
+
+        @if (view === 'chase') {
+          <app-chase-game (exit)="backToHub()"></app-chase-game>
         }
 
         @if (view === 'quiz' && activeTrack && current) {
@@ -457,6 +480,12 @@ export class PlayComponent implements OnInit {
     this.postedToBoard = false;
     this.startedAt = Date.now();
     this.view = 'quiz';
+  }
+
+  openChase(): void {
+    this.view = 'chase';
+    this.activeTrack = null;
+    this.deck = [];
   }
 
   backToHub(): void {

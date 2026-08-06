@@ -73,10 +73,14 @@ type AwardResult struct {
 
 // Award adds XP for a quiz attempt and persists level on the user.
 func Award(st *store.Store, ctx context.Context, userID string, score, total int) (*AwardResult, error) {
-	if st == nil || userID == "" {
+	return AwardFlat(st, ctx, userID, AttemptXP(score, total))
+}
+
+// AwardFlat adds a fixed XP amount (chase runs, bonuses) and updates level.
+func AwardFlat(st *store.Store, ctx context.Context, userID string, gained int) (*AwardResult, error) {
+	if st == nil || userID == "" || gained <= 0 {
 		return nil, nil
 	}
-	gained := AttemptXP(score, total)
 	user, err := st.Client.User.FindUnique(db.User.ID.Equals(userID)).Exec(ctx)
 	if err != nil || user == nil {
 		return nil, err

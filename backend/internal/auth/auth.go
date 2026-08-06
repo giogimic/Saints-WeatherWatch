@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/saints-weatherwatch/backend/internal/loot"
 	"github.com/saints-weatherwatch/backend/internal/progress"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
@@ -27,17 +28,18 @@ const (
 type contextKey string
 
 type UserView struct {
-	ID                 string   `json:"id"`
-	ChaserName         string   `json:"chaserName"`
-	Email              *string  `json:"email,omitempty"`
-	EquippedVehicleKey string   `json:"equippedVehicleKey"`
-	XP                 int      `json:"xp"`
-	Level              int      `json:"level"`
-	XPIntoLevel        int      `json:"xpIntoLevel"`
-	XPForNext          int      `json:"xpForNext"`
-	LevelTitle         string   `json:"levelTitle"`
-	CreatedAt          string   `json:"createdAt"`
-	VehicleKeys        []string `json:"vehicleKeys"`
+	ID                 string          `json:"id"`
+	ChaserName         string          `json:"chaserName"`
+	Email              *string         `json:"email,omitempty"`
+	EquippedVehicleKey string          `json:"equippedVehicleKey"`
+	XP                 int             `json:"xp"`
+	Level              int             `json:"level"`
+	XPIntoLevel        int             `json:"xpIntoLevel"`
+	XPForNext          int             `json:"xpForNext"`
+	LevelTitle         string          `json:"levelTitle"`
+	CreatedAt          string          `json:"createdAt"`
+	VehicleKeys        []string        `json:"vehicleKeys"`
+	Loot               []loot.ItemView `json:"loot"`
 }
 
 func NormalizeName(name string) string {
@@ -191,6 +193,7 @@ func ToUserView(st *store.Store, ctx context.Context, u *db.UserModel) UserView 
 		level = progress.LevelFromXP(xp)
 	}
 	into, need := progress.XPProgress(xp)
+	lootItems := loot.Inventory(st, ctx, u.ID)
 	return UserView{
 		ID:                 u.ID,
 		ChaserName:         u.ChaserName,
@@ -203,5 +206,6 @@ func ToUserView(st *store.Store, ctx context.Context, u *db.UserModel) UserView 
 		LevelTitle:         progress.Title(level),
 		CreatedAt:          u.CreatedAt.UTC().Format(time.RFC3339),
 		VehicleKeys:        keys,
+		Loot:               lootItems,
 	}
 }

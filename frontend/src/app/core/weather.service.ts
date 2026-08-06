@@ -242,6 +242,37 @@ export class WeatherService {
     );
   }
 
+  getChaseCatalog(): Observable<ChaseLootDef[]> {
+    return this.http.get<ChaseLootDef[]>('/api/chase/catalog').pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  getMyLoot(): Observable<ChaseLootItem[]> {
+    return this.http.get<ChaseLootItem[]>('/api/chase/loot').pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  saveChaseRun(run: { items: string[]; seconds: number }): Observable<{
+    items: string[];
+    inventory: ChaseLootItem[];
+    award?: QuizAward | null;
+    unlocked: string[];
+  } | null> {
+    return this.http.post<{
+      items: string[];
+      inventory: ChaseLootItem[];
+      award?: QuizAward | null;
+      unlocked: string[];
+    }>('/api/chase/runs', run).pipe(
+      catchError(err => {
+        console.error('saveChaseRun error:', err);
+        return of(null);
+      })
+    );
+  }
+
   getSavedLocations(): Observable<SavedLocation[]> {
     return this.http.get<SavedLocation[]>('/api/locations').pipe(
       catchError(err => {
@@ -357,6 +388,18 @@ export interface QuizAward {
   xpIntoLevel: number;
   xpForNext: number;
   title: string;
+}
+
+export interface ChaseLootDef {
+  key: string;
+  name: string;
+  blurb: string;
+  rarity: string;
+  xp: number;
+}
+
+export interface ChaseLootItem extends ChaseLootDef {
+  count: number;
 }
 
 export interface SavedLocation {

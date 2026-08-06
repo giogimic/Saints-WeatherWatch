@@ -2,6 +2,15 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, map, of, tap } from 'rxjs';
 
+export interface LootItem {
+  key: string;
+  name: string;
+  blurb: string;
+  rarity: string;
+  count: number;
+  xp: number;
+}
+
 export interface ChaserUser {
   id: string;
   chaserName: string;
@@ -14,6 +23,7 @@ export interface ChaserUser {
   levelTitle: string;
   createdAt: string;
   vehicleKeys: string[];
+  loot?: LootItem[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -31,6 +41,12 @@ export class AuthService {
     total: number;
     seconds: number;
     playerName: string;
+  } | null = null;
+
+  /** Pending Radar Chase loot to save after guest registers/logs in */
+  pendingChase: {
+    items: string[];
+    seconds: number;
   } | null = null;
 
   readonly isLoggedIn = computed(() => !!this.user());

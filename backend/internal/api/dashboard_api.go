@@ -218,7 +218,7 @@ func getDashboardPrefsHandler(st *store.Store) http.HandlerFunc {
 		row, err := st.Client.DashboardPreference.FindUnique(db.DashboardPreference.UserID.Equals(user.ID)).Exec(r.Context())
 		if err != nil || row == nil {
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"cardOrder":   "profile,progress,garage,cams,areas,map",
+				"cardOrder":   "profile,progress,garage,loot,cams,areas,map",
 				"hiddenCards": "",
 				"mapLayers":   "radar,warnings,cams",
 			})
@@ -248,7 +248,7 @@ func saveDashboardPrefsHandler(st *store.Store) http.HandlerFunc {
 			return
 		}
 		if req.CardOrder == "" {
-			req.CardOrder = "profile,progress,garage,cams,areas,map"
+			req.CardOrder = "profile,progress,garage,loot,cams,areas,map"
 		}
 		if req.MapLayers == "" {
 			req.MapLayers = "radar,warnings,cams"
