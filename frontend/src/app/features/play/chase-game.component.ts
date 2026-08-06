@@ -155,9 +155,9 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
           <div class="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-start gap-2 pointer-events-none">
             <div class="pointer-events-none storm-card px-3 py-2 text-xs font-black uppercase tracking-wider">
               <span class="text-accent">{{ bagged.length }} bagged</span>
-              @if (worldMode && world.connected()) {
+              @if (worldMode) {
                 <span class="text-base-content/40 mx-2">·</span>
-                <span class="text-primary">live</span>
+                <span class="text-primary">{{ onlineLabel() }}</span>
               }
             </div>
             @if (toast) {
@@ -511,6 +511,13 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     return LOOT_META[key]?.rarity || WORLD_NAMES[key]?.rarity || 'common';
   }
 
+  onlineLabel(): string {
+    if (!this.world.connected()) return 'connecting…';
+    const n = this.world.players().length;
+    if (n <= 1) return '1 online (you)';
+    return `${n} online`;
+  }
+
   private teardownImmersive(exitBrowserFs: boolean): void {
     this.immersive = false;
     this.lockBodyScroll(false);
@@ -602,7 +609,8 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private startWorldSync(): void {
     this.stopWorldSync();
     this.syncWorldMarkers();
-    this.syncTimer = setInterval(() => this.syncWorldMarkers(), 500);
+    // Match server presence tick (~10 Hz) so peer markers stay live.
+    this.syncTimer = setInterval(() => this.syncWorldMarkers(), 100);
   }
 
   private stopWorldSync(): void {
@@ -621,17 +629,19 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     const me = this.auth.user()?.id;
     const seen = new Set<string>();
     for (const p of this.world.players()) {
-      if (p.userId === me) continue;
+      if (!p.userId || p.userId === me) continue;
       seen.add(p.userId);
       let m = this.otherMarkers.get(p.userId);
+      const name = this.escape(p.chaserName || 'Chaser');
+      const truck = vehicleSvg(p.vehicleKey || 'starter_car');
       const icon = L.divIcon({
-        className: 'chase-drop-icon',
-        html: `<div style="padding:2px 6px;border-radius:8px;background:rgba(15,23,42,.85);border:1px solid #38bdf8;color:#e2e8f0;font:700 10px/1.2 sans-serif;">${this.escape(p.chaserName)}</div>`,
-        iconSize: [80, 18],
-        iconAnchor: [40, 9],
+        className: 'chase-peer-icon',
+        html: `<div class="chase-peer"><div class="chase-peer-truck">${truck}</div><div class="chase-peer-name">${name}</div></div>`,
+        iconSize: [72, 52],
+        iconAnchor: [36, 40],
       });
       if (!m) {
-        m = L.marker([p.lat, p.lng], { icon, interactive: false }).addTo(this.map);
+        m = L.marker([p.lat, p.lng], { icon, interactive: false, zIndexOffset: 500 }).addTo(this.map);
         this.otherMarkers.set(p.userId, m);
       } else {
         m.setLatLng([p.lat, p.lng]);

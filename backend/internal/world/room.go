@@ -34,6 +34,9 @@ const (
 	MaxDrops         = 40
 	DropRespawnEvery = 18 * time.Second
 	EventEvery       = 90 * time.Second
+	// PresenceTickHz: classic casual MMO-style snapshot rate (Gaffer / Gambetta).
+	// Clients send moves whenever; server broadcasts authoritative positions on a tick.
+	PresenceTick = 100 * time.Millisecond
 )
 
 type ItemDef struct {
@@ -194,6 +197,7 @@ type client struct {
 	lat      float64
 	lng      float64
 	lastMove time.Time
+	dirty    bool // moved since last presence tick
 }
 
 // Room is the single shared Phase 1 world instance.
@@ -223,7 +227,7 @@ func NewRoom(st *store.Store, allowedOrigins []string) *Room {
 		clients:    map[*client]struct{}{},
 		drops:      map[string]*Drop{},
 		origins:    origins,
-		broadcast:  make(chan []byte, 32),
+		broadcast:  make(chan []byte, 128),
 		register:   make(chan *client),
 		unregister: make(chan *client),
 	}
@@ -245,9 +249,13 @@ func NewRoom(st *store.Store, allowedOrigins []string) *Room {
 func (r *Room) Run(done <-chan struct{}) {
 	dropTick := time.NewTicker(DropRespawnEvery)
 	eventTick := time.NewTicker(EventEvery)
+	presenceTick := time.NewTicker(PresenceTick)
 	defer dropTick.Stop()
 	defer eventTick.Stop()
+	defer presenceTick.Stop()
+	r.mu.Lock()
 	r.ensureDropsLocked(12)
+	r.mu.Unlock()
 
 	for {
 		select {
@@ -261,11 +269,7 @@ func (r *Room) Run(done <-chan struct{}) {
 			r.mu.Unlock()
 			return
 		case c := <-r.register:
-			r.mu.Lock()
-			r.clients[c] = struct{}{}
-			r.mu.Unlock()
-			r.sendSnapshot(c)
-			r.broadcastPresence()
+			r.acceptClient(c)
 		case c := <-r.unregister:
 			r.mu.Lock()
 			if _, ok := r.clients[c]; ok {
@@ -275,15 +279,9 @@ func (r *Room) Run(done <-chan struct{}) {
 			r.mu.Unlock()
 			r.broadcastPresence()
 		case msg := <-r.broadcast:
-			r.mu.Lock()
-			for c := range r.clients {
-				select {
-				case c.send <- msg:
-				default:
-					go func(cl *client) { r.unregister <- cl }(c)
-				}
-			}
-			r.mu.Unlock()
+			r.fanout(msg)
+		case <-presenceTick.C:
+			r.tickPresence()
 		case <-dropTick.C:
 			r.mu.Lock()
 			before := len(r.drops)
@@ -296,6 +294,58 @@ func (r *Room) Run(done <-chan struct{}) {
 		case <-eventTick.C:
 			r.maybeSpawnEvent()
 		}
+	}
+}
+
+// acceptClient replaces any prior socket for the same user (one body in the world).
+func (r *Room) acceptClient(c *client) {
+	r.mu.Lock()
+	for old := range r.clients {
+		if old.userID == c.userID && old != c {
+			delete(r.clients, old)
+			close(old.send)
+			_ = old.conn.Close()
+		}
+	}
+	r.clients[c] = struct{}{}
+	r.mu.Unlock()
+	r.sendSnapshot(c)
+	r.broadcastPresence()
+}
+
+// fanout delivers without kicking slow clients — drop the frame instead (snapshot tick recovers).
+func (r *Room) fanout(msg []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for c := range r.clients {
+		select {
+		case c.send <- msg:
+		default:
+			// Slow consumer: skip this tick rather than disconnect (chat-hub kick pattern is wrong here).
+		}
+	}
+}
+
+func (r *Room) tickPresence() {
+	r.mu.Lock()
+	n := len(r.clients)
+	if n == 0 {
+		r.mu.Unlock()
+		return
+	}
+	dirty := false
+	for c := range r.clients {
+		if c.dirty {
+			dirty = true
+			c.dirty = false
+		}
+	}
+	players := r.playerListLocked()
+	r.mu.Unlock()
+	// With 2+ chasers, always tick so peers keep a live list even if a frame was dropped.
+	// Solo: only publish when someone moved/joined (join already does an immediate broadcast).
+	if n >= 2 || dirty {
+		r.publish(Envelope{Type: "presence", Players: players})
 	}
 }
 
@@ -320,13 +370,14 @@ func (r *Room) ServeWS(w http.ResponseWriter, req *http.Request) {
 	c := &client{
 		room:     r,
 		conn:     conn,
-		send:     make(chan []byte, 16),
+		send:     make(chan []byte, 64),
 		userID:   user.ID,
 		name:     user.ChaserName,
 		veh:      user.EquippedVehicleKey,
 		lat:      47.05,
 		lng:      -68.35,
 		lastMove: time.Now(),
+		dirty:    true,
 	}
 	r.register <- c
 	go c.writePump()
@@ -356,6 +407,7 @@ func (c *client) readPump() {
 		case "hello":
 			// First join / respawn: accept position (within bounds) so client/server stay aligned.
 			c.snapPosition(msg.Lat, msg.Lng)
+			c.dirty = true
 			c.room.broadcastPresence()
 		case "move":
 			c.handleMove(msg.Lat, msg.Lng)
@@ -397,6 +449,7 @@ func (c *client) snapPosition(lat, lng float64) {
 	c.lat = clamp(lat, Bounds.MinLat, Bounds.MaxLat)
 	c.lng = clamp(lng, Bounds.MinLng, Bounds.MaxLng)
 	c.lastMove = time.Now()
+	c.dirty = true
 }
 
 func (c *client) handleMove(lat, lng float64) {
@@ -420,7 +473,8 @@ func (c *client) handleMove(lat, lng float64) {
 	c.lat = clamp(lat, Bounds.MinLat, Bounds.MaxLat)
 	c.lng = clamp(lng, Bounds.MinLng, Bounds.MaxLng)
 	c.lastMove = now
-	c.room.broadcastPresence()
+	c.dirty = true
+	// Presence is broadcast on PresenceTick — not per move (avoids WS flood / dropped frames).
 }
 
 func (r *Room) handlePickup(c *client, dropID string, lat, lng float64) {
@@ -503,6 +557,7 @@ func (c *client) syncForAction(lat, lng float64) {
 	if dist <= 0.55 {
 		c.lat, c.lng = lat, lng
 		c.lastMove = time.Now()
+		c.dirty = true
 		return
 	}
 	c.handleMove(lat, lng)
