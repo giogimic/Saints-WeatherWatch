@@ -11,14 +11,27 @@ import (
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 )
 
+// UpdateHook is called after a successful live poll with the full snapshot and
+// any alerts that were not present in the previous snapshot (for WebSocket push).
+type UpdateHook func(live AlertsResponse, newAlerts []Alert)
+
 type Cache struct {
-	mu    sync.RWMutex
-	data  AlertsResponse
-	store *store.Store
+	mu       sync.RWMutex
+	data     AlertsResponse
+	prevIDs  map[string]struct{}
+	store    *store.Store
+	onUpdate UpdateHook
 }
 
 func NewCache(st *store.Store) *Cache {
-	return &Cache{store: st}
+	return &Cache{store: st, prevIDs: map[string]struct{}{}}
+}
+
+// OnUpdate registers a listener for live alert refreshes (e.g. WebSocket hub).
+func (c *Cache) OnUpdate(hook UpdateHook) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onUpdate = hook
 }
 
 func (c *Cache) Get() AlertsResponse {
@@ -75,9 +88,31 @@ func (c *Cache) update(ctx context.Context) {
 	}
 
 	c.mu.Lock()
+	prev := c.prevIDs
+	newOnes := make([]Alert, 0)
+	nextIDs := make(map[string]struct{}, len(bundle.Live.Alerts))
+	for _, a := range bundle.Live.Alerts {
+		nextIDs[a.ID] = struct{}{}
+		if prev != nil {
+			if _, seen := prev[a.ID]; !seen {
+				newOnes = append(newOnes, a)
+			}
+		}
+	}
+	// First successful poll seeds IDs without firing "new warning" spam.
+	if prev == nil || len(prev) == 0 {
+		newOnes = nil
+	}
 	c.data = bundle.Live
+	c.prevIDs = nextIDs
+	hook := c.onUpdate
 	c.mu.Unlock()
-	log.Printf("nws.Cache: live=%d archive-candidates=%d", len(bundle.Live.Alerts), len(bundle.ToArchive))
+
+	log.Printf("nws.Cache: live=%d new=%d archive-candidates=%d", len(bundle.Live.Alerts), len(newOnes), len(bundle.ToArchive))
+
+	if hook != nil {
+		hook(bundle.Live, newOnes)
+	}
 
 	if c.store != nil {
 		c.processIncidents(ctx, bundle.ToArchive)

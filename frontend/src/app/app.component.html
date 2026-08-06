@@ -20,12 +20,21 @@
     }
   </div>
   <div class="navbar-end">
-    <div class="badge badge-error gap-2 text-xs font-black p-3 border-2 border-error-content shadow-[2px_2px_0_0_rgba(69,44,99,1)] rounded-lg">
+    <div
+      class="badge gap-2 text-xs font-black p-3 border-2 rounded-lg"
+      [class.badge-error]="ops.wsConnected()"
+      [class.border-error-content]="ops.wsConnected()"
+      [class.badge-ghost]="!ops.wsConnected()"
+      [class.border-base-300]="!ops.wsConnected()"
+      [title]="ops.wsConnected() ? 'Live WebSocket connected' : 'Connecting / polling fallback'"
+    >
       <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-      LIVE
+      {{ ops.wsConnected() ? 'LIVE' : 'SYNC' }}
     </div>
   </div>
 </div>
+
+<app-alert-banner />
 
 <!-- Main content area -->
 <main class="pb-20 md:pb-0">
