@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/saints-weatherwatch/backend/internal/auth"
+	"github.com/saints-weatherwatch/backend/internal/cams"
 	"github.com/saints-weatherwatch/backend/internal/geo"
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/outages"
@@ -178,7 +179,7 @@ type matchedAlert struct {
 	Approximate bool `json:"approximate"`
 }
 
-func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache, outageCache *outages.Cache) http.HandlerFunc {
+func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache, outageCache *outages.Cache, camCache *cams.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		user, ok := auth.UserFromContext(r.Context())
@@ -207,6 +208,9 @@ func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache, outageCache *ou
 		}
 		if outageCache != nil {
 			res["outage"] = outageCache.CorrelateArea(area.Lat, area.Lon)
+		}
+		if camCache != nil {
+			res["cams"] = camCache.CamsNearPoint(area.Lat, area.Lon, float64(area.RadiusMiles))
 		}
 		_ = json.NewEncoder(w).Encode(res)
 	}

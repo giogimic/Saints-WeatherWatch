@@ -24,6 +24,14 @@ export interface CameraFeed {
   lng?: number;
   km?: number;
   category?: string;
+  health?: string;
+  lastUpdated?: string;
+  ageSec?: number;
+  blackFrame?: boolean;
+  corridorId?: string;
+  corridorLabel?: string;
+  nearAlertIds?: string[];
+  nearAlertCount?: number;
 }
 
 @Component({
@@ -39,7 +47,7 @@ export interface CameraFeed {
             Chaser Live
           </h1>
           <p class="text-base-content/60 text-sm font-semibold mt-1">
-            Northern Maine / St. John Valley · closest feeds first
+            Northern Maine / St. John Valley · health · corridors · closest first
           </p>
           <div class="mt-3 flex flex-wrap gap-2">
             <button
@@ -59,6 +67,23 @@ export interface CameraFeed {
               Collapse all
             </button>
           </div>
+          @if (nearWarningCams.length) {
+            <div class="mt-4 storm-card p-3 border-warning/40">
+              <div class="text-[10px] font-black uppercase tracking-widest text-warning mb-2">
+                Cams near active warnings · {{ nearWarningCams.length }}
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                @for (cam of nearWarningCams; track cam.id) {
+                  <button
+                    type="button"
+                    class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-9"
+                    [ngClass]="isOpen(cam.id) ? 'btn-warning' : 'btn-ghost border border-warning/40'"
+                    (click)="openCam(cam)"
+                  >{{ cam.title }} · {{ cam.nearAlertCount || 1 }}</button>
+                }
+              </div>
+            </div>
+          }
         </div>
 
         @if (loading) {
@@ -79,96 +104,30 @@ export interface CameraFeed {
               </span>
             </h2>
 
-            <div class="grid gap-3 md:grid-cols-2 items-start" [class.xl:grid-cols-3]="section.group === 'cams'">
-              @for (camera of getCamsByGroup(section.group); track camera.id) {
-                <article class="storm-card overflow-hidden self-start">
-                  <button
-                    type="button"
-                    class="w-full text-left p-4 min-h-14 flex items-center gap-3 hover:bg-white/5 transition-colors"
-                    (click)="toggleCamera(camera.id, section.group)"
-                    [attr.aria-expanded]="isOpen(camera.id)"
-                  >
-                    <span
-                      class="badge text-[10px] font-black uppercase border px-2 py-2 rounded-lg shrink-0"
-                      [ngClass]="statusClass(camera.status)"
-                    >{{ camera.status }}</span>
-                    <div class="flex-1 min-w-0">
-                      <h3 class="font-black font-sans text-white text-sm uppercase italic truncate">{{ camera.title }}</h3>
-                      <p class="text-[10px] text-base-content/50 font-bold truncate">{{ camera.region }} · {{ camera.attribution }}</p>
-                    </div>
-                    <span class="text-base-content/40 text-xs shrink-0 transition-transform" [class.rotate-180]="isOpen(camera.id)">▼</span>
-                  </button>
-
-                  <div class="feed-panel" [class.feed-panel-open]="isOpen(camera.id)">
-                    <div class="feed-panel-inner">
-                      <div class="px-4 pb-4">
-                        <p class="text-[11px] text-base-content/55 font-semibold mb-3">{{ camera.description }}</p>
-                        <div class="relative overflow-hidden rounded-xl border border-base-300 bg-base-300/40 min-h-[180px]">
-                          @if (isOpen(camera.id)) {
-                            @if (failedIds[camera.id]) {
-                              <div class="aspect-video flex items-center justify-center text-sm font-bold text-base-content/50">
-                                Feed offline
-                              </div>
-                            } @else if (camera.type === 'iframe' && camera.safeEmbedUrl) {
-                              <iframe
-                                class="aspect-video w-full"
-                                [src]="camera.safeEmbedUrl"
-                                [title]="camera.title"
-                                frameborder="0"
-                                loading="lazy"
-                                allow="autoplay; fullscreen"
-                                allowfullscreen
-                              ></iframe>
-                            } @else {
-                              @if (!loadedIds[camera.id]) {
-                                <div class="absolute inset-0 flex items-center justify-center text-[10px] uppercase tracking-widest font-bold text-base-content/40 animate-pulse">
-                                  Loading feed…
-                                </div>
-                              }
-                              <img
-                                class="aspect-video w-full object-cover"
-                                [class.opacity-0]="!loadedIds[camera.id]"
-                                [class.opacity-100]="loadedIds[camera.id]"
-                                [src]="feedSrc(camera)"
-                                [alt]="camera.title"
-                                loading="lazy"
-                                (load)="onFeedLoad(camera.id)"
-                                (error)="onFeedError(camera.id)"
-                              />
-                            }
-                            <div class="absolute bottom-1.5 right-1.5 bg-black/70 px-2 py-1 rounded-lg text-[9px] text-white font-bold uppercase tracking-wider backdrop-blur-sm pointer-events-none">
-                              {{ camera.attribution }}
-                            </div>
-                          }
-                        </div>
-                        <div class="mt-3 flex flex-wrap gap-2">
-                          @if (camera.lat && camera.lng) {
-                            <a
-                              class="btn btn-xs btn-ghost border border-base-300 rounded-lg font-black uppercase text-[10px] min-h-10"
-                              [routerLink]="['/map']"
-                              [queryParams]="{ cam: camera.id }"
-                              (click)="$event.stopPropagation()"
-                            >
-                              Show on map
-                            </a>
-                          }
-                          @if (camera.group === 'cams') {
-                            <button
-                              type="button"
-                              class="btn btn-xs rounded-lg font-black uppercase text-[10px] min-h-10"
-                              [ngClass]="isFavorite(camera.id) ? 'btn-secondary' : 'btn-ghost border border-base-300'"
-                              (click)="toggleFavorite(camera.id); $event.stopPropagation()"
-                            >
-                              {{ isFavorite(camera.id) ? '★ Favorited' : '☆ Favorite' }}
-                            </button>
-                          }
-                        </div>
-                      </div>
-                    </div>
+            @if (section.group === 'cams') {
+              @for (bucket of camCorridorSections; track bucket.id) {
+                <div class="mb-4">
+                  <h3 class="text-[11px] font-black uppercase tracking-widest text-sky-300/90 mb-2">
+                    {{ bucket.label }}
+                    <span class="text-base-content/40 font-bold normal-case tracking-normal">· {{ bucket.cams.length }}</span>
+                  </h3>
+                  <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3 items-start">
+                    @for (camera of bucket.cams; track camera.id) {
+                      <ng-container *ngTemplateOutlet="camCard; context: { $implicit: camera, grp: 'cams' }"></ng-container>
+                    }
                   </div>
-                </article>
+                </div>
               }
-            </div>
+              @if (!loading && getCamsByGroup('cams').length === 0) {
+                <div class="text-center py-8 text-base-content/50 font-bold">No road cams cached yet — try again in a minute.</div>
+              }
+            } @else {
+              <div class="grid gap-3 md:grid-cols-2 items-start">
+                @for (camera of getCamsByGroup(section.group); track camera.id) {
+                  <ng-container *ngTemplateOutlet="camCard; context: { $implicit: camera, grp: section.group }"></ng-container>
+                }
+              </div>
+            }
 
             @if (section.group === 'radar') {
               <article class="storm-card overflow-hidden mt-3">
@@ -199,12 +158,101 @@ export interface CameraFeed {
                 </div>
               </article>
             }
-
-            @if (!loading && section.group === 'cams' && getCamsByGroup('cams').length === 0) {
-              <div class="text-center py-8 text-base-content/50 font-bold">No road cams cached yet — try again in a minute.</div>
-            }
           </div>
         }
+
+        <ng-template #camCard let-camera let-grp="grp">
+          <article
+            class="storm-card overflow-hidden self-start"
+            [ngClass]="(camera.nearAlertCount || 0) > 0 ? 'ring-1 ring-warning/50' : ''"
+          >            <button
+              type="button"
+              class="w-full text-left p-4 min-h-14 flex items-center gap-3 hover:bg-white/5 transition-colors"
+              (click)="toggleCamera(camera.id, grp)"
+              [attr.aria-expanded]="isOpen(camera.id)"
+            >
+              <span
+                class="badge text-[10px] font-black uppercase border px-2 py-2 rounded-lg shrink-0"
+                [ngClass]="healthClass(camera)"
+              >{{ healthLabel(camera) }}</span>
+              <div class="flex-1 min-w-0">
+                <h3 class="font-black font-sans text-white text-sm uppercase italic truncate">{{ camera.title }}</h3>
+                <p class="text-[10px] text-base-content/50 font-bold truncate">
+                  {{ camera.corridorLabel || camera.region }} · {{ ageLabel(camera) }} · {{ camera.attribution }}
+                </p>
+              </div>
+              <span class="text-base-content/40 text-xs shrink-0 transition-transform" [class.rotate-180]="isOpen(camera.id)">▼</span>
+            </button>
+
+            <div class="feed-panel" [class.feed-panel-open]="isOpen(camera.id)">
+              <div class="feed-panel-inner">
+                <div class="px-4 pb-4">
+                  <p class="text-[11px] text-base-content/55 font-semibold mb-3">{{ camera.description }}</p>
+                  <div class="relative overflow-hidden rounded-xl border border-base-300 bg-base-300/40 min-h-[180px]">
+                    @if (isOpen(camera.id)) {
+                      @if (failedIds[camera.id]) {
+                        <div class="aspect-video flex items-center justify-center text-sm font-bold text-base-content/50">
+                          Feed offline
+                        </div>
+                      } @else if (camera.type === 'iframe' && camera.safeEmbedUrl) {
+                        <iframe
+                          class="aspect-video w-full"
+                          [src]="camera.safeEmbedUrl"
+                          [title]="camera.title"
+                          frameborder="0"
+                          loading="lazy"
+                          allow="autoplay; fullscreen"
+                          allowfullscreen
+                        ></iframe>
+                      } @else {
+                        @if (!loadedIds[camera.id]) {
+                          <div class="absolute inset-0 flex items-center justify-center text-[10px] uppercase tracking-widest font-bold text-base-content/40 animate-pulse">
+                            Loading feed…
+                          </div>
+                        }
+                        <img
+                          class="aspect-video w-full object-cover"
+                          [class.opacity-0]="!loadedIds[camera.id]"
+                          [class.opacity-100]="loadedIds[camera.id]"
+                          [src]="feedSrc(camera)"
+                          [alt]="camera.title"
+                          loading="lazy"
+                          (load)="onFeedLoad(camera.id)"
+                          (error)="onFeedError(camera.id)"
+                        />
+                      }
+                      <div class="absolute bottom-1.5 right-1.5 bg-black/70 px-2 py-1 rounded-lg text-[9px] text-white font-bold uppercase tracking-wider backdrop-blur-sm pointer-events-none">
+                        {{ camera.attribution }}
+                      </div>
+                    }
+                  </div>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    @if (camera.lat && camera.lng) {
+                      <a
+                        class="btn btn-xs btn-ghost border border-base-300 rounded-lg font-black uppercase text-[10px] min-h-10"
+                        [routerLink]="['/map']"
+                        [queryParams]="{ cam: camera.id }"
+                        (click)="$event.stopPropagation()"
+                      >
+                        Show on map
+                      </a>
+                    }
+                    @if (camera.group === 'cams') {
+                      <button
+                        type="button"
+                        class="btn btn-xs rounded-lg font-black uppercase text-[10px] min-h-10"
+                        [ngClass]="isFavorite(camera.id) ? 'btn-secondary' : 'btn-ghost border border-base-300'"
+                        (click)="toggleFavorite(camera.id); $event.stopPropagation()"
+                      >
+                        {{ isFavorite(camera.id) ? '★ Favorited' : '☆ Favorite' }}
+                      </button>
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </ng-template>
 
       </div>
     </div>
@@ -262,7 +310,7 @@ export class LiveComponent implements OnInit, OnDestroy {
     this.refreshTimer = setInterval(() => {
       this.currentTimestamp = Date.now();
     }, 60000);
-    this.listTimer = setInterval(() => this.loadCameras(), 5 * 60 * 1000);
+    this.listTimer = setInterval(() => this.loadCameras(), 2 * 60 * 1000);
 
     this.route.queryParamMap.subscribe(params => {
       const cam = params.get('cam');
@@ -275,6 +323,42 @@ export class LiveComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
     if (this.listTimer) clearInterval(this.listTimer);
+  }
+
+  get nearWarningCams(): CameraFeed[] {
+    return this.getCamsByGroup('cams')
+      .filter(c => (c.nearAlertCount || 0) > 0)
+      .sort((a, b) => (b.nearAlertCount || 0) - (a.nearAlertCount || 0));
+  }
+
+  get camCorridorSections(): { id: string; label: string; cams: CameraFeed[] }[] {
+    const order = [
+      'st-john',
+      'caribou',
+      'i95-north',
+      'nb-border',
+      'outer',
+      '',
+    ];
+    const buckets = new Map<string, { id: string; label: string; cams: CameraFeed[] }>();
+    for (const cam of this.getCamsByGroup('cams')) {
+      const id = cam.corridorId || 'outer';
+      const label = cam.corridorLabel || 'Outer corridor';
+      if (!buckets.has(id)) {
+        buckets.set(id, { id, label, cams: [] });
+      }
+      buckets.get(id)!.cams.push(cam);
+    }
+    const out: { id: string; label: string; cams: CameraFeed[] }[] = [];
+    for (const id of order) {
+      const b = buckets.get(id);
+      if (b?.cams.length) out.push(b);
+      buckets.delete(id);
+    }
+    for (const b of buckets.values()) {
+      if (b.cams.length) out.push(b);
+    }
+    return out;
   }
 
   loadCameras(): void {
@@ -315,6 +399,12 @@ export class LiveComponent implements OnInit, OnDestroy {
     }
   }
 
+  openCam(cam: CameraFeed): void {
+    this.openByGroup = { ...this.openByGroup, [cam.group]: cam.id };
+    this.failedIds = { ...this.failedIds, [cam.id]: false };
+    this.loadedIds = { ...this.loadedIds, [cam.id]: false };
+  }
+
   isOpen(cameraId: string): boolean {
     return Object.values(this.openByGroup).includes(cameraId);
   }
@@ -326,9 +416,7 @@ export class LiveComponent implements OnInit, OnDestroy {
   openNearest(): void {
     const nearest = this.getCamsByGroup('cams')[0];
     if (!nearest) return;
-    this.openByGroup = { ...this.openByGroup, cams: nearest.id };
-    this.failedIds = { ...this.failedIds, [nearest.id]: false };
-    this.loadedIds = { ...this.loadedIds, [nearest.id]: false };
+    this.openCam(nearest);
   }
 
   collapseAll(): void {
@@ -349,10 +437,41 @@ export class LiveComponent implements OnInit, OnDestroy {
     this.loadedIds = { ...this.loadedIds, [id]: true };
   }
 
-  statusClass(status: string): string {
-    return status === 'LIVE'
-      ? 'bg-error/20 text-error border-error/50'
-      : 'bg-warning/20 text-warning border-warning/50';
+  healthLabel(camera: CameraFeed): string {
+    const h = (camera.health || '').toLowerCase();
+    if (h === 'ok') return 'OK';
+    if (h === 'stale') return 'STALE';
+    if (h === 'black') return 'BLACK';
+    if (h === 'error') return 'ERROR';
+    if (h === 'pending') return 'PENDING';
+    return camera.status || '—';
+  }
+
+  healthClass(camera: CameraFeed): string {
+    const h = (camera.health || '').toLowerCase();
+    switch (h) {
+      case 'ok':
+        return 'bg-success/20 text-success border-success/50';
+      case 'stale':
+        return 'bg-warning/20 text-warning border-warning/50';
+      case 'black':
+      case 'error':
+        return 'bg-error/20 text-error border-error/50';
+      case 'pending':
+        return 'bg-base-content/10 text-base-content/60 border-base-300';
+      default:
+        return camera.status === 'LIVE'
+          ? 'bg-error/20 text-error border-error/50'
+          : 'bg-warning/20 text-warning border-warning/50';
+    }
+  }
+
+  ageLabel(camera: CameraFeed): string {
+    if (camera.ageSec == null || camera.ageSec <= 0) {
+      return camera.health === 'pending' ? 'no frame' : 'age —';
+    }
+    if (camera.ageSec < 90) return `${camera.ageSec}s`;
+    return `${Math.round(camera.ageSec / 60)}m`;
   }
 
   isFavorite(id: string): boolean {
@@ -370,8 +489,7 @@ export class LiveComponent implements OnInit, OnDestroy {
   private openRequestedCam(camId: string): void {
     const cam = this.cameras.find(c => c.id === camId);
     if (!cam) return;
-    this.openByGroup = { ...this.openByGroup, [cam.group]: cam.id };
-    // Soft-clear query after open so refresh doesn't force reopen awkwardly
+    this.openCam(cam);
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { cam: null },

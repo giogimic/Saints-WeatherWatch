@@ -9,6 +9,7 @@ import { OpsStateService } from '../../core/ops-state.service';
 import { vehicleSvg } from '../../core/vehicles';
 import {
   AreaOutageInfo,
+  CameraFeedDto,
   DashboardPrefs,
   VehicleDef,
   WatchedArea,
@@ -197,7 +198,7 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | '
                         </div>
                         @if (expandedId === area.id) {
                           <div class="text-[10px] font-bold uppercase tracking-wider text-accent">
-                            {{ expandedAlerts.length }} alert(s) in range
+                            {{ expandedAlerts.length }} alert(s) · {{ expandedCams.length }} cam(s) in range
                           </div>
                           @if (expandedOutage) {
                             <div class="text-[10px] font-semibold text-base-content/60">
@@ -206,6 +207,14 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | '
                                 {{ expandedOutage.metersOut | number }} meters out (ODIN)
                               } @else {
                                 no ODIN reporters for ME — check utility map
+                              }
+                            </div>
+                          }
+                          @if (expandedCams.length) {
+                            <div class="text-[10px] font-semibold text-base-content/55">
+                              Cams:
+                              @for (c of expandedCams.slice(0, 4); track c.id; let last = $last) {
+                                {{ c.title }}@if (!last){, }
                               }
                             </div>
                           }
@@ -260,6 +269,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   expandedId: string | null = null;
   expandedAlerts: WeatherAlert[] = [];
   expandedOutage: AreaOutageInfo | null = null;
+  expandedCams: CameraFeedDto[] = [];
 
   private map?: L.Map;
   private layer = L.layerGroup();
@@ -345,6 +355,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.expandedId = null;
         this.expandedAlerts = [];
         this.expandedOutage = null;
+        this.expandedCams = [];
       }
       this.ops.reloadAccountData();
       setTimeout(() => this.redrawMap(), 200);
@@ -356,12 +367,14 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.expandedId = null;
       this.expandedAlerts = [];
       this.expandedOutage = null;
+      this.expandedCams = [];
       return;
     }
     this.expandedId = area.id;
     this.weather.expandWatchedArea(area.id).subscribe(res => {
       this.expandedAlerts = res.alerts || [];
       this.expandedOutage = res.outage || null;
+      this.expandedCams = res.cams || [];
       this.map?.flyTo([area.lat, area.lon], 8, { duration: 0.6 });
     });
   }

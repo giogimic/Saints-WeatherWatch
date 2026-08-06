@@ -11,7 +11,7 @@ Storm World / game stays a separate labeled SIM layer.
 - [x] OutageSnapshot history table
 - [ ] Optional commercial outage GeoJSON (PowerOutage.us / Outage Pro) if ME stays dark on ODIN
 
-## Phase B — Radar systems — **in progress**
+## Phase B — Radar systems — **done**
 
 - [x] Multi-product radar: reflectivity / reflectivity HD / storm-relative velocity (RIDGE)
 - [x] Nearest NEXRAD (CBW) + scan-age / latency badge
@@ -19,11 +19,12 @@ Storm World / game stays a separate labeled SIM layer.
 - [x] Pair radar desk with ME outage delta from OutageSnapshot history
 - [ ] Optional single-site reflectivity RIDGE as fourth product
 
-## Phase C — Camera network
+## Phase C — Camera network — **in progress**
 
-- Cam health (last frame age, black-frame)
-- Group by corridor / watch zone; cams near active warning
-- Optional DOT / traffic public feeds
+- [x] Cam health (last frame age, black-frame, stale/error)
+- [x] Group by corridor (St. John / Caribou / I-95 / NB border)
+- [x] Cams near active warning (+ watched-area expand cams)
+- [x] DOT / traffic via existing OpenCCTV NE511 + NB sources (no new scrapers)
 
 ## Phase D — Multi-hazard
 
