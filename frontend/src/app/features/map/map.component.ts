@@ -106,108 +106,105 @@ const STORAGE_KEY = 'ww-map-view';
             }
           </div>
 
-          <!-- Discrete radar desk (bottom-right) -->
+          <!-- Left edge: layer toggles (desktop) — no bottom bar -->
+          <div class="hidden md:flex absolute top-1/2 -translate-y-1/2 left-2 z-[1000] flex-col gap-1 pointer-events-none max-h-[70%] overflow-y-auto pr-0.5">
+            <button
+              type="button"
+              class="pointer-events-auto btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8 w-[3.25rem] px-0 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
+              [ngClass]="ops.impactMode() ? 'btn-warning border-warning' : 'btn-ghost'"
+              (click)="toggleImpactMode()"
+              title="Focus warnings, outages, flood, cams"
+            >Imp</button>
+            @for (chip of layerChips; track chip.key) {
+              <button
+                type="button"
+                class="pointer-events-auto btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8 w-[3.25rem] px-0 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
+                [ngClass]="layers[chip.key] ? 'btn-primary' : 'btn-ghost'"
+                (click)="toggleLayer(chip.key)"
+                [title]="chip.label"
+              >{{ chip.short || chip.label }}</button>
+            }
+          </div>
+
+          <!-- Top-right edge: base map -->
+          <div class="hidden md:flex absolute top-3 right-3 z-[1000] flex-col gap-1 pointer-events-none">
+            @for (b of baseChips; track b.key) {
+              <button
+                type="button"
+                class="pointer-events-auto btn btn-xs rounded-lg font-bold uppercase tracking-wider min-h-8 h-8 px-2 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
+                [ngClass]="activeBase === b.key ? 'btn-secondary' : 'btn-ghost'"
+                (click)="setBase(b.key)"
+                [title]="b.label"
+              >{{ b.short || b.label }}</button>
+            }
+          </div>
+
+          <!-- Right edge: discrete radar product buttons (when radar layer on) -->
           @if (layers.radar) {
-            <div class="absolute bottom-16 md:bottom-4 right-3 z-[1000] w-[min(14.5rem,calc(100%-1.5rem))]">
-              <div class="rounded-xl border border-base-content/12 bg-base-300/60 backdrop-blur-md shadow-sm overflow-hidden">
-                @if (!radarDeskOpen) {
+            <div class="hidden md:flex absolute top-1/2 -translate-y-1/2 right-3 z-[1000] flex-col gap-1 items-end pointer-events-none">
+              <div class="pointer-events-none text-[8px] font-black uppercase tracking-widest text-sky-300/75 bg-base-300/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md border border-base-content/10 max-w-[4.5rem] truncate" [title]="radarSiteLabel + ' · ' + radarAgeLabel">
+                {{ radarSiteLabel }}
+              </div>
+              @for (p of radarProductChoices; track p.id) {
+                <button
+                  type="button"
+                  class="pointer-events-auto btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8 w-11 px-0 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
+                  [ngClass]="radarProduct === p.id ? 'btn-primary' : 'btn-ghost'"
+                  (click)="setRadarProduct(p.id)"
+                  [title]="p.label"
+                >{{ p.short }}</button>
+              }
+              <button
+                type="button"
+                class="pointer-events-auto btn btn-xs rounded-lg font-black uppercase min-h-8 h-8 w-11 px-0 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
+                [ngClass]="radarLooping ? 'btn-accent' : 'btn-ghost'"
+                (click)="toggleRadarLoop()"
+                [disabled]="!canLoop"
+                title="Radar loop"
+              >{{ radarLooping ? '||' : '▶' }}</button>
+              @if (radarFrames.length > 1) {
+                <div class="pointer-events-auto flex flex-col items-center gap-0.5 rounded-lg border border-base-content/12 bg-base-300/55 backdrop-blur-sm px-1 py-1.5 shadow-sm">
+                  <input
+                    type="range"
+                    class="range range-xs range-primary h-16 w-3 writing-vertical"
+                    style="writing-mode: vertical-lr; direction: rtl; width: 0.75rem; height: 4rem;"
+                    min="0"
+                    [max]="Math.max(radarFrames.length - 1, 0)"
+                    [(ngModel)]="radarFrameIndex"
+                    (ngModelChange)="onRadarFrameScrub()"
+                    [disabled]="radarFrames.length < 2"
+                    [title]="radarFrameLabel"
+                  >
+                  <span class="text-[8px] font-bold tabular-nums text-base-content/45">{{ radarFrameLabel }}</span>
+                </div>
+              }
+              @if (outagePairNote) {
+                <p class="pointer-events-none text-[8px] text-amber-200/70 font-semibold leading-snug max-w-[4.75rem] text-right line-clamp-3">{{ outagePairNote }}</p>
+              }
+            </div>
+
+            <!-- Mobile: compact radar strip above sheet handle -->
+            <div class="md:hidden absolute bottom-14 right-2 left-auto z-[1000] flex flex-col items-end gap-1">
+              <div class="flex gap-1 rounded-xl border border-base-content/12 bg-base-300/65 backdrop-blur-md p-1 shadow-sm">
+                @for (p of radarProductChoices; track p.id) {
                   <button
                     type="button"
-                    class="w-full text-left px-2.5 py-2 min-h-10 flex items-center gap-2 hover:bg-white/5 transition-colors"
-                    (click)="radarDeskOpen = true"
-                    title="Expand radar desk"
-                  >
-                    <span class="text-[9px] font-black uppercase tracking-widest text-sky-300/80 shrink-0">Radar</span>
-                    <span class="text-[10px] font-bold text-white/85 truncate flex-1">{{ radarSiteLabel }}</span>
-                    <span class="text-[9px] font-semibold tabular-nums text-base-content/45 shrink-0">{{ radarAgeLabel }}</span>
-                  </button>
-                } @else {
-                  <div class="p-2 space-y-1.5">
-                    <div class="flex items-start justify-between gap-1.5">
-                      <div class="min-w-0">
-                        <div class="text-[9px] font-black uppercase tracking-widest text-sky-300/80">Radar</div>
-                        <div class="text-[11px] font-bold text-white/90 truncate leading-tight">{{ radarSiteLabel }}</div>
-                        <div class="text-[9px] text-base-content/45 font-semibold tabular-nums">{{ radarAgeLabel }}</div>
-                      </div>
-                      <button
-                        type="button"
-                        class="btn btn-ghost btn-xs min-h-7 h-7 w-7 p-0 rounded-lg opacity-60 shrink-0"
-                        (click)="radarDeskOpen = false"
-                        aria-label="Collapse radar desk"
-                      >✕</button>
-                    </div>
-                    <div class="flex gap-0.5 flex-wrap">
-                      @for (p of radarProductChoices; track p.id) {
-                        <button
-                          type="button"
-                          class="btn btn-xs rounded-md font-black uppercase tracking-wider min-h-7 h-7 px-1.5 text-[9px]"
-                          [ngClass]="radarProduct === p.id ? 'btn-primary' : 'btn-ghost border border-base-content/15'"
-                          (click)="setRadarProduct(p.id)"
-                          [title]="p.label"
-                        >{{ p.short }}</button>
-                      }
-                    </div>
-                    <div class="flex items-center gap-1">
-                      <button
-                        type="button"
-                        class="btn btn-xs rounded-md font-black uppercase min-h-7 h-7 px-1.5 text-[9px]"
-                        [ngClass]="radarLooping ? 'btn-accent' : 'btn-ghost border border-base-content/15'"
-                        (click)="toggleRadarLoop()"
-                        [disabled]="!canLoop"
-                      >{{ radarLooping ? 'Pause' : 'Loop' }}</button>
-                      <input
-                        type="range"
-                        class="range range-xs range-primary flex-1 h-3"
-                        min="0"
-                        [max]="Math.max(radarFrames.length - 1, 0)"
-                        [(ngModel)]="radarFrameIndex"
-                        (ngModelChange)="onRadarFrameScrub()"
-                        [disabled]="radarFrames.length < 2"
-                      >
-                      <span class="text-[9px] font-bold tabular-nums text-base-content/45 w-10 text-right">{{ radarFrameLabel }}</span>
-                    </div>
-                    @if (outagePairNote) {
-                      <p class="text-[9px] text-amber-200/70 font-semibold leading-snug line-clamp-2">{{ outagePairNote }}</p>
-                    }
-                  </div>
+                    class="btn btn-xs rounded-md font-black uppercase min-h-8 h-8 px-1.5 text-[9px]"
+                    [ngClass]="radarProduct === p.id ? 'btn-primary' : 'btn-ghost border border-base-content/15'"
+                    (click)="setRadarProduct(p.id)"
+                    [title]="p.label"
+                  >{{ p.short }}</button>
                 }
+                <button
+                  type="button"
+                  class="btn btn-xs rounded-md font-black uppercase min-h-8 h-8 px-1.5 text-[9px]"
+                  [ngClass]="radarLooping ? 'btn-accent' : 'btn-ghost border border-base-content/15'"
+                  (click)="toggleRadarLoop()"
+                  [disabled]="!canLoop"
+                >{{ radarLooping ? '||' : 'Loop' }}</button>
               </div>
             </div>
           }
-
-          <!-- Desktop layer chips (left; leave room for radar desk) -->
-          <div class="hidden md:flex absolute bottom-4 left-4 z-[1000] flex-wrap gap-1.5 pointer-events-none max-w-[calc(100%-16rem)]">
-            <div class="pointer-events-auto rounded-xl border border-base-content/12 bg-base-300/60 backdrop-blur-md p-1.5 flex flex-wrap gap-1 max-w-full">
-              <button
-                type="button"
-                class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8"
-                [ngClass]="ops.impactMode() ? 'btn-warning' : 'btn-ghost border border-base-content/15'"
-                (click)="toggleImpactMode()"
-                title="Focus warnings, outages, flood, cams"
-              >Impact</button>
-              @for (chip of layerChips; track chip.key) {
-                <button
-                  type="button"
-                  class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8"
-                  [ngClass]="layers[chip.key] ? 'btn-primary' : 'btn-ghost border border-base-content/15'"
-                  (click)="toggleLayer(chip.key)"
-                >
-                  {{ chip.label }}
-                </button>
-              }
-              <div class="w-px bg-base-content/15 mx-0.5 self-stretch"></div>
-              @for (b of baseChips; track b.key) {
-                <button
-                  type="button"
-                  class="btn btn-xs rounded-lg font-bold uppercase tracking-wider min-h-8 h-8"
-                  [ngClass]="activeBase === b.key ? 'btn-secondary' : 'btn-ghost border border-base-content/15'"
-                  (click)="setBase(b.key)"
-                >
-                  {{ b.label }}
-                </button>
-              }
-            </div>
-          </div>
 
           <!-- Mobile sheet handle -->
           <button
@@ -438,7 +435,6 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   searchQuery = '';
   searchOpen = false;
-  radarDeskOpen = false;
   isSearching = false;
   searchError = '';
   @ViewChild('searchInput') searchInput?: ElementRef<HTMLInputElement>;
@@ -480,21 +476,21 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     quakes: true,
   };
 
-  layerChips: { key: LayerChip; label: string }[] = [
-    { key: 'radar', label: 'Radar' },
-    { key: 'warnings', label: 'Warnings' },
-    { key: 'lsr', label: 'Reports' },
-    { key: 'spc', label: 'SPC' },
-    { key: 'cams', label: 'Cams' },
-    { key: 'outages', label: 'Outages' },
-    { key: 'flood', label: 'Flood' },
-    { key: 'quakes', label: 'Quakes' },
+  layerChips: { key: LayerChip; label: string; short: string }[] = [
+    { key: 'radar', label: 'Radar', short: 'Rdr' },
+    { key: 'warnings', label: 'Warnings', short: 'Wrn' },
+    { key: 'lsr', label: 'Reports', short: 'Rpt' },
+    { key: 'spc', label: 'SPC', short: 'SPC' },
+    { key: 'cams', label: 'Cams', short: 'Cam' },
+    { key: 'outages', label: 'Outages', short: 'Out' },
+    { key: 'flood', label: 'Flood', short: 'Fld' },
+    { key: 'quakes', label: 'Quakes', short: 'Qke' },
   ];
 
-  baseChips: { key: BaseKey; label: string }[] = [
-    { key: 'street', label: 'Street' },
-    { key: 'dark', label: 'Dark' },
-    { key: 'imagery', label: 'Imagery' },
+  baseChips: { key: BaseKey; label: string; short: string }[] = [
+    { key: 'street', label: 'Street', short: 'St' },
+    { key: 'dark', label: 'Dark', short: 'Dk' },
+    { key: 'imagery', label: 'Imagery', short: 'Sat' },
   ];
 
   ngAfterViewInit(): void {

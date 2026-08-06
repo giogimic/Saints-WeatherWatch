@@ -1,7 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
+import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/auth.service';
 import { TradeListing, WorldItem, WorldRecipe, WorldService } from '../../../core/world.service';
 import { ItemIconComponent } from '../item-icon/item-icon.component';
@@ -9,48 +11,55 @@ import { ItemIconComponent } from '../item-icon/item-icon.component';
 type Overlay = 'none' | 'bag' | 'market';
 type MarketTab = 'buy' | 'sell';
 
+/** Play + Profile (dashboard) only — not global chrome. */
+const DOCK_PATHS = ['/play', '/dashboard'];
+
 @Component({
   selector: 'app-bag-market-dock',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, ItemIconComponent],
   template: `
-    @if (auth.isLoggedIn()) {
-      <div class="fixed z-[70] flex flex-col gap-2 items-end pointer-events-none
-                  bottom-24 right-3 md:bottom-6 md:right-5">
-        <div class="pointer-events-auto flex gap-2">
+    @if (showDock()) {
+      <div class="fixed z-[70] flex flex-col gap-1.5 items-start pointer-events-none
+                  bottom-[5.75rem] left-2 sm:left-3 md:bottom-6 md:left-5">
+        <div class="pointer-events-none text-[9px] sm:text-[10px] font-black tabular-nums text-amber-200/90 bg-black/50 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-lg border border-amber-700/40">
+          {{ credits() }} ₡
+        </div>
+        <div class="pointer-events-auto flex gap-1.5 sm:gap-2">
           <button
             type="button"
-            class="bag-fab storm-card flex flex-col items-center justify-center gap-0.5 w-[4.25rem] h-[4.25rem] rounded-2xl border-2 border-amber-700/60 bg-amber-950/90 text-amber-100 hover:bg-amber-900/90 transition-colors"
+            class="bag-fab storm-card flex flex-col items-center justify-center gap-0
+                   w-12 h-12 sm:w-14 sm:h-14 md:w-[4.25rem] md:h-[4.25rem]
+                   rounded-xl md:rounded-2xl border-2 border-amber-700/60 bg-amber-950/90 text-amber-100 hover:bg-amber-900/90 transition-colors"
             (click)="open('bag')"
             title="Bag"
           >
-            <svg viewBox="0 0 48 48" class="w-9 h-9" aria-hidden="true">
+            <svg viewBox="0 0 48 48" class="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9" aria-hidden="true">
               <path d="M12 18h24l-2 22H14z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
               <path d="M18 18c0-5 3-9 6-9s6 4 6 9" fill="none" stroke="currentColor" stroke-width="2.2"/>
               <ellipse cx="24" cy="18" rx="11" ry="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
               <circle cx="24" cy="28" r="5.5" fill="#1a1208" stroke="currentColor" stroke-width="1.6"/>
               <text x="24" y="31.2" text-anchor="middle" font-size="6.5" font-weight="800" fill="#f5d78e" font-family="serif">BAG</text>
             </svg>
-            <span class="text-[9px] font-black uppercase tracking-widest">Bag</span>
+            <span class="hidden md:inline text-[9px] font-black uppercase tracking-widest">Bag</span>
           </button>
 
           <button
             type="button"
-            class="bag-fab storm-card flex flex-col items-center justify-center gap-0.5 w-[4.25rem] h-[4.25rem] rounded-2xl border-2 border-sky-600/50 bg-slate-900/90 text-sky-100 hover:bg-slate-800/90 transition-colors"
+            class="bag-fab storm-card flex flex-col items-center justify-center gap-0
+                   w-12 h-12 sm:w-14 sm:h-14 md:w-[4.25rem] md:h-[4.25rem]
+                   rounded-xl md:rounded-2xl border-2 border-sky-600/50 bg-slate-900/90 text-sky-100 hover:bg-slate-800/90 transition-colors"
             (click)="open('market')"
             title="Storm Market"
           >
-            <svg viewBox="0 0 48 48" class="w-9 h-9" aria-hidden="true">
+            <svg viewBox="0 0 48 48" class="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9" aria-hidden="true">
               <path d="M8 20h32v18H8z" fill="none" stroke="currentColor" stroke-width="2.2"/>
               <path d="M6 20l6-8h24l6 8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
               <path d="M16 20v18M32 20v18M8 28h32" stroke="currentColor" stroke-width="1.5" opacity="0.7"/>
               <circle cx="24" cy="14" r="3" fill="currentColor"/>
             </svg>
-            <span class="text-[8px] font-black uppercase tracking-wider leading-tight text-center px-0.5">Storm Market</span>
+            <span class="hidden md:inline text-[8px] font-black uppercase tracking-wider leading-tight text-center px-0.5">Market</span>
           </button>
-        </div>
-        <div class="pointer-events-none text-[10px] font-black tabular-nums text-amber-200/90 bg-black/50 px-2 py-1 rounded-lg border border-amber-700/40">
-          {{ credits() }} ₡
         </div>
       </div>
     }
@@ -229,6 +238,22 @@ type MarketTab = 'buy' | 'sell';
 export class BagMarketDockComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
   private readonly world = inject(WorldService);
+  private readonly router = inject(Router);
+
+  private readonly path = toSignal(
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+      map(() => this.router.url.split('?')[0]),
+      startWith(this.router.url.split('?')[0]),
+    ),
+    { initialValue: this.router.url.split('?')[0] },
+  );
+
+  readonly showDock = computed(() => {
+    if (!this.auth.isLoggedIn()) return false;
+    const p = this.path() || '';
+    return DOCK_PATHS.some(base => p === base || p.startsWith(base + '/'));
+  });
 
   readonly overlay = signal<Overlay>('none');
   readonly marketTab = signal<MarketTab>('buy');
@@ -251,6 +276,14 @@ export class BagMarketDockComponent implements OnInit, OnDestroy {
   private names = new Map<string, string>();
   private recipes: WorldRecipe[] = [];
 
+  constructor() {
+    effect(() => {
+      if (!this.showDock() && this.overlay() !== 'none') {
+        this.close();
+      }
+    });
+  }
+
   ngOnInit(): void {
     this.world.getCatalog().subscribe(c => {
       this.catalog.set(c.items || []);
@@ -271,6 +304,7 @@ export class BagMarketDockComponent implements OnInit, OnDestroy {
   }
 
   open(kind: Overlay): void {
+    if (!this.showDock()) return;
     this.overlay.set(kind);
     this.msg.set('');
     this.reload();
