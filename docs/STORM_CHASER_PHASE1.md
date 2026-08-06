@@ -10,7 +10,7 @@ Goal: a **simple, synchronized, server-authoritative** shared world slice on the
 4. Inventory changes happen **only** in Go handlers / world room (Prisma `UserCollectible`).
 5. Never accept “I picked item X” payloads that invent keys/counts.
 
-Cheaters can still spoof position somewhat in Phase 1 (no full anti-teleport). Mitigations: max speed clamp, pickup radius, rate limits. Good enough for soft launch; harden later.
+Soft launch mitigations (extended in Phase 2): max speed clamp, pickup radius, pickup/event cooldowns, first-hello-only snap, action sync ≤ pickup radius. Not full physics anti-cheat.
 
 ## Phase 1 features
 
