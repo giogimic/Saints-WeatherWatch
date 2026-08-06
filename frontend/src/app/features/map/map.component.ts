@@ -5,10 +5,19 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import { Subscription } from 'rxjs';
 
-import { CameraFeedDto, SavedLocation, WeatherAlert, WeatherService } from '../../core/weather.service';
+import {
+  CameraFeedDto,
+  RadarProductDef,
+  RadarScan,
+  RadarStatus,
+  SavedLocation,
+  WeatherAlert,
+  WeatherService,
+} from '../../core/weather.service';
 
 type BaseKey = 'street' | 'dark' | 'imagery';
-type LayerChip = 'radar' | 'radarSharp' | 'warnings' | 'lsr' | 'spc' | 'cams' | 'outages';
+type LayerChip = 'radar' | 'warnings' | 'lsr' | 'spc' | 'cams' | 'outages';
+type RadarProductId = 'n0r' | 'n0q' | 'n0s';
 
 interface MapPersist {
   lat: number;
@@ -68,6 +77,54 @@ const STORAGE_KEY = 'ww-map-view';
               <p class="mt-1 text-error text-xs font-bold px-1">{{ searchError }}</p>
             }
           </div>
+
+          <!-- Radar status + loop HUD -->
+          @if (layers.radar) {
+            <div class="absolute top-16 left-3 right-3 md:right-auto md:w-[22rem] z-[1000]">
+              <div class="storm-card p-2.5 space-y-2">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="text-[10px] font-black uppercase tracking-widest text-sky-300">Radar desk</div>
+                    <div class="text-xs font-black text-white truncate">{{ radarSiteLabel }}</div>
+                    <div class="text-[10px] text-base-content/50 font-semibold tabular-nums">{{ radarAgeLabel }}</div>
+                  </div>
+                  <div class="flex gap-1 shrink-0">
+                    @for (p of radarProductChoices; track p.id) {
+                      <button
+                        type="button"
+                        class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-9"
+                        [ngClass]="radarProduct === p.id ? 'btn-primary' : 'btn-ghost border border-base-300'"
+                        (click)="setRadarProduct(p.id)"
+                        [title]="p.label"
+                      >{{ p.short }}</button>
+                    }
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    class="btn btn-xs rounded-lg font-black uppercase min-h-9"
+                    [ngClass]="radarLooping ? 'btn-accent' : 'btn-ghost border border-base-300'"
+                    (click)="toggleRadarLoop()"
+                    [disabled]="!canLoop"
+                  >{{ radarLooping ? 'Pause' : 'Loop' }}</button>
+                  <input
+                    type="range"
+                    class="range range-xs range-primary flex-1"
+                    min="0"
+                    [max]="Math.max(radarFrames.length - 1, 0)"
+                    [(ngModel)]="radarFrameIndex"
+                    (ngModelChange)="onRadarFrameScrub()"
+                    [disabled]="radarFrames.length < 2"
+                  >
+                  <span class="text-[10px] font-bold tabular-nums text-base-content/55 w-14 text-right">{{ radarFrameLabel }}</span>
+                </div>
+                @if (outagePairNote) {
+                  <p class="text-[10px] text-amber-200/80 font-semibold leading-snug">{{ outagePairNote }}</p>
+                }
+              </div>
+            </div>
+          }
 
           <!-- Desktop layer chips -->
           <div class="hidden md:flex absolute bottom-4 left-4 right-4 z-[1000] flex-wrap gap-1.5 pointer-events-none">
@@ -155,6 +212,31 @@ const STORAGE_KEY = 'ww-map-view';
       }
 
       <ng-template #sidePanel>
+        <article class="storm-card p-3 space-y-2">
+          <h2 class="text-xs font-black uppercase tracking-widest text-sky-300">Radar systems</h2>
+          <p class="text-[10px] text-base-content/45 font-semibold">
+            Multi-product IEM radar · nearest NEXRAD age · loop pairs with outage delta.
+          </p>
+          <div class="flex flex-wrap gap-1.5">
+            @for (p of radarProductChoices; track p.id) {
+              <button
+                type="button"
+                class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-9"
+                [ngClass]="radarProduct === p.id ? 'btn-primary' : 'btn-ghost border border-base-300'"
+                (click)="setRadarProduct(p.id)"
+              >{{ p.label }}</button>
+            }
+          </div>
+          <div class="rounded-lg border border-base-300/60 bg-base-200/40 px-2 py-1.5 text-[11px] font-semibold space-y-0.5">
+            <div><span class="text-base-content/45">Site</span> · {{ radarSiteLabel }}</div>
+            <div><span class="text-base-content/45">Scan age</span> · {{ radarAgeLabel }}</div>
+            <div class="text-base-content/55 text-[10px]">{{ radarSourceNote }}</div>
+          </div>
+          @if (outagePairNote) {
+            <p class="text-[10px] text-amber-200/80 font-semibold">{{ outagePairNote }}</p>
+          }
+        </article>
+
         <article class="storm-card p-3 space-y-2">
           <h2 class="text-xs font-black uppercase tracking-widest text-primary">Home base</h2>
           <p class="text-[10px] text-base-content/45 font-semibold">
@@ -276,11 +358,13 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private subs = new Subscription();
 
+  readonly Math = Math;
+
   private map?: L.Map;
   private searchMarker?: L.Marker;
   private baseLayers: Record<BaseKey, L.TileLayer> = {} as any;
-  private radarLayer?: L.TileLayer;
-  private radarSharpLayer?: L.TileLayer;
+  private radarTileLayer?: L.TileLayer.WMS;
+  private radarImageOverlay?: L.ImageOverlay;
   private warningsLayer?: L.TileLayer;
   private lsrLayer = L.layerGroup();
   private spcLayer = L.layerGroup();
@@ -289,6 +373,9 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private savedLayer = L.layerGroup();
   private camMarkers = new Map<string, L.Marker>();
   private savedMarkers = new Map<string, L.Marker>();
+  private radarLoopTimer?: ReturnType<typeof setInterval>;
+  private radarRefreshTimer?: ReturnType<typeof setInterval>;
+  private radarProducts: RadarProductDef[] = [];
 
   searchQuery = '';
   isSearching = false;
@@ -302,9 +389,26 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   newPinLabel = 'Home base';
   savingPin = false;
 
+  radarProduct: RadarProductId = 'n0q';
+  radarStatus: RadarStatus | null = null;
+  radarFrames: RadarScan[] = [];
+  radarFrameIndex = 0;
+  radarLooping = false;
+  radarSiteLabel = 'Nearest NEXRAD…';
+  radarAgeLabel = 'Scan age —';
+  radarSourceNote = 'IEM NEXRAD / RIDGE';
+  radarFrameLabel = 'live';
+  outagePairNote = '';
+  canLoop = false;
+
+  radarProductChoices: { id: RadarProductId; label: string; short: string }[] = [
+    { id: 'n0r', label: 'Reflectivity', short: 'Ref' },
+    { id: 'n0q', label: 'Reflectivity HD', short: 'HD' },
+    { id: 'n0s', label: 'Velocity (SR)', short: 'Vel' },
+  ];
+
   layers: Record<LayerChip, boolean> = {
     radar: true,
-    radarSharp: false,
     warnings: true,
     lsr: true,
     spc: false,
@@ -314,7 +418,6 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   layerChips: { key: LayerChip; label: string }[] = [
     { key: 'radar', label: 'Radar' },
-    { key: 'radarSharp', label: 'Radar+' },
     { key: 'warnings', label: 'Warnings' },
     { key: 'lsr', label: 'Reports' },
     { key: 'spc', label: 'SPC' },
@@ -339,6 +442,11 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       for (const key of Object.keys(this.layers) as LayerChip[]) {
         this.layers[key] = saved.layers.includes(key);
       }
+      // Migrate pre–Phase B Radar+ preference to HD reflectivity product.
+      if ((saved.layers as string[]).includes('radarSharp')) {
+        this.layers.radar = true;
+        this.radarProduct = 'n0q';
+      }
     }
 
     this.map = L.map('maine-map', {
@@ -362,22 +470,6 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     );
     this.baseLayers[this.activeBase].addTo(this.map);
 
-    this.radarLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi', {
-      layers: 'nexrad-n0r-900913',
-      format: 'image/png',
-      transparent: true,
-      attribution: 'IEM NEXRAD',
-      opacity: 0.55,
-    } as any);
-
-    this.radarSharpLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0q.cgi', {
-      layers: 'nexrad-n0q-900913',
-      format: 'image/png',
-      transparent: true,
-      attribution: 'IEM NEXRAD n0q',
-      opacity: 0.55,
-    } as any);
-
     this.warningsLayer = L.tileLayer.wms(
       'https://mapservices.weather.noaa.gov/eventdriven/services/WWA/watch_warn_adv/MapServer/WMSServer',
       {
@@ -400,6 +492,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     this.loadNearbyAlerts();
     this.loadSavedLocations();
     this.loadOutages();
+    this.loadRadarDesk();
+    this.radarRefreshTimer = setInterval(() => this.loadRadarDesk(true), 60_000);
 
     this.subs.add(
       this.route.queryParamMap.subscribe(params => {
@@ -428,14 +522,51 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subs.unsubscribe();
+    this.stopRadarLoop();
+    if (this.radarRefreshTimer) clearInterval(this.radarRefreshTimer);
     this.persistView();
     this.map?.remove();
   }
 
   toggleLayer(key: LayerChip): void {
     this.layers = { ...this.layers, [key]: !this.layers[key] };
+    if (key === 'radar') {
+      if (this.layers.radar) this.applyRadarFrame();
+      else {
+        this.stopRadarLoop();
+        this.clearRadarOverlay();
+      }
+    }
     this.applyLayerVisibility();
     this.persistView();
+  }
+
+  setRadarProduct(id: RadarProductId): void {
+    if (this.radarProduct === id) return;
+    this.radarProduct = id;
+    this.stopRadarLoop();
+    this.radarFrameIndex = 0;
+    this.loadRadarFrames().then(() => this.applyRadarFrame());
+  }
+
+  toggleRadarLoop(): void {
+    if (!this.canLoop) return;
+    if (this.radarLooping) {
+      this.stopRadarLoop();
+      return;
+    }
+    if (this.radarFrames.length < 2) return;
+    this.radarLooping = true;
+    this.radarLoopTimer = setInterval(() => {
+      if (!this.radarFrames.length) return;
+      this.radarFrameIndex = (this.radarFrameIndex + 1) % this.radarFrames.length;
+      this.applyRadarFrame();
+    }, 700);
+  }
+
+  onRadarFrameScrub(): void {
+    if (this.radarLooping) this.stopRadarLoop();
+    this.applyRadarFrame();
   }
 
   setBase(key: BaseKey): void {
@@ -525,8 +656,14 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       if (on && !this.map!.hasLayer(layer)) layer.addTo(this.map!);
       if (!on && this.map!.hasLayer(layer)) this.map!.removeLayer(layer);
     };
-    sync(this.radarLayer, this.layers.radar);
-    sync(this.radarSharpLayer, this.layers.radarSharp);
+    if (!this.layers.radar) {
+      this.clearRadarOverlay();
+    } else if (!this.radarTileLayer && !this.radarImageOverlay) {
+      this.applyRadarFrame();
+    } else {
+      sync(this.radarTileLayer, true);
+      sync(this.radarImageOverlay, true);
+    }
     sync(this.warningsLayer, this.layers.warnings);
     sync(this.lsrLayer, this.layers.lsr);
     sync(this.spcLayer, this.layers.spc);
@@ -580,7 +717,201 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  private loadSavedLocations(): void {
+  private loadRadarDesk(quiet = false): void {
+    const center = this.map?.getCenter();
+    const lat = center?.lat ?? DEFAULT_CENTER[0];
+    const lon = center?.lng ?? DEFAULT_CENTER[1];
+    this.subs.add(
+      this.weather.getRadarStatus(lat, lon).subscribe(status => {
+        if (!status) {
+          if (!quiet) {
+            this.radarSiteLabel = 'Radar metadata unavailable';
+            this.radarAgeLabel = 'Scan age —';
+          }
+          return;
+        }
+        this.radarStatus = status;
+        this.radarProducts = status.products || [];
+        this.radarSourceNote = status.sourceNote || 'IEM NEXRAD / RIDGE';
+        if (status.nearest) {
+          const km = status.nearest.distanceKm != null
+            ? ` · ${Math.round(status.nearest.distanceKm)} km`
+            : '';
+          this.radarSiteLabel = `${status.nearest.id} ${status.nearest.name}${km}`;
+        } else {
+          this.radarSiteLabel = 'Composite only';
+        }
+        if (status.latestScan?.ageSeconds != null) {
+          const mins = Math.max(0, Math.round(status.latestScan.ageSeconds / 60));
+          this.radarAgeLabel = mins <= 1
+            ? 'Scan age ~1 min'
+            : `Scan age ~${mins} min · ${status.latestScan.ts}`;
+        } else {
+          this.radarAgeLabel = 'Scan age unknown';
+        }
+        const pair = status.outagePair;
+        if (pair) {
+          const delta = pair.deltaMeters;
+          const deltaTxt = typeof delta === 'number'
+            ? (delta > 0 ? `+${delta}` : `${delta}`)
+            : '—';
+          this.outagePairNote = `Outage pair · ME ${pair.maineMetersOut ?? 0} m (Δ ${deltaTxt}). ${pair.note || ''}`.trim();
+        } else {
+          this.outagePairNote = '';
+        }
+        this.loadRadarFrames().then(() => {
+          if (this.layers.radar) this.applyRadarFrame();
+        });
+      })
+    );
+  }
+
+  private loadRadarFrames(): Promise<void> {
+    const def = this.currentRadarProduct();
+    if (!def) {
+      this.radarFrames = [];
+      this.canLoop = false;
+      return Promise.resolve();
+    }
+    return new Promise(resolve => {
+      this.weather.getRadarScans(def.scanRadar, def.scanProduct, 2).subscribe(res => {
+        this.radarFrames = res?.scans?.length ? res.scans : [];
+        this.canLoop = !!(def.loopSupported && this.radarFrames.length >= 2);
+        if (this.radarFrameIndex >= this.radarFrames.length) {
+          this.radarFrameIndex = Math.max(0, this.radarFrames.length - 1);
+        }
+        if (!this.radarLooping && this.radarFrames.length) {
+          this.radarFrameIndex = this.radarFrames.length - 1;
+        }
+        resolve();
+      });
+    });
+  }
+
+  private currentRadarProduct(): RadarProductDef | undefined {
+    const fromApi = this.radarProducts.find(p => p.id === this.radarProduct);
+    if (fromApi) return fromApi;
+    // Fallback defs if status not loaded yet
+    const fallbacks: Record<RadarProductId, RadarProductDef> = {
+      n0r: {
+        id: 'n0r', label: 'Reflectivity', kind: 'wms', blurb: '',
+        wms: 'https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi',
+        layer: 'nexrad-n0r-900913',
+        loopWms: 'https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r-t.cgi',
+        loopLayer: 'nexrad-n0r-wmst',
+        loopSupported: true, scanRadar: 'USCOMP', scanProduct: 'N0R', attribution: 'IEM NEXRAD n0r',
+      },
+      n0q: {
+        id: 'n0q', label: 'Reflectivity HD', kind: 'wms', blurb: '',
+        wms: 'https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0q.cgi',
+        layer: 'nexrad-n0q-900913',
+        loopWms: 'https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0q-t.cgi',
+        loopLayer: 'nexrad-n0q-wmst',
+        loopSupported: true, scanRadar: 'USCOMP', scanProduct: 'N0Q', attribution: 'IEM NEXRAD n0q',
+      },
+      n0s: {
+        id: 'n0s', label: 'Velocity (SR)', kind: 'ridge', blurb: '',
+        loopSupported: true, scanRadar: 'CBW', scanProduct: 'N0S', ridgeProduct: 'N0S',
+        ridgeUrl: 'https://mesonet.agron.iastate.edu/data/gis/images/4326/ridge/CBW/N0S_0.png',
+        bounds: { south: 40.069, west: -73.776, north: 52.009, east: -61.836 },
+        attribution: 'IEM RIDGE N0S',
+      },
+    };
+    return fallbacks[this.radarProduct];
+  }
+
+  private applyRadarFrame(): void {
+    if (!this.map || !this.layers.radar) return;
+    const def = this.currentRadarProduct();
+    if (!def) return;
+    const frame = this.radarFrames[this.radarFrameIndex];
+    const looping = this.radarLooping || (frame && this.radarFrameIndex < this.radarFrames.length - 1);
+
+    if (def.kind === 'ridge') {
+      this.clearRadarTile();
+      const url = (looping && frame?.ridgeUrl)
+        ? frame.ridgeUrl
+        : (def.ridgeUrl || frame?.ridgeUrl);
+      const b = def.bounds;
+      if (!url || !b) return;
+      const bounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
+      if (this.radarImageOverlay) {
+        this.radarImageOverlay.setUrl(url);
+        this.radarImageOverlay.setBounds(bounds);
+        if (!this.map.hasLayer(this.radarImageOverlay)) {
+          this.radarImageOverlay.addTo(this.map);
+        }
+      } else {
+        this.radarImageOverlay = L.imageOverlay(url, bounds, { opacity: 0.65, interactive: false });
+        this.radarImageOverlay.addTo(this.map);
+      }
+    } else {
+      this.clearRadarImage();
+      const useLoop = !!(looping && def.loopSupported && frame?.wmsTime && def.loopWms && def.loopLayer);
+      const wmsUrl = useLoop ? def.loopWms! : def.wms!;
+      const layerName = useLoop ? def.loopLayer! : def.layer!;
+      const params: Record<string, string> = {
+        layers: layerName,
+        format: 'image/png',
+        transparent: 'true',
+      };
+      if (useLoop && frame?.wmsTime) {
+        params['time'] = frame.wmsTime;
+      }
+      if (
+        this.radarTileLayer &&
+        (this.radarTileLayer as any)._url === wmsUrl
+      ) {
+        this.radarTileLayer.setParams(params as any);
+      } else {
+        this.clearRadarTile();
+        this.radarTileLayer = L.tileLayer.wms(wmsUrl, {
+          layers: layerName,
+          format: 'image/png',
+          transparent: true,
+          attribution: def.attribution,
+          opacity: 0.55,
+          ...(useLoop && frame?.wmsTime ? { time: frame.wmsTime } : {}),
+        } as any);
+        this.radarTileLayer.addTo(this.map);
+      }
+    }
+
+    if (frame?.ts) {
+      this.radarFrameLabel = frame.ts.replace('T', ' ').replace('Z', 'Z');
+    } else {
+      this.radarFrameLabel = 'live';
+    }
+  }
+
+  private stopRadarLoop(): void {
+    this.radarLooping = false;
+    if (this.radarLoopTimer) {
+      clearInterval(this.radarLoopTimer);
+      this.radarLoopTimer = undefined;
+    }
+  }
+
+  private clearRadarOverlay(): void {
+    this.clearRadarTile();
+    this.clearRadarImage();
+  }
+
+  private clearRadarTile(): void {
+    if (this.radarTileLayer && this.map) {
+      this.map.removeLayer(this.radarTileLayer);
+    }
+    this.radarTileLayer = undefined;
+  }
+
+  private clearRadarImage(): void {
+    if (this.radarImageOverlay && this.map) {
+      this.map.removeLayer(this.radarImageOverlay);
+    }
+    this.radarImageOverlay = undefined;
+  }
+
+    private loadSavedLocations(): void {
     this.subs.add(
       this.weather.getSavedLocations().subscribe(rows => {
         this.savedLocations = rows || [];

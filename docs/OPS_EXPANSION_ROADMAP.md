@@ -3,7 +3,7 @@
 Phased plan (A→F) for expanding Saints Weather Watch ops capabilities.
 Storm World / game stays a separate labeled SIM layer.
 
-## Phase A — Impact desk (outages) — **in progress**
+## Phase A — Impact desk (outages) — **done**
 
 - [x] ODIN public county/state outage poll + ME county grid
 - [x] Map Outages layer + overview badge + utility links
@@ -11,12 +11,13 @@ Storm World / game stays a separate labeled SIM layer.
 - [x] OutageSnapshot history table
 - [ ] Optional commercial outage GeoJSON (PowerOutage.us / Outage Pro) if ME stays dark on ODIN
 
-## Phase B — Radar systems
+## Phase B — Radar systems — **in progress**
 
-- Multi-product radar (reflectivity / velocity where available)
-- Nearest NEXRAD + age/latency badge
-- Loop / timelapse control
-- Pair radar with outage delta
+- [x] Multi-product radar: reflectivity / reflectivity HD / storm-relative velocity (RIDGE)
+- [x] Nearest NEXRAD (CBW) + scan-age / latency badge
+- [x] Loop / timelapse (IEM WMS-T for composites; RIDGE archive for velocity)
+- [x] Pair radar desk with ME outage delta from OutageSnapshot history
+- [ ] Optional single-site reflectivity RIDGE as fourth product
 
 ## Phase C — Camera network
 
