@@ -65,6 +65,7 @@ export interface WorldEnvelope {
   players?: WorldPlayer[];
   drops?: WorldDrop[];
   dropId?: string;
+  itemKey?: string;
   event?: WorldEvent;
   toast?: string;
 }
@@ -78,10 +79,16 @@ export class WorldService {
   readonly event = signal<WorldEvent | null>(null);
   readonly toast = signal('');
   readonly connected = signal(false);
+  /** Latest successful server bag (for UI). */
+  readonly lastBag = signal<{ seq: number; itemKey: string; dropId?: string } | null>(null);
 
   private socket?: WebSocket;
   private intentionalClose = false;
   private toastTimer?: ReturnType<typeof setTimeout>;
+  private lastLat = 47.05;
+  private lastLng = -68.35;
+  private lastMoveSent = 0;
+  private bagSeq = 0;
 
   getCatalog(): Observable<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number> }> {
     return this.http.get<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number> }>('/api/world/catalog').pipe(
@@ -124,9 +131,16 @@ export class WorldService {
     );
   }
 
-  connectWorld(): void {
+  connectWorld(lat?: number, lng?: number): void {
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      this.lastLat = lat;
+      this.lastLng = lng;
+    }
     this.intentionalClose = false;
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      if (this.socket.readyState === WebSocket.OPEN) {
+        this.send({ type: 'hello', lat: this.lastLat, lng: this.lastLng });
+      }
       return;
     }
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -134,7 +148,7 @@ export class WorldService {
     this.socket = ws;
     ws.onopen = () => {
       this.connected.set(true);
-      this.send({ type: 'hello', lat: 47.05, lng: -68.35 });
+      this.send({ type: 'hello', lat: this.lastLat, lng: this.lastLng });
     };
     ws.onmessage = (ev) => {
       try {
@@ -162,15 +176,24 @@ export class WorldService {
   }
 
   sendMove(lat: number, lng: number): void {
+    this.lastLat = lat;
+    this.lastLng = lng;
+    const now = Date.now();
+    if (now - this.lastMoveSent < 80) return;
+    this.lastMoveSent = now;
     this.send({ type: 'move', lat, lng });
   }
 
-  sendPickup(dropId: string): void {
-    this.send({ type: 'pickup', dropId });
+  sendPickup(dropId: string, lat: number, lng: number): void {
+    this.lastLat = lat;
+    this.lastLng = lng;
+    this.send({ type: 'pickup', dropId, lat, lng });
   }
 
-  sendEventPlace(eventId: string): void {
-    this.send({ type: 'event_place', eventId });
+  sendEventPlace(eventId: string, lat: number, lng: number): void {
+    this.lastLat = lat;
+    this.lastLng = lng;
+    this.send({ type: 'event_place', eventId, lat, lng });
   }
 
   private send(payload: Record<string, unknown>): void {
@@ -195,8 +218,18 @@ export class WorldService {
     if (env.type === 'event_done') {
       this.event.set(null);
       if (env.toast) this.flash(env.toast);
+      if (env.itemKey) {
+        this.bagSeq += 1;
+        this.lastBag.set({ seq: this.bagSeq, itemKey: env.itemKey, dropId: env.dropId });
+      }
     }
-    if (env.type === 'toast' && env.toast) this.flash(env.toast);
+    if (env.type === 'toast' && env.toast) {
+      this.flash(env.toast);
+      if (env.itemKey && (env.toast.startsWith('Bagged ') || env.toast.startsWith('Event secured'))) {
+        this.bagSeq += 1;
+        this.lastBag.set({ seq: this.bagSeq, itemKey: env.itemKey, dropId: env.dropId });
+      }
+    }
   }
 
   private flash(msg: string): void {

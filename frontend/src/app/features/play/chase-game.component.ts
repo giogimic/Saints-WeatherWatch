@@ -31,9 +31,8 @@ interface DropMarker {
 const CENTER: [number, number] = [47.05, -68.35];
 /** Expanded Maine / St. John Valley corridor (matches server world.Bounds). */
 const BOUNDS = { minLat: 44.6, maxLat: 47.5, minLng: -71.2, maxLng: -66.9 };
-const RUN_SECONDS = 90;
 const MOVE_SPEED = 0.14;
-const PICKUP_DIST = 0.04;
+const PICKUP_DIST = 0.055;
 const DROP_COUNT = 7;
 
 const LOOT_META: Record<string, { name: string; rarity: string; weight: number }> = {
@@ -115,7 +114,7 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
             <div>
               <p class="text-sm font-black text-white italic">{{ vehicleLabel }}</p>
               <p class="text-xs text-base-content/55 font-semibold">
-                {{ RUN_SECONDS }}s · full Maine corridor · live radar
+                Open drive · full Maine corridor · live radar
                 @if (auth.isLoggedIn()) {
                   · shared multiplayer world
                 }
@@ -155,9 +154,11 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
 
           <div class="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-start gap-2 pointer-events-none">
             <div class="pointer-events-none storm-card px-3 py-2 text-xs font-black uppercase tracking-wider">
-              <span class="text-primary">{{ timeLeft }}s</span>
-              <span class="text-base-content/40 mx-2">·</span>
               <span class="text-accent">{{ bagged.length }} bagged</span>
+              @if (worldMode && world.connected()) {
+                <span class="text-base-content/40 mx-2">·</span>
+                <span class="text-primary">live</span>
+              }
             </div>
             @if (toast) {
               <div class="storm-card px-3 py-2 text-xs font-black uppercase tracking-wider text-secondary">
@@ -279,14 +280,11 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   readonly auth = inject(AuthService);
   private readonly weather = inject(WeatherService);
-  private readonly world = inject(WorldService);
+  readonly world = inject(WorldService);
   private readonly sanitizer = inject(DomSanitizer);
-
-  readonly RUN_SECONDS = RUN_SECONDS;
 
   phase: ChasePhase = 'ready';
   immersive = false;
-  timeLeft = RUN_SECONDS;
   bagged: string[] = [];
   toast = '';
   lastAward: QuizAward | null = null;
@@ -295,6 +293,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   vehicleLabel = 'Starter Chase Car';
   stickKnobX = 0;
   stickKnobY = 0;
+  worldMode = false;
 
   private map?: L.Map;
   private playerMarker?: L.Marker;
@@ -302,7 +301,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private drops: DropMarker[] = [];
   private lat = CENTER[0];
   private lng = CENTER[1];
-  private timer?: ReturnType<typeof setInterval>;
   private toastTimer?: ReturnType<typeof setTimeout>;
   private startedAt = 0;
 
@@ -319,10 +317,12 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private otherMarkers = new Map<string, L.Marker>();
   private worldDropMarkers = new Map<string, L.Marker>();
   private eventMarker?: L.Marker;
-  worldMode = false;
   private syncTimer?: ReturnType<typeof setInterval>;
   private pendingPickups = new Map<string, string>();
+  private inflightPickups = new Set<string>();
+  private inflightEvent = false;
   private lastWorldToast = '';
+  private lastBagSeq = 0;
 
   ngAfterViewInit(): void {
     this.refreshVehicle();
@@ -330,7 +330,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopLoop();
-    this.clearTimer();
     this.stopWorldSync();
     this.destroyMap();
     this.keys.clear();
@@ -403,7 +402,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   startRun(preferFullscreen = false): void {
     this.refreshVehicle();
     this.phase = 'running';
-    this.timeLeft = RUN_SECONDS;
     this.bagged = [];
     this.toast = '';
     this.lastAward = null;
@@ -413,7 +411,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.lat = CENTER[0] + (Math.random() - 0.5) * 0.1;
     this.lng = CENTER[1] + (Math.random() - 0.5) * 0.1;
     this.startedAt = Date.now();
-    this.clearTimer();
     this.stopLoop();
 
     if (preferFullscreen) {
@@ -423,15 +420,19 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.stickRadius = (this.immersive || this.isMobile()) ? 44 : 36;
     this.worldMode = this.auth.isLoggedIn();
     this.pendingPickups.clear();
+    this.inflightPickups.clear();
+    this.inflightEvent = false;
     this.lastWorldToast = '';
+    this.lastBagSeq = 0;
     if (this.worldMode) {
-      this.world.connectWorld();
+      this.world.connectWorld(this.lat, this.lng);
     }
 
     setTimeout(() => {
       this.ensureMap();
       if (this.worldMode) {
         this.clearDrops();
+        this.world.connectWorld(this.lat, this.lng);
         this.startWorldSync();
       } else {
         this.spawnDrops();
@@ -439,17 +440,12 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       this.placePlayer();
       this.startLoop();
       this.map?.invalidateSize();
-      this.timer = setInterval(() => {
-        this.timeLeft -= 1;
-        if (this.timeLeft <= 0) this.endRun();
-      }, 1000);
     }, 60);
   }
 
   endRun(): void {
     if (this.phase !== 'running') return;
     this.stopLoop();
-    this.clearTimer();
     this.stopWorldSync();
     this.resetStick();
     this.keys.clear();
@@ -473,7 +469,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   }
 
   promptSave(): void {
-    this.auth.pendingChase = { items: [...this.bagged], seconds: Math.max(1, RUN_SECONDS - this.timeLeft) };
+    this.auth.pendingChase = {
+      items: [...this.bagged],
+      seconds: Math.max(1, Math.round((Date.now() - this.startedAt) / 1000)),
+    };
     this.auth.openModal('signup');
   }
 
@@ -694,34 +693,46 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     if (t && t !== this.lastWorldToast) {
       this.lastWorldToast = t;
       this.showToast(t);
-      if (t.startsWith('Bagged ')) {
-        for (const [id, key] of this.pendingPickups) {
-          if (!this.world.drops().some(d => d.id === id)) {
-            this.pendingPickups.delete(id);
-            if (this.bagged.length < 12) this.bagged = [...this.bagged, key];
-            break;
-          }
-        }
-      }
     } else if (!t) {
       this.lastWorldToast = '';
+    }
+
+    const bag = this.world.lastBag();
+    if (bag && bag.seq !== this.lastBagSeq) {
+      this.lastBagSeq = bag.seq;
+      if (bag.dropId) {
+        this.inflightPickups.delete(bag.dropId);
+        this.pendingPickups.delete(bag.dropId);
+      }
+      if (bag.itemKey && this.bagged.length < 24) {
+        this.bagged = [...this.bagged, bag.itemKey];
+      }
     }
   }
 
   private tryWorldPickups(): void {
     for (const d of this.world.drops()) {
-      if (Math.hypot(d.lat - this.lat, d.lng - this.lng) <= PICKUP_DIST) {
-        this.pendingPickups.set(d.id, d.itemKey);
-        this.world.sendPickup(d.id);
-      }
+      if (this.inflightPickups.has(d.id)) continue;
+      if (Math.hypot(d.lat - this.lat, d.lng - this.lng) > PICKUP_DIST) continue;
+      this.inflightPickups.add(d.id);
+      this.pendingPickups.set(d.id, d.itemKey);
+      this.world.sendPickup(d.id, this.lat, this.lng);
+      // Safety: allow retry if server never answers (e.g. too-far then drive closer).
+      setTimeout(() => {
+        if (this.inflightPickups.has(d.id) && this.world.drops().some(x => x.id === d.id)) {
+          this.inflightPickups.delete(d.id);
+        }
+      }, 2000);
     }
   }
 
   private tryEventPlace(): void {
     const ev = this.world.event();
-    if (!ev?.active) return;
+    if (!ev?.active || this.inflightEvent) return;
     if (Math.hypot(ev.lat - this.lat, ev.lng - this.lng) <= PICKUP_DIST * 1.4) {
-      this.world.sendEventPlace(ev.id);
+      this.inflightEvent = true;
+      this.world.sendEventPlace(ev.id, this.lat, this.lng);
+      setTimeout(() => { this.inflightEvent = false; }, 2500);
     }
   }
 
@@ -853,11 +864,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private clearDrops(): void {
     for (const d of this.drops) d.marker.remove();
     this.drops = [];
-  }
-
-  private clearTimer(): void {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = undefined;
   }
 
   private showToast(msg: string): void {

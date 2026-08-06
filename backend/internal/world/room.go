@@ -29,8 +29,8 @@ var Bounds = struct{ MinLat, MaxLat, MinLng, MaxLng float64 }{
 }
 
 const (
-	PickupRadiusDeg  = 0.04
-	MaxMoveDegPerSec = 0.25
+	PickupRadiusDeg  = 0.06
+	MaxMoveDegPerSec = 0.35
 	MaxDrops         = 40
 	DropRespawnEvery = 18 * time.Second
 	EventEvery       = 90 * time.Second
@@ -170,6 +170,7 @@ type Envelope struct {
 	Players []Player  `json:"players,omitempty"`
 	Drops   []Drop    `json:"drops,omitempty"`
 	DropID  string    `json:"dropId,omitempty"`
+	ItemKey string    `json:"itemKey,omitempty"`
 	Event   *SimEvent `json:"event,omitempty"`
 	Toast   string    `json:"toast,omitempty"`
 	You     *Player   `json:"you,omitempty"`
@@ -352,12 +353,16 @@ func (c *client) readPump() {
 			continue
 		}
 		switch msg.Type {
-		case "hello", "move":
+		case "hello":
+			// First join / respawn: accept position (within bounds) so client/server stay aligned.
+			c.snapPosition(msg.Lat, msg.Lng)
+			c.room.broadcastPresence()
+		case "move":
 			c.handleMove(msg.Lat, msg.Lng)
 		case "pickup":
-			c.room.handlePickup(c, msg.DropID)
+			c.room.handlePickup(c, msg.DropID, msg.Lat, msg.Lng)
 		case "event_place":
-			c.room.handleEventPlace(c, msg.EventID)
+			c.room.handleEventPlace(c, msg.EventID, msg.Lat, msg.Lng)
 		}
 	}
 }
@@ -388,10 +393,16 @@ func (c *client) writePump() {
 	}
 }
 
+func (c *client) snapPosition(lat, lng float64) {
+	c.lat = clamp(lat, Bounds.MinLat, Bounds.MaxLat)
+	c.lng = clamp(lng, Bounds.MinLng, Bounds.MaxLng)
+	c.lastMove = time.Now()
+}
+
 func (c *client) handleMove(lat, lng float64) {
 	now := time.Now()
 	dt := now.Sub(c.lastMove).Seconds()
-	if dt < 0.05 {
+	if dt < 0.04 {
 		return
 	}
 	if dt > 2 {
@@ -412,15 +423,21 @@ func (c *client) handleMove(lat, lng float64) {
 	c.room.broadcastPresence()
 }
 
-func (r *Room) handlePickup(c *client, dropID string) {
+func (r *Room) handlePickup(c *client, dropID string, lat, lng float64) {
 	if c.userID == "" || dropID == "" || r.st == nil {
 		return
 	}
+	// Align server pos with client before the distance check (soft anti-desync).
+	if lat != 0 || lng != 0 {
+		c.syncForAction(lat, lng)
+	}
+
 	r.mu.Lock()
 	d, ok := r.drops[dropID]
 	if !ok {
 		r.mu.Unlock()
-		r.toast(c, "That drop is gone.")
+		// Already claimed (often by *this* client's spam) — stay silent so it
+		// doesn't look like another player stole the drop.
 		return
 	}
 	if math.Hypot(d.Lat-c.lat, d.Lng-c.lng) > PickupRadiusDeg {
@@ -429,10 +446,12 @@ func (r *Room) handlePickup(c *client, dropID string) {
 		return
 	}
 	itemKey := d.ItemKey
+	name := d.Name
 	delete(r.drops, dropID)
 	r.mu.Unlock()
 
-	if !GrantStackOK(r.st, context.Background(), c.userID, itemKey, 1) {
+	if err := GrantStack(r.st, context.Background(), c.userID, itemKey, 1); err != nil {
+		log.Printf("world.pickup grant failed user=%s item=%s: %v", c.userID, itemKey, err)
 		r.mu.Lock()
 		r.drops[dropID] = d // rollback into world
 		r.mu.Unlock()
@@ -441,17 +460,19 @@ func (r *Room) handlePickup(c *client, dropID string) {
 		return
 	}
 	r.publish(Envelope{Type: "drop_gone", DropID: dropID})
-	r.toast(c, "Bagged "+d.Name)
+	r.toastBag(c, "Bagged "+name, dropID, itemKey)
 	r.broadcastDrops()
 }
 
-func (r *Room) handleEventPlace(c *client, eventID string) {
+func (r *Room) handleEventPlace(c *client, eventID string, lat, lng float64) {
+	if lat != 0 || lng != 0 {
+		c.syncForAction(lat, lng)
+	}
 	r.mu.Lock()
 	ev := r.event
 	if ev == nil || !ev.Active || ev.ID != eventID {
 		r.mu.Unlock()
-		r.toast(c, "Event already claimed or expired.")
-		return
+		return // silent — already claimed
 	}
 	if math.Hypot(ev.Lat-c.lat, ev.Lng-c.lng) > PickupRadiusDeg*1.4 {
 		r.mu.Unlock()
@@ -464,9 +485,27 @@ func (r *Room) handleEventPlace(c *client, eventID string) {
 	r.event = ev
 	r.mu.Unlock()
 
-	_ = GrantStack(r.st, context.Background(), c.userID, reward, 1)
-	r.publish(Envelope{Type: "event_done", Event: ev, Toast: c.name + " secured: " + label})
-	r.toast(c, "Event secured — reward bagged.")
+	if err := GrantStack(r.st, context.Background(), c.userID, reward, 1); err != nil {
+		log.Printf("world.event grant failed user=%s item=%s: %v", c.userID, reward, err)
+		r.toast(c, "Could not bag event reward.")
+		return
+	}
+	r.publish(Envelope{Type: "event_done", Event: ev, Toast: c.name + " secured: " + label, ItemKey: reward})
+	r.toastBag(c, "Event secured — reward bagged.", eventID, reward)
+}
+
+// syncForAction lets the client catch the server up within a soft radius so
+// pickups aren't rejected purely from move-message lag.
+func (c *client) syncForAction(lat, lng float64) {
+	lat = clamp(lat, Bounds.MinLat, Bounds.MaxLat)
+	lng = clamp(lng, Bounds.MinLng, Bounds.MaxLng)
+	dist := math.Hypot(lat-c.lat, lng-c.lng)
+	if dist <= 0.55 {
+		c.lat, c.lng = lat, lng
+		c.lastMove = time.Now()
+		return
+	}
+	c.handleMove(lat, lng)
 }
 
 func (r *Room) maybeSpawnEvent() {
@@ -556,7 +595,11 @@ func (r *Room) dropListLocked() []Drop {
 }
 
 func (r *Room) toast(c *client, msg string) {
-	if b, err := json.Marshal(Envelope{Type: "toast", Toast: msg}); err == nil {
+	r.toastBag(c, msg, "", "")
+}
+
+func (r *Room) toastBag(c *client, msg, dropID, itemKey string) {
+	if b, err := json.Marshal(Envelope{Type: "toast", Toast: msg, DropID: dropID, ItemKey: itemKey}); err == nil {
 		select {
 		case c.send <- b:
 		default:
