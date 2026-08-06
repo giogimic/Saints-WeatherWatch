@@ -16,7 +16,7 @@ import {
 } from '../../core/weather.service';
 
 type BaseKey = 'street' | 'dark' | 'imagery';
-type LayerChip = 'radar' | 'warnings' | 'lsr' | 'spc' | 'cams' | 'outages';
+type LayerChip = 'radar' | 'warnings' | 'lsr' | 'spc' | 'cams' | 'outages' | 'flood' | 'quakes';
 type RadarProductId = 'n0r' | 'n0q' | 'n0s';
 
 interface MapPersist {
@@ -41,7 +41,7 @@ const STORAGE_KEY = 'ww-map-view';
       <div class="hidden md:block max-w-7xl mx-auto w-full px-2">
         <h1 class="text-3xl font-black text-white italic uppercase tracking-wider font-sans">Storm Map</h1>
         <p class="text-base-content/55 text-sm font-semibold mt-0.5">
-          Northern Maine / St. John Valley · radar, hazards, reports, outages, live cams
+          Northern Maine / St. John Valley · radar, flood, quakes, outages, cams
         </p>
       </div>
 
@@ -370,6 +370,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private spcLayer = L.layerGroup();
   private camsLayer = L.layerGroup();
   private outagesLayer = L.layerGroup();
+  private floodLayer = L.layerGroup();
+  private quakesLayer = L.layerGroup();
   private savedLayer = L.layerGroup();
   private camMarkers = new Map<string, L.Marker>();
   private savedMarkers = new Map<string, L.Marker>();
@@ -414,6 +416,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     spc: false,
     cams: true,
     outages: true,
+    flood: true,
+    quakes: true,
   };
 
   layerChips: { key: LayerChip; label: string }[] = [
@@ -423,6 +427,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     { key: 'spc', label: 'SPC' },
     { key: 'cams', label: 'Cams' },
     { key: 'outages', label: 'Outages' },
+    { key: 'flood', label: 'Flood' },
+    { key: 'quakes', label: 'Quakes' },
   ];
 
   baseChips: { key: BaseKey; label: string }[] = [
@@ -492,6 +498,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     this.loadNearbyAlerts();
     this.loadSavedLocations();
     this.loadOutages();
+    this.loadHazards();
     this.loadRadarDesk();
     this.radarRefreshTimer = setInterval(() => this.loadRadarDesk(true), 60_000);
 
@@ -669,6 +676,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     sync(this.spcLayer, this.layers.spc);
     sync(this.camsLayer, this.layers.cams);
     sync(this.outagesLayer, this.layers.outages);
+    sync(this.floodLayer, this.layers.flood);
+    sync(this.quakesLayer, this.layers.quakes);
     sync(this.savedLayer, true);
   }
 
@@ -975,6 +984,63 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
         const camQ = this.route.snapshot.queryParamMap.get('cam');
         if (camQ) this.focusCam(camQ, true);
+      })
+    );
+  }
+
+  private loadHazards(): void {
+    this.subs.add(
+      this.weather.getHazardsGeo().subscribe(geo => {
+        this.floodLayer.clearLayers();
+        this.quakesLayer.clearLayers();
+        if (!geo) {
+          this.applyLayerVisibility();
+          return;
+        }
+        L.geoJSON(geo as any, {
+          pointToLayer: (feature, latlng) => {
+            const p = feature.properties || {};
+            const kind = String(p['kind'] || '');
+            if (kind === 'flood') {
+              const sev = String(p['severity'] || 'info');
+              const color = sev === 'major' || sev === 'moderate' ? '#2563eb'
+                : sev === 'minor' || sev === 'action' ? '#38bdf8'
+                : '#64748b';
+              const r = sev === 'info' || sev === 'unknown' ? 6 : 9;
+              return L.circleMarker(latlng, {
+                radius: r,
+                color: '#e0f2fe',
+                fillColor: color,
+                fillOpacity: 0.85,
+                weight: 1,
+              });
+            }
+            const mag = Number(p['magnitude'] || 0);
+            const color = mag >= 3.5 ? '#ef4444' : mag >= 3 ? '#f97316' : '#a855f7';
+            return L.circleMarker(latlng, {
+              radius: Math.max(5, Math.min(14, 4 + mag * 2)),
+              color: '#fce7f3',
+              fillColor: color,
+              fillOpacity: 0.85,
+              weight: 1,
+            });
+          },
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties || {};
+            const kind = String(p['kind'] || '');
+            const extra = kind === 'flood'
+              ? `Stage ${p['stage'] ?? '—'} ${p['stageUnit'] || 'ft'}`
+              : `M${p['magnitude'] ?? '—'} · depth ${p['depthKm'] ?? '—'} km`;
+            layer.bindPopup(
+              `<strong>${p['headline'] || kind}</strong><br>` +
+                `<span style="font-size:11px">${extra}</span><br>` +
+                `<span style="font-size:10px;opacity:.7">${p['source'] || ''} · ${p['severity'] || ''}</span>`
+            );
+            if (kind === 'flood') layer.addTo(this.floodLayer);
+            else if (kind === 'quake') layer.addTo(this.quakesLayer);
+          },
+        });
+        this.applyLayerVisibility();
       })
     );
   }

@@ -110,6 +110,7 @@ Long-term vision (grain of salt — do not rewrite the ops app to chase it):
 - **SPC** — day-1 categorical outlook GeoJSON
 - **NOAA Event-Driven WMS** — watch/warning polygons
 - **ODIN (ORNL)** — public power outage estimates (`/api/outages`); ME county grid + Versant/CMP links when ODIN has no Maine reporters
+- **NOAA NWPS / AHPS** — corridor flood gauges (`/api/hazards`); USGS Earthquake Hazards for regional quakes
 - **GOES / FAA / regional cams** — via backend `/api/cams` proxy (health, corridors, near-warnings)
 - **OpenStreetMap / CARTO / Esri** — map basemaps
 

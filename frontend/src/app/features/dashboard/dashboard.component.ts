@@ -11,6 +11,8 @@ import {
   AreaOutageInfo,
   CameraFeedDto,
   DashboardPrefs,
+  HazardAreaInfo,
+  HazardIncident,
   VehicleDef,
   WatchedArea,
   WeatherAlert,
@@ -218,6 +220,15 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | '
                               }
                             </div>
                           }
+                          @if (expandedHazards) {
+                            <div class="text-[10px] font-semibold text-base-content/55">
+                              Hazards · flood action {{ expandedHazards.floodActionable || 0 }} ·
+                              quakes {{ expandedHazards.quakeCount || 0 }}
+                            </div>
+                            @for (h of hazardPreview; track h.id) {
+                              <div class="text-[10px] font-semibold text-base-content/50 truncate">{{ h.headline }}</div>
+                            }
+                          }
                           <ul class="space-y-1">
                             @for (al of expandedAlerts.slice(0, 6); track al.id) {
                               <li class="text-xs font-semibold text-base-content/70">
@@ -270,6 +281,12 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   expandedAlerts: WeatherAlert[] = [];
   expandedOutage: AreaOutageInfo | null = null;
   expandedCams: CameraFeedDto[] = [];
+  expandedHazards: HazardAreaInfo | null = null;
+
+  get hazardPreview(): HazardIncident[] {
+    if (!this.expandedHazards) return [];
+    return [...(this.expandedHazards.flood || []), ...(this.expandedHazards.quakes || [])].slice(0, 4);
+  }
 
   private map?: L.Map;
   private layer = L.layerGroup();
@@ -356,6 +373,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.expandedAlerts = [];
         this.expandedOutage = null;
         this.expandedCams = [];
+        this.expandedHazards = null;
       }
       this.ops.reloadAccountData();
       setTimeout(() => this.redrawMap(), 200);
@@ -368,6 +386,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.expandedAlerts = [];
       this.expandedOutage = null;
       this.expandedCams = [];
+      this.expandedHazards = null;
       return;
     }
     this.expandedId = area.id;
@@ -375,6 +394,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.expandedAlerts = res.alerts || [];
       this.expandedOutage = res.outage || null;
       this.expandedCams = res.cams || [];
+      this.expandedHazards = res.hazards || null;
       this.map?.flyTo([area.lat, area.lon], 8, { duration: 0.6 });
     });
   }

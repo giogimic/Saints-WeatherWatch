@@ -20,6 +20,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/outages"
 	"github.com/saints-weatherwatch/backend/internal/radar"
+	"github.com/saints-weatherwatch/backend/internal/hazards"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	"github.com/saints-weatherwatch/backend/internal/world"
 	"github.com/saints-weatherwatch/backend/internal/ws"
@@ -83,6 +84,9 @@ func main() {
 
 	radarCache := radar.NewCache(cfg.UserAgent)
 
+	hazardCache := hazards.NewCache(cfg.UserAgent)
+	hazardCache.Start(bgCtx, 10*time.Minute)
+
 	// WebSocket stays outside Timeout middleware so long-lived connections work.
 	serveWS := func(w http.ResponseWriter, r *http.Request) {
 		hub.ServeHTTP(w, r, nwsCache.Get)
@@ -94,7 +98,7 @@ func main() {
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(60 * time.Second))
-		api.Mount(r, st, nwsCache, camCache, worldHub, outageCache, radarCache)
+		api.Mount(r, st, nwsCache, camCache, worldHub, outageCache, radarCache, hazardCache)
 	})
 
 	srv := &http.Server{

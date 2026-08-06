@@ -19,18 +19,21 @@ Storm World / game stays a separate labeled SIM layer.
 - [x] Pair radar desk with ME outage delta from OutageSnapshot history
 - [ ] Optional single-site reflectivity RIDGE as fourth product
 
-## Phase C — Camera network — **in progress**
+## Phase C — Camera network — **done**
 
 - [x] Cam health (last frame age, black-frame, stale/error)
 - [x] Group by corridor (St. John / Caribou / I-95 / NB border)
 - [x] Cams near active warning (+ watched-area expand cams)
 - [x] DOT / traffic via existing OpenCCTV NE511 + NB sources (no new scrapers)
 
-## Phase D — Multi-hazard
+## Phase D — Multi-hazard — **in progress**
 
-- Flood gauges (USGS / AHPS)
-- Fire/smoke, quake (USGS), winter roads, marine as feeds allow
-- Shared Incident model (`kind` + source + lat/lon)
+- [x] Shared live `Incident` model (`kind` + source + lat/lon)
+- [x] Flood gauges via NOAA NWPS/AHPS (St. John / Aroostook corridor)
+- [x] Quakes via USGS FDSN (M≥2.5, 7d, ME bbox)
+- [x] Map Flood / Quakes layers + overview badges + watched-area correlate
+- [ ] Fire/smoke when a stable open feed is available
+- [ ] Winter roads / marine as feeds allow
 
 ## Phase E — Product surfaces
 
