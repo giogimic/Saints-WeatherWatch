@@ -39,4 +39,10 @@ type AlertsResponse struct {
 	GeneratedAt string       `json:"generatedAt"`
 	Alerts      []Alert      `json:"alerts"`
 	History     []HistoryLog `json:"history"`
+	// Phase F freshness
+	FetchedAt     string `json:"fetchedAt,omitempty"`
+	AgeSec        int    `json:"ageSec,omitempty"`
+	StaleAfterSec int    `json:"staleAfterSec,omitempty"`
+	Stale         bool   `json:"stale,omitempty"`
+	LastError     string `json:"lastError,omitempty"`
 }

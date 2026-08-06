@@ -19,16 +19,22 @@ type Incident struct {
 
 // Snapshot is the cached multi-hazard desk payload.
 type Snapshot struct {
-	GeneratedAt      string     `json:"generatedAt"`
-	SourceNote       string     `json:"sourceNote"`
-	FloodActionable  int        `json:"floodActionable"`
-	FloodGaugeCount  int        `json:"floodGaugeCount"`
-	QuakeCount       int        `json:"quakeCount"`
-	FireCount        int        `json:"fireCount"`
-	Incidents        []Incident `json:"incidents"`
-	Flood            []Incident `json:"flood"`
-	Quakes           []Incident `json:"quakes"`
-	Fire             []Incident `json:"fire"`
+	GeneratedAt     string     `json:"generatedAt"`
+	SourceNote      string     `json:"sourceNote"`
+	FloodActionable int        `json:"floodActionable"`
+	FloodGaugeCount int        `json:"floodGaugeCount"`
+	QuakeCount      int        `json:"quakeCount"`
+	FireCount       int        `json:"fireCount"`
+	Incidents       []Incident `json:"incidents"`
+	Flood           []Incident `json:"flood"`
+	Quakes          []Incident `json:"quakes"`
+	Fire            []Incident `json:"fire"`
+	// Phase F freshness
+	FetchedAt     string `json:"fetchedAt,omitempty"`
+	AgeSec        int    `json:"ageSec,omitempty"`
+	StaleAfterSec int    `json:"staleAfterSec,omitempty"`
+	Stale         bool   `json:"stale,omitempty"`
+	LastError     string `json:"lastError,omitempty"`
 }
 
 // Corridor focus — Northern Maine / St. John Valley.

@@ -13,4 +13,4 @@ Phase D (#15) merged. Continue A→F with Phase E on `giogimic/ops-phase-e-impac
 alerts 40 · outage 25 · cams 20 · flood 15 (no ME ODIN inflation when uncovered)
 
 ## Next
-- Phase F reliability (stale banners, attribution, rate limits)
+Ops A→F complete (see Phase F log).

@@ -49,6 +49,10 @@ export interface CameraFeed {
           <p class="text-base-content/60 text-sm font-semibold mt-1">
             Northern Maine / St. John Valley · health · corridors · closest first
           </p>
+          <p class="text-[10px] text-base-content/45 font-semibold mt-2 max-w-2xl leading-relaxed"
+            [title]="ops.policyNote() || 'Official/licensed feeds only'">
+            {{ ops.attribution() }}
+          </p>
           <div class="mt-3 flex flex-wrap gap-2">
             <button
               type="button"

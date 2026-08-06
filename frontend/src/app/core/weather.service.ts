@@ -69,10 +69,30 @@ export interface ChaseLogEntry {
   createdAt: string;
 }
 
+export interface FeedFreshness {
+  fetchedAt?: string;
+  ageSec?: number;
+  staleAfterSec?: number;
+  stale?: boolean;
+  lastError?: string;
+}
+
+export interface OverviewFreshness {
+  alerts: FeedFreshness;
+  outages: FeedFreshness;
+  hazards: FeedFreshness;
+  anyStale: boolean;
+}
+
 export interface WeatherAlertsResponse {
   generatedAt: string;
   alerts: WeatherAlert[];
   history: WeatherHistoryEntry[];
+  fetchedAt?: string;
+  ageSec?: number;
+  staleAfterSec?: number;
+  stale?: boolean;
+  lastError?: string;
 }
 
 export interface WeatherOverviewResponse {
@@ -92,6 +112,9 @@ export interface WeatherOverviewResponse {
   floodGaugeCount?: number;
   quakeCount?: number;
   hazardNote?: string;
+  freshness?: OverviewFreshness;
+  attribution?: string;
+  policyNote?: string;
 }
 
 export interface OutageCounty {
@@ -116,6 +139,12 @@ export interface OutageSnapshot {
   maine: OutageCounty[];
   nearby: OutageCounty[];
   utilityLinks: { name: string; url: string; blurb: string }[];
+  fetchedAt?: string;
+  ageSec?: number;
+  staleAfterSec?: number;
+  stale?: boolean;
+  lastError?: string;
+  policyNote?: string;
 }
 
 export interface AreaOutageInfo {

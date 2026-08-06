@@ -46,18 +46,25 @@ type StateOutage struct {
 
 // Snapshot is the API payload for impact desk.
 type Snapshot struct {
-	GeneratedAt     string         `json:"generatedAt"`
-	Source          string         `json:"source"`
-	SourceNote      string         `json:"sourceNote"`
-	MaineCovered    bool           `json:"maineCovered"`
-	MaineMetersOut  int            `json:"maineMetersOut"`
-	MaineCountiesOut int           `json:"maineCountiesOut"`
-	NationalMetersOut int          `json:"nationalMetersOut"`
-	UtilityReporters int           `json:"utilityReporters"`
-	Maine           []CountyOutage `json:"maine"`
-	Nearby          []CountyOutage `json:"nearby"` // NE counties with ODIN data
-	States          []StateOutage  `json:"states"`
-	UtilityLinks    []UtilityLink  `json:"utilityLinks"`
+	GeneratedAt       string         `json:"generatedAt"`
+	Source            string         `json:"source"`
+	SourceNote        string         `json:"sourceNote"`
+	MaineCovered      bool           `json:"maineCovered"`
+	MaineMetersOut    int            `json:"maineMetersOut"`
+	MaineCountiesOut  int            `json:"maineCountiesOut"`
+	NationalMetersOut int            `json:"nationalMetersOut"`
+	UtilityReporters  int            `json:"utilityReporters"`
+	Maine             []CountyOutage `json:"maine"`
+	Nearby            []CountyOutage `json:"nearby"` // NE counties with ODIN data
+	States            []StateOutage  `json:"states"`
+	UtilityLinks      []UtilityLink  `json:"utilityLinks"`
+	// Phase F freshness
+	FetchedAt     string `json:"fetchedAt,omitempty"`
+	AgeSec        int    `json:"ageSec,omitempty"`
+	StaleAfterSec int    `json:"staleAfterSec,omitempty"`
+	Stale         bool   `json:"stale,omitempty"`
+	LastError     string `json:"lastError,omitempty"`
+	PolicyNote    string `json:"policyNote,omitempty"`
 }
 
 type UtilityLink struct {

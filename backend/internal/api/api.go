@@ -11,43 +11,57 @@ import (
 
 	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/cams"
+	"github.com/saints-weatherwatch/backend/internal/hazards"
 	"github.com/saints-weatherwatch/backend/internal/nws"
+	"github.com/saints-weatherwatch/backend/internal/ops"
 	"github.com/saints-weatherwatch/backend/internal/outages"
 	"github.com/saints-weatherwatch/backend/internal/progress"
 	"github.com/saints-weatherwatch/backend/internal/radar"
-	"github.com/saints-weatherwatch/backend/internal/hazards"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 	"github.com/saints-weatherwatch/backend/internal/vehicles"
 	"github.com/saints-weatherwatch/backend/internal/world"
 )
 
+type overviewFreshness struct {
+	Alerts   ops.FeedFreshness `json:"alerts"`
+	Outages  ops.FeedFreshness `json:"outages"`
+	Hazards  ops.FeedFreshness `json:"hazards"`
+	AnyStale bool              `json:"anyStale"`
+}
+
 type overviewResponse struct {
-	GeneratedAt        string   `json:"generatedAt"`
-	TotalAlerts        int      `json:"totalAlerts"`
-	SevereAlerts       int      `json:"severeAlerts"`
-	WatchCount         int      `json:"watchCount"`
-	Categories         []string `json:"categories"`
-	TopHeadline        string   `json:"topHeadline"`
-	MostAtRiskArea     string   `json:"mostAtRiskArea"`
-	MaineMetersOut     int      `json:"maineMetersOut"`
-	MaineCountiesOut   int      `json:"maineCountiesOut"`
-	MaineOutageCovered bool     `json:"maineOutageCovered"`
-	OutageSource       string   `json:"outageSource,omitempty"`
-	OutageNote         string   `json:"outageNote,omitempty"`
-	FloodActionable    int      `json:"floodActionable"`
-	FloodGaugeCount    int      `json:"floodGaugeCount"`
-	QuakeCount         int      `json:"quakeCount"`
-	HazardNote         string   `json:"hazardNote,omitempty"`
+	GeneratedAt        string            `json:"generatedAt"`
+	TotalAlerts        int               `json:"totalAlerts"`
+	SevereAlerts       int               `json:"severeAlerts"`
+	WatchCount         int               `json:"watchCount"`
+	Categories         []string          `json:"categories"`
+	TopHeadline        string            `json:"topHeadline"`
+	MostAtRiskArea     string            `json:"mostAtRiskArea"`
+	MaineMetersOut     int               `json:"maineMetersOut"`
+	MaineCountiesOut   int               `json:"maineCountiesOut"`
+	MaineOutageCovered bool              `json:"maineOutageCovered"`
+	OutageSource       string            `json:"outageSource,omitempty"`
+	OutageNote         string            `json:"outageNote,omitempty"`
+	FloodActionable    int               `json:"floodActionable"`
+	FloodGaugeCount    int               `json:"floodGaugeCount"`
+	QuakeCount         int               `json:"quakeCount"`
+	HazardNote         string            `json:"hazardNote,omitempty"`
+	// Phase F reliability
+	Freshness   overviewFreshness `json:"freshness"`
+	Attribution string            `json:"attribution,omitempty"`
+	PolicyNote  string            `json:"policyNote,omitempty"`
 }
 
 // Mount attaches all API routes to the provided router.
 func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache, worldHub *world.Hub, outageCache *outages.Cache, radarCache *radar.Cache, hazardCache *hazards.Cache) {
 	limiter := auth.NewPINLimiter()
 	r.Route("/api", func(r chi.Router) {
+		r.Use(RateLimitMiddleware(120))
 		r.Use(auth.Middleware(st))
 
 		r.Get("/health", healthHandler(st))
+		r.Get("/policy", policyHandler())
 		r.Get("/alerts", alertsHandler(cache))
 		r.Get("/overview", overviewHandler(cache, outageCache, hazardCache))
 		r.Get("/history", historyHandler(st))
@@ -122,9 +136,11 @@ func healthHandler(st *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"status":     "ok",
-			"serverTime": time.Now().UTC().Format(time.RFC3339),
-			"service":    "saints-weatherwatch-backend",
+			"status":      "ok",
+			"serverTime":  time.Now().UTC().Format(time.RFC3339),
+			"service":     "saints-weatherwatch-backend",
+			"policyNote":  ops.PolicyNote,
+			"attribution": ops.AttributionLine,
 		})
 	}
 }
@@ -151,12 +167,28 @@ func overviewHandler(cache *nws.Cache, outageCache *outages.Cache, hazardCache *
 			categories = append(categories, alert.Category)
 		}
 
+		alertsFresh := ops.FeedFreshness{
+			FetchedAt:     payload.FetchedAt,
+			AgeSec:        payload.AgeSec,
+			StaleAfterSec: payload.StaleAfterSec,
+			Stale:         payload.Stale,
+			LastError:     payload.LastError,
+		}
+		if alertsFresh.StaleAfterSec == 0 {
+			alertsFresh.StaleAfterSec = int(ops.StaleAlerts.Seconds())
+		}
+
 		response := overviewResponse{
 			GeneratedAt:  payload.GeneratedAt,
 			TotalAlerts:  len(payload.Alerts),
 			SevereAlerts: 0,
 			WatchCount:   0,
 			Categories:   categories,
+			Attribution:  ops.AttributionLine,
+			PolicyNote:   ops.PolicyNote,
+			Freshness: overviewFreshness{
+				Alerts: alertsFresh,
+			},
 		}
 
 		if len(payload.Alerts) > 0 {
@@ -180,6 +212,15 @@ func overviewHandler(cache *nws.Cache, outageCache *outages.Cache, hazardCache *
 			response.MaineOutageCovered = o.MaineCovered
 			response.OutageSource = o.Source
 			response.OutageNote = o.SourceNote
+			response.Freshness.Outages = ops.FeedFreshness{
+				FetchedAt:     o.FetchedAt,
+				AgeSec:        o.AgeSec,
+				StaleAfterSec: o.StaleAfterSec,
+				Stale:         o.Stale,
+				LastError:     o.LastError,
+			}
+		} else {
+			response.Freshness.Outages = ops.FreshnessFromTime(time.Time{}, ops.StaleOutages, "outage cache unavailable")
 		}
 
 		if hazardCache != nil {
@@ -188,7 +229,20 @@ func overviewHandler(cache *nws.Cache, outageCache *outages.Cache, hazardCache *
 			response.FloodGaugeCount = h.FloodGaugeCount
 			response.QuakeCount = h.QuakeCount
 			response.HazardNote = h.SourceNote
+			response.Freshness.Hazards = ops.FeedFreshness{
+				FetchedAt:     h.FetchedAt,
+				AgeSec:        h.AgeSec,
+				StaleAfterSec: h.StaleAfterSec,
+				Stale:         h.Stale,
+				LastError:     h.LastError,
+			}
+		} else {
+			response.Freshness.Hazards = ops.FreshnessFromTime(time.Time{}, ops.StaleHazards, "hazard cache unavailable")
 		}
+
+		response.Freshness.AnyStale = response.Freshness.Alerts.Stale ||
+			response.Freshness.Outages.Stale ||
+			response.Freshness.Hazards.Stale
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(response)
