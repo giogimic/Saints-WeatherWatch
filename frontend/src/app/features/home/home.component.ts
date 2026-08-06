@@ -37,7 +37,23 @@ import { WeatherService } from '../../core/weather.service';
             <div class="badge badge-info gap-2 text-lg py-5 px-6 border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] rounded-2xl font-black uppercase">
               Watches: <span class="text-white">{{ overview.watchCount }}</span>
             </div>
+            <div class="badge badge-neutral gap-2 text-lg py-5 px-6 border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] rounded-2xl font-black uppercase"
+              [title]="overview.outageNote || 'ODIN power outages'">
+              ME out:
+              <span class="text-white">
+                @if (overview.maineOutageCovered) {
+                  {{ overview.maineMetersOut || 0 | number }}
+                } @else {
+                  n/a*
+                }
+              </span>
+            </div>
           </div>
+          @if (overview.outageNote && !overview.maineOutageCovered) {
+            <p class="text-[10px] text-base-content/50 font-semibold mb-8 max-w-xl mx-auto">
+              * Maine utilities may not report to ODIN yet — use Versant/CMP maps from the Live Map outage layer.
+            </p>
+          }
         }
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">

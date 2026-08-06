@@ -83,6 +83,47 @@ export interface WeatherOverviewResponse {
   categories: string[];
   topHeadline: string;
   mostAtRiskArea: string;
+  maineMetersOut?: number;
+  maineCountiesOut?: number;
+  maineOutageCovered?: boolean;
+  outageSource?: string;
+  outageNote?: string;
+}
+
+export interface OutageCounty {
+  fips: string;
+  name: string;
+  state: string;
+  metersOut: number;
+  utilities?: string[];
+  lat?: number;
+  lng?: number;
+}
+
+export interface OutageSnapshot {
+  generatedAt: string;
+  source: string;
+  sourceNote: string;
+  maineCovered: boolean;
+  maineMetersOut: number;
+  maineCountiesOut: number;
+  nationalMetersOut: number;
+  utilityReporters: number;
+  maine: OutageCounty[];
+  nearby: OutageCounty[];
+  utilityLinks: { name: string; url: string; blurb: string }[];
+}
+
+export interface AreaOutageInfo {
+  fips: string;
+  county: string;
+  metersOut: number;
+  utilities?: string[];
+  maineCovered: boolean;
+  maineMetersOut: number;
+  source: string;
+  generatedAt: string;
+  utilityLinks?: { name: string; url: string; blurb: string }[];
 }
 
 export interface CameraFeedDto {
@@ -337,11 +378,31 @@ export class WeatherService {
     );
   }
 
-  expandWatchedArea(id: string): Observable<{ area: WatchedArea; alerts: WeatherAlert[]; count: number }> {
-    return this.http.get<{ area: WatchedArea; alerts: WeatherAlert[]; count: number }>(
-      `/api/watched-areas/${id}/expand`
-    ).pipe(
-      catchError(() => of({ area: null as any, alerts: [], count: 0 }))
+  expandWatchedArea(id: string): Observable<{
+    area: WatchedArea;
+    alerts: WeatherAlert[];
+    count: number;
+    outage?: AreaOutageInfo;
+  }> {
+    return this.http.get<{
+      area: WatchedArea;
+      alerts: WeatherAlert[];
+      count: number;
+      outage?: AreaOutageInfo;
+    }>(`/api/watched-areas/${id}/expand`).pipe(
+      catchError(() => of({ area: null as any, alerts: [], count: 0 })),
+    );
+  }
+
+  getOutages(): Observable<OutageSnapshot | null> {
+    return this.http.get<OutageSnapshot>('/api/outages').pipe(
+      catchError(() => of(null)),
+    );
+  }
+
+  getOutagesGeo(): Observable<GeoJSON.FeatureCollection | null> {
+    return this.http.get<GeoJSON.FeatureCollection>('/api/outages/geo').pipe(
+      catchError(() => of(null)),
     );
   }
 
