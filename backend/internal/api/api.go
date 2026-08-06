@@ -12,6 +12,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/cams"
 	"github.com/saints-weatherwatch/backend/internal/nws"
+	"github.com/saints-weatherwatch/backend/internal/outages"
 	"github.com/saints-weatherwatch/backend/internal/progress"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
@@ -20,24 +21,29 @@ import (
 )
 
 type overviewResponse struct {
-	GeneratedAt    string   `json:"generatedAt"`
-	TotalAlerts    int      `json:"totalAlerts"`
-	SevereAlerts   int      `json:"severeAlerts"`
-	WatchCount     int      `json:"watchCount"`
-	Categories     []string `json:"categories"`
-	TopHeadline    string   `json:"topHeadline"`
-	MostAtRiskArea string   `json:"mostAtRiskArea"`
+	GeneratedAt       string   `json:"generatedAt"`
+	TotalAlerts       int      `json:"totalAlerts"`
+	SevereAlerts      int      `json:"severeAlerts"`
+	WatchCount        int      `json:"watchCount"`
+	Categories        []string `json:"categories"`
+	TopHeadline       string   `json:"topHeadline"`
+	MostAtRiskArea    string   `json:"mostAtRiskArea"`
+	MaineMetersOut    int      `json:"maineMetersOut"`
+	MaineCountiesOut  int      `json:"maineCountiesOut"`
+	MaineOutageCovered bool    `json:"maineOutageCovered"`
+	OutageSource      string   `json:"outageSource,omitempty"`
+	OutageNote        string   `json:"outageNote,omitempty"`
 }
 
 // Mount attaches all API routes to the provided router.
-func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache, worldHub *world.Hub) {
+func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache, worldHub *world.Hub, outageCache *outages.Cache) {
 	limiter := auth.NewPINLimiter()
 	r.Route("/api", func(r chi.Router) {
 		r.Use(auth.Middleware(st))
 
 		r.Get("/health", healthHandler(st))
 		r.Get("/alerts", alertsHandler(cache))
-		r.Get("/overview", overviewHandler(cache))
+		r.Get("/overview", overviewHandler(cache, outageCache))
 		r.Get("/history", historyHandler(st))
 		r.Delete("/history/{id}", deleteHistoryHandler(st))
 
@@ -69,6 +75,9 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		// Storm World — craft / trade / inventory / lobbies
 		mountWorldRoutes(r, st, worldHub)
 
+		// Phase A — power outages (ODIN)
+		mountOutageRoutes(r, st, outageCache)
+
 		// Dashboard (login required handlers enforce auth)
 		r.Get("/favorites", getFavoritesHandler(st))
 		r.Post("/favorites", addFavoriteHandler(st))
@@ -76,7 +85,7 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Get("/watched-areas", getWatchedAreasHandler(st))
 		r.Post("/watched-areas", createWatchedAreaHandler(st))
 		r.Delete("/watched-areas/{id}", deleteWatchedAreaHandler(st))
-		r.Get("/watched-areas/{id}/expand", expandWatchedAreaHandler(st, cache))
+		r.Get("/watched-areas/{id}/expand", expandWatchedAreaHandler(st, cache, outageCache))
 		r.Get("/dashboard/prefs", getDashboardPrefsHandler(st))
 		r.Put("/dashboard/prefs", saveDashboardPrefsHandler(st))
 
@@ -112,7 +121,7 @@ func alertsHandler(cache *nws.Cache) http.HandlerFunc {
 	}
 }
 
-func overviewHandler(cache *nws.Cache) http.HandlerFunc {
+func overviewHandler(cache *nws.Cache, outageCache *outages.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		payload := cache.Get()
 		categories := make([]string, 0, len(payload.Alerts))
@@ -145,6 +154,15 @@ func overviewHandler(cache *nws.Cache) http.HandlerFunc {
 			if alert.Status == "watch" {
 				response.WatchCount++
 			}
+		}
+
+		if outageCache != nil {
+			o := outageCache.Get()
+			response.MaineMetersOut = o.MaineMetersOut
+			response.MaineCountiesOut = o.MaineCountiesOut
+			response.MaineOutageCovered = o.MaineCovered
+			response.OutageSource = o.Source
+			response.OutageNote = o.SourceNote
 		}
 
 		w.Header().Set("Content-Type", "application/json")

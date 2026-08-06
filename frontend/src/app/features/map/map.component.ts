@@ -8,7 +8,7 @@ import { Subscription } from 'rxjs';
 import { CameraFeedDto, SavedLocation, WeatherAlert, WeatherService } from '../../core/weather.service';
 
 type BaseKey = 'street' | 'dark' | 'imagery';
-type LayerChip = 'radar' | 'radarSharp' | 'warnings' | 'lsr' | 'spc' | 'cams';
+type LayerChip = 'radar' | 'radarSharp' | 'warnings' | 'lsr' | 'spc' | 'cams' | 'outages';
 
 interface MapPersist {
   lat: number;
@@ -32,7 +32,7 @@ const STORAGE_KEY = 'ww-map-view';
       <div class="hidden md:block max-w-7xl mx-auto w-full px-2">
         <h1 class="text-3xl font-black text-white italic uppercase tracking-wider font-sans">Storm Map</h1>
         <p class="text-base-content/55 text-sm font-semibold mt-0.5">
-          Northern Maine / St. John Valley · radar, hazards, reports, live cams
+          Northern Maine / St. John Valley · radar, hazards, reports, outages, live cams
         </p>
       </div>
 
@@ -285,6 +285,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private lsrLayer = L.layerGroup();
   private spcLayer = L.layerGroup();
   private camsLayer = L.layerGroup();
+  private outagesLayer = L.layerGroup();
   private savedLayer = L.layerGroup();
   private camMarkers = new Map<string, L.Marker>();
   private savedMarkers = new Map<string, L.Marker>();
@@ -308,6 +309,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     lsr: true,
     spc: false,
     cams: true,
+    outages: true,
   };
 
   layerChips: { key: LayerChip; label: string }[] = [
@@ -317,6 +319,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     { key: 'lsr', label: 'Reports' },
     { key: 'spc', label: 'SPC' },
     { key: 'cams', label: 'Cams' },
+    { key: 'outages', label: 'Outages' },
   ];
 
   baseChips: { key: BaseKey; label: string }[] = [
@@ -396,6 +399,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     this.loadSpc();
     this.loadNearbyAlerts();
     this.loadSavedLocations();
+    this.loadOutages();
 
     this.subs.add(
       this.route.queryParamMap.subscribe(params => {
@@ -527,6 +531,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     sync(this.lsrLayer, this.layers.lsr);
     sync(this.spcLayer, this.layers.spc);
     sync(this.camsLayer, this.layers.cams);
+    sync(this.outagesLayer, this.layers.outages);
     sync(this.savedLayer, true);
   }
 
@@ -630,6 +635,46 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
         const camQ = this.route.snapshot.queryParamMap.get('cam');
         if (camQ) this.focusCam(camQ, true);
+      })
+    );
+  }
+
+  private loadOutages(): void {
+    this.subs.add(
+      this.weather.getOutagesGeo().subscribe(geo => {
+        this.outagesLayer.clearLayers();
+        if (!geo) {
+          this.applyLayerVisibility();
+          return;
+        }
+        L.geoJSON(geo as any, {
+          style: feature => {
+            const meters = Number(feature?.properties?.['metersOut'] || 0);
+            const fill = meters <= 0
+              ? '#334155'
+              : meters < 50
+                ? '#fbbf24'
+                : meters < 500
+                  ? '#f97316'
+                  : '#ef4444';
+            return {
+              color: meters > 0 ? '#fef3c7' : '#64748b',
+              weight: 1,
+              fillColor: fill,
+              fillOpacity: meters > 0 ? 0.45 : 0.12,
+            };
+          },
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties || {};
+            const meters = Number(p['metersOut'] || 0);
+            layer.bindPopup(
+              `<strong>${p['name'] || 'County'} Co.</strong><br>` +
+                `<span style="font-size:12px;font-weight:800">${meters.toLocaleString()} meters out</span><br>` +
+                `<span style="font-size:10px;opacity:.7">ODIN estimate · see utility map for local detail</span>`
+            );
+          },
+        }).addTo(this.outagesLayer);
+        this.applyLayerVisibility();
       })
     );
   }

@@ -18,6 +18,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/cams"
 	"github.com/saints-weatherwatch/backend/internal/config"
 	"github.com/saints-weatherwatch/backend/internal/nws"
+	"github.com/saints-weatherwatch/backend/internal/outages"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	"github.com/saints-weatherwatch/backend/internal/world"
 	"github.com/saints-weatherwatch/backend/internal/ws"
@@ -76,6 +77,9 @@ func main() {
 	discoverEvery := time.Duration(cfg.CamDiscoverIntervalSec) * time.Second
 	camCache.Start(bgCtx.Done(), discoverEvery)
 
+	outageCache := outages.NewCache(cfg.UserAgent, st)
+	outageCache.Start(bgCtx, 5*time.Minute)
+
 	// WebSocket stays outside Timeout middleware so long-lived connections work.
 	serveWS := func(w http.ResponseWriter, r *http.Request) {
 		hub.ServeHTTP(w, r, nwsCache.Get)
@@ -87,7 +91,7 @@ func main() {
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(60 * time.Second))
-		api.Mount(r, st, nwsCache, camCache, worldHub)
+		api.Mount(r, st, nwsCache, camCache, worldHub, outageCache)
 	})
 
 	srv := &http.Server{

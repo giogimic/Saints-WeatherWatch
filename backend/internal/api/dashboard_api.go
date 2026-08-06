@@ -10,6 +10,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/geo"
 	"github.com/saints-weatherwatch/backend/internal/nws"
+	"github.com/saints-weatherwatch/backend/internal/outages"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 )
@@ -177,7 +178,7 @@ type matchedAlert struct {
 	Approximate bool `json:"approximate"`
 }
 
-func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache) http.HandlerFunc {
+func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache, outageCache *outages.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		user, ok := auth.UserFromContext(r.Context())
@@ -199,11 +200,15 @@ func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache) http.HandlerFun
 				matched = append(matched, matchedAlert{Alert: a, Approximate: approx})
 			}
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		res := map[string]any{
 			"area":   area,
 			"alerts": matched,
 			"count":  len(matched),
-		})
+		}
+		if outageCache != nil {
+			res["outage"] = outageCache.CorrelateArea(area.Lat, area.Lon)
+		}
+		_ = json.NewEncoder(w).Encode(res)
 	}
 }
 

@@ -8,6 +8,7 @@ import { AuthService } from '../../core/auth.service';
 import { OpsStateService } from '../../core/ops-state.service';
 import { vehicleSvg } from '../../core/vehicles';
 import {
+  AreaOutageInfo,
   DashboardPrefs,
   VehicleDef,
   WatchedArea,
@@ -198,6 +199,16 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | '
                           <div class="text-[10px] font-bold uppercase tracking-wider text-accent">
                             {{ expandedAlerts.length }} alert(s) in range
                           </div>
+                          @if (expandedOutage) {
+                            <div class="text-[10px] font-semibold text-base-content/60">
+                              {{ expandedOutage.county }} Co. ·
+                              @if (expandedOutage.maineCovered || expandedOutage.metersOut > 0) {
+                                {{ expandedOutage.metersOut | number }} meters out (ODIN)
+                              } @else {
+                                no ODIN reporters for ME — check utility map
+                              }
+                            </div>
+                          }
                           <ul class="space-y-1">
                             @for (al of expandedAlerts.slice(0, 6); track al.id) {
                               <li class="text-xs font-semibold text-base-content/70">
@@ -248,6 +259,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   newAreaRadius = 50;
   expandedId: string | null = null;
   expandedAlerts: WeatherAlert[] = [];
+  expandedOutage: AreaOutageInfo | null = null;
 
   private map?: L.Map;
   private layer = L.layerGroup();
@@ -332,6 +344,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.expandedId === id) {
         this.expandedId = null;
         this.expandedAlerts = [];
+        this.expandedOutage = null;
       }
       this.ops.reloadAccountData();
       setTimeout(() => this.redrawMap(), 200);
@@ -342,11 +355,13 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.expandedId === area.id) {
       this.expandedId = null;
       this.expandedAlerts = [];
+      this.expandedOutage = null;
       return;
     }
     this.expandedId = area.id;
     this.weather.expandWatchedArea(area.id).subscribe(res => {
       this.expandedAlerts = res.alerts || [];
+      this.expandedOutage = res.outage || null;
       this.map?.flyTo([area.lat, area.lon], 8, { duration: 0.6 });
     });
   }

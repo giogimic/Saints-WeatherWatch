@@ -202,3 +202,17 @@ model TrackerIncident {
   @@index([source, office])
   @@index([category, datePulled])
 }
+
+// OutageSnapshot — Phase A impact desk history (ODIN rollups).
+model OutageSnapshot {
+  id           String   @id @default(cuid())
+  scope        String   @default("maine") // maine | national
+  metersOut    Int      @default(0)
+  countiesOut  Int      @default(0)
+  nationalOut  Int      @default(0)
+  summaryJson  String?
+  source       String   @default("ODIN")
+  sampledAt    DateTime @default(now())
+
+  @@index([scope, sampledAt])
+}
