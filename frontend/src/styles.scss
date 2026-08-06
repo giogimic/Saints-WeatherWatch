@@ -103,8 +103,54 @@ html {
   display: block;
 }
 
+/* Radar Chase immersive / mobile fullscreen shell */
+.chase-noscroll {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
+.chase-stage {
+  min-height: 48vh;
+}
+
+@media (min-width: 768px) {
+  .chase-stage {
+    min-height: 420px;
+  }
+}
+
+.chase-immersive {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding:
+    max(0.5rem, env(safe-area-inset-top))
+    max(0.5rem, env(safe-area-inset-right))
+    max(0.5rem, env(safe-area-inset-bottom))
+    max(0.5rem, env(safe-area-inset-left));
+  background: #020617;
+  margin: 0;
+}
+
+.chase-immersive .chase-topbar {
+  flex-shrink: 0;
+}
+
+.chase-immersive .chase-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  border: none !important;
+  border-radius: 0.75rem;
+}
+
 /* Floating virtual joystick — low-contrast so it doesn't cover radar */
 .chase-stick {
+  left: max(0.75rem, env(safe-area-inset-left));
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
   width: 96px;
   height: 96px;
   opacity: 0.72;
@@ -116,9 +162,15 @@ html {
   opacity: 0.92;
 }
 
+.chase-stick-lg {
+  width: 112px;
+  height: 112px;
+  opacity: 0.8;
+}
+
 .chase-stick-base {
-  width: 96px;
-  height: 96px;
+  width: 100%;
+  height: 100%;
   border-radius: 999px;
   border: 2px solid rgba(148, 163, 184, 0.45);
   background: radial-gradient(circle at 40% 35%, rgba(51, 65, 85, 0.55), rgba(15, 23, 42, 0.45));
@@ -139,6 +191,12 @@ html {
   background: linear-gradient(180deg, rgba(125, 211, 252, 0.55), rgba(14, 165, 233, 0.45));
   box-shadow: 0 2px 8px rgba(2, 6, 23, 0.4);
   will-change: transform;
+}
+
+.chase-stick-lg .chase-stick-knob {
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
 }
 
 .chase-stick-hint {
