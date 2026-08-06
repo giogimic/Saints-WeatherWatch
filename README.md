@@ -106,7 +106,7 @@ Long-term vision (grain of salt — do not rewrite the ops app to chase it):
 ## Data Sources (all free, no API keys)
 
 - **NWS API** (`api.weather.gov`) — active warnings & watches
-- **Iowa State IEM** — NEXRAD WMS, LSR GeoJSON, VTEC archive
+- **Iowa State IEM** — NEXRAD WMS / WMS-T loop, RIDGE velocity, LSR GeoJSON, VTEC archive; desk meta via `/api/radar/*`
 - **SPC** — day-1 categorical outlook GeoJSON
 - **NOAA Event-Driven WMS** — watch/warning polygons
 - **ODIN (ORNL)** — public power outage estimates (`/api/outages`); ME county grid + Versant/CMP links when ODIN has no Maine reporters

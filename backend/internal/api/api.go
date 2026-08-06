@@ -14,6 +14,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/outages"
 	"github.com/saints-weatherwatch/backend/internal/progress"
+	"github.com/saints-weatherwatch/backend/internal/radar"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 	"github.com/saints-weatherwatch/backend/internal/vehicles"
@@ -36,7 +37,7 @@ type overviewResponse struct {
 }
 
 // Mount attaches all API routes to the provided router.
-func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache, worldHub *world.Hub, outageCache *outages.Cache) {
+func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache, worldHub *world.Hub, outageCache *outages.Cache, radarCache *radar.Cache) {
 	limiter := auth.NewPINLimiter()
 	r.Route("/api", func(r chi.Router) {
 		r.Use(auth.Middleware(st))
@@ -77,6 +78,9 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 
 		// Phase A — power outages (ODIN)
 		mountOutageRoutes(r, st, outageCache)
+
+		// Phase B — radar systems (IEM metadata + loop frames)
+		mountRadarRoutes(r, st, radarCache, outageCache)
 
 		// Dashboard (login required handlers enforce auth)
 		r.Get("/favorites", getFavoritesHandler(st))

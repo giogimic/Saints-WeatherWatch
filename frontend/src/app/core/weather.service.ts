@@ -126,6 +126,78 @@ export interface AreaOutageInfo {
   utilityLinks?: { name: string; url: string; blurb: string }[];
 }
 
+export interface RadarSite {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  type: string;
+  distanceKm?: number;
+}
+
+export interface RadarLatLonBox {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+}
+
+export interface RadarProductDef {
+  id: string;
+  label: string;
+  kind: 'wms' | 'ridge' | string;
+  blurb: string;
+  wms?: string;
+  layer?: string;
+  loopWms?: string;
+  loopLayer?: string;
+  loopSupported: boolean;
+  scanRadar: string;
+  scanProduct: string;
+  ridgeSite?: string;
+  ridgeProduct?: string;
+  ridgeUrl?: string;
+  bounds?: RadarLatLonBox;
+  attribution: string;
+}
+
+export interface RadarScan {
+  ts: string;
+  validAt?: string;
+  ageSeconds?: number;
+  ridgeUrl?: string;
+  wmsTime?: string;
+}
+
+export interface RadarOutagePair {
+  maineMetersOut: number;
+  deltaMeters?: number | null;
+  note?: string;
+  maineCovered?: boolean;
+  outageSource?: string;
+  sampledAt?: string;
+  priorSampledAt?: string;
+}
+
+export interface RadarStatus {
+  generatedAt: string;
+  focusLat: number;
+  focusLon: number;
+  nearest?: RadarSite;
+  composite?: RadarSite;
+  products: RadarProductDef[];
+  latestScan?: RadarScan;
+  sourceNote: string;
+  outagePair?: RadarOutagePair;
+}
+
+export interface RadarScansResponse {
+  generatedAt: string;
+  radar: string;
+  product: string;
+  scans: RadarScan[];
+}
+
 export interface CameraFeedDto {
   id: string;
   title: string;
@@ -402,6 +474,23 @@ export class WeatherService {
 
   getOutagesGeo(): Observable<GeoJSON.FeatureCollection | null> {
     return this.http.get<GeoJSON.FeatureCollection>('/api/outages/geo').pipe(
+      catchError(() => of(null)),
+    );
+  }
+
+  getRadarStatus(lat?: number, lon?: number): Observable<RadarStatus | null> {
+    const params: string[] = [];
+    if (typeof lat === 'number') params.push(`lat=${lat}`);
+    if (typeof lon === 'number') params.push(`lon=${lon}`);
+    const q = params.length ? `?${params.join('&')}` : '';
+    return this.http.get<RadarStatus>(`/api/radar/status${q}`).pipe(
+      catchError(() => of(null)),
+    );
+  }
+
+  getRadarScans(radar: string, product: string, hours = 2): Observable<RadarScansResponse | null> {
+    const q = `?radar=${encodeURIComponent(radar)}&product=${encodeURIComponent(product)}&hours=${hours}`;
+    return this.http.get<RadarScansResponse>(`/api/radar/scans${q}`).pipe(
       catchError(() => of(null)),
     );
   }
