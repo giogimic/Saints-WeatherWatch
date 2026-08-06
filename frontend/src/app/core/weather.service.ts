@@ -88,6 +88,10 @@ export interface WeatherOverviewResponse {
   maineOutageCovered?: boolean;
   outageSource?: string;
   outageNote?: string;
+  floodActionable?: number;
+  floodGaugeCount?: number;
+  quakeCount?: number;
+  hazardNote?: string;
 }
 
 export interface OutageCounty {
@@ -196,6 +200,42 @@ export interface RadarScansResponse {
   radar: string;
   product: string;
   scans: RadarScan[];
+}
+
+export interface HazardIncident {
+  id: string;
+  kind: 'flood' | 'quake' | 'fire' | 'smoke' | string;
+  source: string;
+  sourceUrl?: string;
+  headline: string;
+  status?: string;
+  severity?: string;
+  lat: number;
+  lon: number;
+  area?: string;
+  observedAt?: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface HazardSnapshot {
+  generatedAt: string;
+  sourceNote: string;
+  floodActionable: number;
+  floodGaugeCount: number;
+  quakeCount: number;
+  fireCount: number;
+  incidents: HazardIncident[];
+  flood: HazardIncident[];
+  quakes: HazardIncident[];
+  fire: HazardIncident[];
+}
+
+export interface HazardAreaInfo {
+  flood: HazardIncident[];
+  quakes: HazardIncident[];
+  floodActionable: number;
+  quakeCount: number;
+  radiusMiles: number;
 }
 
 export interface CameraFeedDto {
@@ -482,6 +522,7 @@ export class WeatherService {
     count: number;
     outage?: AreaOutageInfo;
     cams?: CameraFeedDto[];
+    hazards?: HazardAreaInfo;
   }> {
     return this.http.get<{
       area: WatchedArea;
@@ -489,6 +530,7 @@ export class WeatherService {
       count: number;
       outage?: AreaOutageInfo;
       cams?: CameraFeedDto[];
+      hazards?: HazardAreaInfo;
     }>(`/api/watched-areas/${id}/expand`).pipe(
       catchError(() => of({ area: null as any, alerts: [], count: 0 })),
     );
@@ -519,6 +561,19 @@ export class WeatherService {
   getRadarScans(radar: string, product: string, hours = 2): Observable<RadarScansResponse | null> {
     const q = `?radar=${encodeURIComponent(radar)}&product=${encodeURIComponent(product)}&hours=${hours}`;
     return this.http.get<RadarScansResponse>(`/api/radar/scans${q}`).pipe(
+      catchError(() => of(null)),
+    );
+  }
+
+  getHazards(): Observable<HazardSnapshot | null> {
+    return this.http.get<HazardSnapshot>('/api/hazards').pipe(
+      catchError(() => of(null)),
+    );
+  }
+
+  getHazardsGeo(kind?: string): Observable<GeoJSON.FeatureCollection | null> {
+    const q = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+    return this.http.get<GeoJSON.FeatureCollection>(`/api/hazards/geo${q}`).pipe(
       catchError(() => of(null)),
     );
   }

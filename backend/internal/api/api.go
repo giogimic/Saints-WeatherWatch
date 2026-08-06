@@ -15,6 +15,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/outages"
 	"github.com/saints-weatherwatch/backend/internal/progress"
 	"github.com/saints-weatherwatch/backend/internal/radar"
+	"github.com/saints-weatherwatch/backend/internal/hazards"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 	"github.com/saints-weatherwatch/backend/internal/vehicles"
@@ -22,29 +23,33 @@ import (
 )
 
 type overviewResponse struct {
-	GeneratedAt       string   `json:"generatedAt"`
-	TotalAlerts       int      `json:"totalAlerts"`
-	SevereAlerts      int      `json:"severeAlerts"`
-	WatchCount        int      `json:"watchCount"`
-	Categories        []string `json:"categories"`
-	TopHeadline       string   `json:"topHeadline"`
-	MostAtRiskArea    string   `json:"mostAtRiskArea"`
-	MaineMetersOut    int      `json:"maineMetersOut"`
-	MaineCountiesOut  int      `json:"maineCountiesOut"`
-	MaineOutageCovered bool    `json:"maineOutageCovered"`
-	OutageSource      string   `json:"outageSource,omitempty"`
-	OutageNote        string   `json:"outageNote,omitempty"`
+	GeneratedAt        string   `json:"generatedAt"`
+	TotalAlerts        int      `json:"totalAlerts"`
+	SevereAlerts       int      `json:"severeAlerts"`
+	WatchCount         int      `json:"watchCount"`
+	Categories         []string `json:"categories"`
+	TopHeadline        string   `json:"topHeadline"`
+	MostAtRiskArea     string   `json:"mostAtRiskArea"`
+	MaineMetersOut     int      `json:"maineMetersOut"`
+	MaineCountiesOut   int      `json:"maineCountiesOut"`
+	MaineOutageCovered bool     `json:"maineOutageCovered"`
+	OutageSource       string   `json:"outageSource,omitempty"`
+	OutageNote         string   `json:"outageNote,omitempty"`
+	FloodActionable    int      `json:"floodActionable"`
+	FloodGaugeCount    int      `json:"floodGaugeCount"`
+	QuakeCount         int      `json:"quakeCount"`
+	HazardNote         string   `json:"hazardNote,omitempty"`
 }
 
 // Mount attaches all API routes to the provided router.
-func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache, worldHub *world.Hub, outageCache *outages.Cache, radarCache *radar.Cache) {
+func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache, worldHub *world.Hub, outageCache *outages.Cache, radarCache *radar.Cache, hazardCache *hazards.Cache) {
 	limiter := auth.NewPINLimiter()
 	r.Route("/api", func(r chi.Router) {
 		r.Use(auth.Middleware(st))
 
 		r.Get("/health", healthHandler(st))
 		r.Get("/alerts", alertsHandler(cache))
-		r.Get("/overview", overviewHandler(cache, outageCache))
+		r.Get("/overview", overviewHandler(cache, outageCache, hazardCache))
 		r.Get("/history", historyHandler(st))
 		r.Delete("/history/{id}", deleteHistoryHandler(st))
 
@@ -82,6 +87,9 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		// Phase B — radar systems (IEM metadata + loop frames)
 		mountRadarRoutes(r, st, radarCache, outageCache)
 
+		// Phase D — multi-hazard (flood gauges + quakes)
+		mountHazardRoutes(r, hazardCache)
+
 		// Dashboard (login required handlers enforce auth)
 		r.Get("/favorites", getFavoritesHandler(st))
 		r.Post("/favorites", addFavoriteHandler(st))
@@ -89,7 +97,7 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Get("/watched-areas", getWatchedAreasHandler(st))
 		r.Post("/watched-areas", createWatchedAreaHandler(st))
 		r.Delete("/watched-areas/{id}", deleteWatchedAreaHandler(st))
-		r.Get("/watched-areas/{id}/expand", expandWatchedAreaHandler(st, cache, outageCache, camCache))
+		r.Get("/watched-areas/{id}/expand", expandWatchedAreaHandler(st, cache, outageCache, camCache, hazardCache))
 		r.Get("/dashboard/prefs", getDashboardPrefsHandler(st))
 		r.Put("/dashboard/prefs", saveDashboardPrefsHandler(st))
 
@@ -127,7 +135,7 @@ func alertsHandler(cache *nws.Cache) http.HandlerFunc {
 	}
 }
 
-func overviewHandler(cache *nws.Cache, outageCache *outages.Cache) http.HandlerFunc {
+func overviewHandler(cache *nws.Cache, outageCache *outages.Cache, hazardCache *hazards.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		payload := cache.Get()
 		categories := make([]string, 0, len(payload.Alerts))
@@ -169,6 +177,14 @@ func overviewHandler(cache *nws.Cache, outageCache *outages.Cache) http.HandlerF
 			response.MaineOutageCovered = o.MaineCovered
 			response.OutageSource = o.Source
 			response.OutageNote = o.SourceNote
+		}
+
+		if hazardCache != nil {
+			h := hazardCache.Get()
+			response.FloodActionable = h.FloodActionable
+			response.FloodGaugeCount = h.FloodGaugeCount
+			response.QuakeCount = h.QuakeCount
+			response.HazardNote = h.SourceNote
 		}
 
 		w.Header().Set("Content-Type", "application/json")

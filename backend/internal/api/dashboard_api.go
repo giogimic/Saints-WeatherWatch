@@ -10,6 +10,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/cams"
 	"github.com/saints-weatherwatch/backend/internal/geo"
+	"github.com/saints-weatherwatch/backend/internal/hazards"
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/outages"
 	"github.com/saints-weatherwatch/backend/internal/store"
@@ -179,7 +180,7 @@ type matchedAlert struct {
 	Approximate bool `json:"approximate"`
 }
 
-func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache, outageCache *outages.Cache, camCache *cams.Cache) http.HandlerFunc {
+func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache, outageCache *outages.Cache, camCache *cams.Cache, hazardCache *hazards.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		user, ok := auth.UserFromContext(r.Context())
@@ -211,6 +212,9 @@ func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache, outageCache *ou
 		}
 		if camCache != nil {
 			res["cams"] = camCache.CamsNearPoint(area.Lat, area.Lon, float64(area.RadiusMiles))
+		}
+		if hazardCache != nil {
+			res["hazards"] = hazardCache.CorrelateArea(area.Lat, area.Lon, float64(area.RadiusMiles))
 		}
 		_ = json.NewEncoder(w).Encode(res)
 	}
