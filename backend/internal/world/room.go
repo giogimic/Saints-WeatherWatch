@@ -40,6 +40,9 @@ const (
 	// Soft anti-cheat (Phase 2): action cooldowns + no free teleport via hello/pickup.
 	MinPickupInterval = 400 * time.Millisecond
 	MinEventInterval  = 800 * time.Millisecond
+	MinChatInterval   = 700 * time.Millisecond
+	MaxChatLen        = 140
+	MaxChatLog        = 40
 	// MaxActionSnapDeg: allow tiny catch-up before distance check (lag), not miles.
 	MaxActionSnapDeg = 0.06
 )
@@ -242,16 +245,26 @@ type SimEvent struct {
 }
 
 type Envelope struct {
-	Type      string    `json:"type"`
-	Players   []Player  `json:"players,omitempty"`
-	Drops     []Drop    `json:"drops,omitempty"`
-	DropID    string    `json:"dropId,omitempty"`
-	ItemKey   string    `json:"itemKey,omitempty"`
-	Event     *SimEvent `json:"event,omitempty"`
-	Toast     string    `json:"toast,omitempty"`
-	You       *Player   `json:"you,omitempty"`
-	LobbyID   string    `json:"lobbyId,omitempty"`
-	LobbyName string    `json:"lobbyName,omitempty"`
+	Type      string     `json:"type"`
+	Players   []Player   `json:"players"`
+	Drops     []Drop     `json:"drops,omitempty"`
+	DropID    string     `json:"dropId,omitempty"`
+	ItemKey   string     `json:"itemKey,omitempty"`
+	Event     *SimEvent  `json:"event,omitempty"`
+	Toast     string     `json:"toast,omitempty"`
+	You       *Player    `json:"you,omitempty"`
+	LobbyID   string     `json:"lobbyId,omitempty"`
+	LobbyName string     `json:"lobbyName,omitempty"`
+	Chat      *ChatLine  `json:"chat,omitempty"`
+	Chats     []ChatLine `json:"chats,omitempty"`
+}
+
+type ChatLine struct {
+	ID     string `json:"id"`
+	UserID string `json:"userId"`
+	Name   string `json:"name"`
+	Text   string `json:"text"`
+	At     int64  `json:"at"`
 }
 
 type clientMsg struct {
@@ -260,6 +273,7 @@ type clientMsg struct {
 	Lng     float64 `json:"lng"`
 	DropID  string  `json:"dropId"`
 	EventID string  `json:"eventId"`
+	Text    string  `json:"text"`
 }
 
 type client struct {
@@ -274,11 +288,12 @@ type client struct {
 	lastMove   time.Time
 	lastPickup time.Time
 	lastEvent  time.Time
+	lastChat   time.Time
 	dirty      bool // moved since last presence tick
 	welcomed   bool // first hello may snap; later hellos are clamped moves
 }
 
-// Room is one lobby shard (presence / drops / SIM events). Inventory stays global.
+// Room is one lobby shard (presence / drops / SIM events / chat). Inventory stays global.
 type Room struct {
 	id         string
 	name       string
@@ -289,6 +304,7 @@ type Room struct {
 	clients    map[*client]struct{}
 	drops      map[string]*Drop
 	event      *SimEvent
+	chatLog    []ChatLine
 	origins    map[string]struct{}
 	upgrader   websocket.Upgrader
 	broadcast  chan []byte
@@ -311,6 +327,29 @@ func (r *Room) PlayerCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.clients)
+}
+
+func (r *Room) peerCount(self *client) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := 0
+	for c := range r.clients {
+		if c != self {
+			n++
+		}
+	}
+	return n
+}
+
+func (r *Room) hasUser(userID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for c := range r.clients {
+		if c.userID == userID {
+			return true
+		}
+	}
+	return false
 }
 
 // KickUser closes sockets for userID (unregister follows via readPump).
@@ -416,6 +455,7 @@ func (r *Room) Run(done <-chan struct{}) {
 }
 
 // acceptClient replaces any prior socket for the same user (one body in the world).
+// New joiners spawn near existing chasers so everyone lands on the same patch of map.
 func (r *Room) acceptClient(c *client) {
 	r.mu.Lock()
 	for old := range r.clients {
@@ -425,10 +465,35 @@ func (r *Room) acceptClient(c *client) {
 			_ = old.conn.Close()
 		}
 	}
+	r.placeNearPeersLocked(c)
 	r.clients[c] = struct{}{}
 	r.mu.Unlock()
 	r.sendSnapshot(c)
 	r.broadcastPresence()
+}
+
+// placeNearPeersLocked sets lat/lng near the average of other players (small jitter).
+func (r *Room) placeNearPeersLocked(c *client) {
+	var sumLat, sumLng float64
+	n := 0
+	for o := range r.clients {
+		if o.userID == c.userID {
+			continue
+		}
+		sumLat += o.lat
+		sumLng += o.lng
+		n++
+	}
+	if n == 0 {
+		return
+	}
+	baseLat := sumLat / float64(n)
+	baseLng := sumLng / float64(n)
+	// ~0.5–1.5 mi cluster so peers share a viewport at default zoom.
+	c.lat = clamp(baseLat+(mrand.Float64()-0.5)*0.04, Bounds.MinLat, Bounds.MaxLat)
+	c.lng = clamp(baseLng+(mrand.Float64()-0.5)*0.04, Bounds.MinLng, Bounds.MaxLng)
+	c.lastMove = time.Now()
+	c.dirty = true
 }
 
 // fanout delivers without kicking slow clients — drop the frame instead (snapshot tick recovers).
@@ -524,8 +589,14 @@ func (c *client) readPump() {
 		switch msg.Type {
 		case "hello":
 			if !c.welcomed {
-				c.snapPosition(msg.Lat, msg.Lng)
 				c.welcomed = true
+				// If peers are already here, keep rendezvous spawn — don't let hello
+				// teleport the joiner to a random solo start across the corridor.
+				if c.room.peerCount(c) > 0 {
+					c.syncForAction(msg.Lat, msg.Lng)
+				} else {
+					c.snapPosition(msg.Lat, msg.Lng)
+				}
 				c.dirty = true
 				c.room.broadcastPresence()
 			} else {
@@ -538,6 +609,8 @@ func (c *client) readPump() {
 			c.room.handlePickup(c, msg.DropID, msg.Lat, msg.Lng)
 		case "event_place":
 			c.room.handleEventPlace(c, msg.EventID, msg.Lat, msg.Lng)
+		case "chat":
+			c.room.handleChat(c, msg.Text)
 		}
 	}
 }
@@ -728,6 +801,57 @@ func (r *Room) awardPickupXP(userID, itemKey string) {
 	}
 }
 
+func (r *Room) handleChat(c *client, raw string) {
+	if c == nil || c.userID == "" {
+		return
+	}
+	now := time.Now()
+	if !c.lastChat.IsZero() && now.Sub(c.lastChat) < MinChatInterval {
+		return
+	}
+	text := sanitizeChat(raw)
+	if text == "" {
+		return
+	}
+	c.lastChat = now
+	line := ChatLine{
+		ID: newID(), UserID: c.userID, Name: c.name, Text: text, At: now.UnixMilli(),
+	}
+	r.mu.Lock()
+	r.chatLog = append(r.chatLog, line)
+	if len(r.chatLog) > MaxChatLog {
+		r.chatLog = append([]ChatLine(nil), r.chatLog[len(r.chatLog)-MaxChatLog:]...)
+	}
+	r.mu.Unlock()
+	r.publish(Envelope{Type: "chat", Chat: &line, Players: []Player{}})
+}
+
+func sanitizeChat(raw string) string {
+	text := strings.TrimSpace(raw)
+	if text == "" {
+		return ""
+	}
+	// Strip control chars; keep it readable on mobile.
+	var b strings.Builder
+	b.Grow(len(text))
+	for _, r := range text {
+		if r == '\n' || r == '\r' || r == '\t' {
+			b.WriteByte(' ')
+			continue
+		}
+		if r < 32 {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	out := strings.Join(strings.Fields(b.String()), " ")
+	if len([]rune(out)) > MaxChatLen {
+		runes := []rune(out)
+		out = string(runes[:MaxChatLen])
+	}
+	return out
+}
+
 func (r *Room) maybeSpawnEvent() {
 	r.mu.Lock()
 	if r.event != nil && r.event.Active {
@@ -779,11 +903,15 @@ func (r *Room) sendSnapshot(c *client) {
 	players := r.playerListLocked()
 	drops := r.dropListLocked()
 	ev := r.event
+	chats := append([]ChatLine(nil), r.chatLog...)
 	you := Player{UserID: c.userID, ChaserName: c.name, VehicleKey: c.veh, Lat: c.lat, Lng: c.lng, UpdatedAt: time.Now().Unix()}
 	r.mu.Unlock()
 	env := Envelope{
 		Type: "snapshot", Players: players, Drops: drops, Event: ev, You: &you,
-		LobbyID: r.id, LobbyName: r.name,
+		LobbyID: r.id, LobbyName: r.name, Chats: chats,
+	}
+	if players == nil {
+		env.Players = []Player{}
 	}
 	if b, err := json.Marshal(env); err == nil {
 		select {

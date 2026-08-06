@@ -143,6 +143,10 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
           @if (auth.isLoggedIn()) {
             <div class="space-y-2">
               <p class="text-[10px] font-black uppercase tracking-widest text-base-content/45">Lobby / shard</p>
+              <p class="text-xs font-semibold text-base-content/60">
+                Stay on <span class="text-accent font-black">Main Corridor</span> to see each other.
+                Other shards are separate rooms on the same map.
+              </p>
               <div class="grid gap-2 sm:grid-cols-2">
                 @for (lobby of lobbies; track lobby.id) {
                   <button
@@ -238,6 +242,15 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
                 >
                   Center
                 </button>
+                @if (worldMode) {
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
+                    (click)="findChasers()"
+                  >
+                    Find
+                  </button>
+                }
                 @if (!immersive) {
                   <button
                     type="button"
@@ -267,6 +280,52 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
                   <p class="text-[10px] font-semibold text-base-content/70 mt-0.5">{{ activeSimHint }}</p>
                 }
               </div>
+            </div>
+          }
+
+          @if (phase === 'running' && worldMode) {
+            <div
+              class="chase-chat pointer-events-auto absolute z-[1000]"
+              [class.chase-chat-open]="chatOpen"
+            >
+              <button
+                type="button"
+                class="chase-chat-toggle"
+                (click)="toggleChat()"
+                [attr.aria-expanded]="chatOpen"
+              >
+                Chat
+                @if (!chatOpen && world.chatLines().length) {
+                  <span class="chase-chat-badge">{{ world.chatLines().length > 9 ? '9+' : world.chatLines().length }}</span>
+                }
+              </button>
+              @if (chatOpen) {
+                <div class="chase-chat-panel">
+                  <div class="chase-chat-log" #chatLog>
+                    @for (line of world.chatLines(); track line.id) {
+                      <div class="chase-chat-line">
+                        <span class="chase-chat-name">{{ line.name }}</span>
+                        <span class="chase-chat-text">{{ line.text }}</span>
+                      </div>
+                    } @empty {
+                      <p class="chase-chat-empty">Say hi — lobby chat stays on this shard.</p>
+                    }
+                  </div>
+                  <form class="chase-chat-form" (submit)="submitChat($event)">
+                    <input
+                      class="chase-chat-input"
+                      type="text"
+                      maxlength="140"
+                      autocomplete="off"
+                      enterkeyhint="send"
+                      placeholder="Message…"
+                      [value]="chatDraft"
+                      (input)="chatDraft = $any($event.target).value"
+                    >
+                    <button type="submit" class="chase-chat-send" [disabled]="!chatDraft.trim()">Send</button>
+                  </form>
+                </div>
+              }
             </div>
           }
 
@@ -364,6 +423,7 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
 export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   @Output() exit = new EventEmitter<void>();
   @ViewChild('shell') shellRef?: ElementRef<HTMLElement>;
+  @ViewChild('chatLog') chatLogRef?: ElementRef<HTMLElement>;
 
   readonly auth = inject(AuthService);
   private readonly weather = inject(WeatherService);
@@ -386,6 +446,8 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   activeSimHint = '';
   lobbies: WorldLobby[] = [];
   selectedLobby = 'main';
+  chatOpen = false;
+  chatDraft = '';
 
   private map?: L.Map;
   private playerMarker?: L.Marker;
@@ -396,6 +458,9 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private toastTimer?: ReturnType<typeof setTimeout>;
   private startedAt = 0;
   private lobbyPoll?: ReturnType<typeof setInterval>;
+  private adoptedServerSpawn = false;
+  private fittedPeers = false;
+  private lastChatCount = 0;
 
   private keys = new Set<string>();
   private stickX = 0;
@@ -524,10 +589,15 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.savedLoot = false;
     this.keys.clear();
     this.resetStick();
-    this.lat = CENTER[0] + (Math.random() - 0.5) * 0.1;
-    this.lng = CENTER[1] + (Math.random() - 0.5) * 0.1;
+    this.lat = CENTER[0] + (Math.random() - 0.5) * (this.auth.isLoggedIn() ? 0.03 : 0.1);
+    this.lng = CENTER[1] + (Math.random() - 0.5) * (this.auth.isLoggedIn() ? 0.03 : 0.1);
     this.startedAt = Date.now();
     this.stopLoop();
+    this.adoptedServerSpawn = false;
+    this.fittedPeers = false;
+    this.chatOpen = false;
+    this.chatDraft = '';
+    this.world.you.set(null);
 
     if (preferFullscreen) {
       this.enterFullscreen();
@@ -680,6 +750,50 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.map.setView([this.lat, this.lng], Math.max(this.map.getZoom(), DEFAULT_ZOOM), { animate: true });
   }
 
+  findChasers(): void {
+    this.fitPeers(true);
+  }
+
+  toggleChat(): void {
+    this.chatOpen = !this.chatOpen;
+    if (this.chatOpen) {
+      setTimeout(() => this.scrollChat(), 40);
+    }
+  }
+
+  submitChat(ev: Event): void {
+    ev.preventDefault();
+    const text = this.chatDraft.trim();
+    if (!text) return;
+    this.world.sendChat(text);
+    this.chatDraft = '';
+    setTimeout(() => this.scrollChat(), 60);
+  }
+
+  private scrollChat(): void {
+    const el = this.chatLogRef?.nativeElement;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  private fitPeers(force = false): void {
+    if (!this.map || !this.worldMode) return;
+    const me = this.auth.user()?.id;
+    const pts: L.LatLngExpression[] = [[this.lat, this.lng]];
+    for (const p of this.world.players()) {
+      if (!p.userId || p.userId === me) continue;
+      pts.push([p.lat, p.lng]);
+    }
+    if (pts.length < 2) {
+      if (force) this.showToast('No other chasers in this lobby yet');
+      return;
+    }
+    if (!force && this.fittedPeers) return;
+    this.fittedPeers = true;
+    this.followCam = false;
+    this.applyCameraMode();
+    this.map.fitBounds(L.latLngBounds(pts), { padding: [48, 48], maxZoom: 11, animate: true });
+  }
+
   private applyCameraMode(): void {
     if (!this.map) return;
     if (this.followCam) {
@@ -801,10 +915,22 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   private syncWorldMarkers(): void {
     if (!this.map || !this.worldMode) return;
+
+    // Adopt server rendezvous spawn once so joiners land near peers.
+    const you = this.world.you();
+    if (you && !this.adoptedServerSpawn) {
+      this.adoptedServerSpawn = true;
+      this.lat = you.lat;
+      this.lng = you.lng;
+      this.placePlayer(true);
+    }
+
     const me = this.auth.user()?.id;
     const seen = new Set<string>();
+    let peerCount = 0;
     for (const p of this.world.players()) {
       if (!p.userId || p.userId === me) continue;
+      peerCount += 1;
       seen.add(p.userId);
       const name = p.chaserName || 'Chaser';
       const veh = p.vehicleKey || 'starter_car';
@@ -831,6 +957,16 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
         this.otherMarkers.delete(id);
         this.peerMeta.delete(id);
       }
+    }
+
+    if (peerCount > 0) {
+      this.fitPeers(false);
+    }
+
+    const chatN = this.world.chatLines().length;
+    if (chatN !== this.lastChatCount) {
+      this.lastChatCount = chatN;
+      if (this.chatOpen) setTimeout(() => this.scrollChat(), 30);
     }
 
     const dropSeen = new Set<string>();

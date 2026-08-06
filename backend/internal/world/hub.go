@@ -27,10 +27,10 @@ type LobbyStatus struct {
 
 // DefaultLobbies — same map + land-cover tables; separate presence/drops/events.
 var DefaultLobbies = []LobbyDef{
-	{ID: "main", Name: "Main Corridor", Blurb: "Default shared Maine world.", MaxPlayers: 32},
-	{ID: "alpha", Name: "Shard Alpha", Blurb: "Same map · separate chasers.", MaxPlayers: 24},
-	{ID: "bravo", Name: "Shard Bravo", Blurb: "Same map · separate chasers.", MaxPlayers: 24},
-	{ID: "practice", Name: "Practice Range", Blurb: "Quieter shard for learning the ropes.", MaxPlayers: 16},
+	{ID: "main", Name: "Main Corridor", Blurb: "Play together here — default shared world.", MaxPlayers: 32},
+	{ID: "alpha", Name: "Shard Alpha", Blurb: "Overflow shard · separate from Main.", MaxPlayers: 24},
+	{ID: "bravo", Name: "Shard Bravo", Blurb: "Overflow shard · separate from Main.", MaxPlayers: 24},
+	{ID: "practice", Name: "Practice Range", Blurb: "Quiet shard for learning (not the main group).", MaxPlayers: 16},
 }
 
 // Hub owns multiple Rooms (shards). Inventory/craft/trade stay global.
@@ -138,13 +138,14 @@ func (h *Hub) ServeWS(w http.ResponseWriter, req *http.Request) {
 
 	lobbyID := NormalizeLobbyID(req.URL.Query().Get("lobby"))
 	room := h.getOrCreate(lobbyID)
-	if room.PlayerCount() >= room.maxPlayers {
+
+	// Free a prior socket for this user first so reconnects aren't blocked by "full".
+	h.disconnectUser(user.ID)
+	if room.PlayerCount() >= room.maxPlayers && !room.hasUser(user.ID) {
 		http.Error(w, "Lobby full — pick another shard", http.StatusServiceUnavailable)
 		return
 	}
 
-	// Kick this user from every other (and this) room so one session owns presence.
-	h.disconnectUser(user.ID)
 	room.ServeWS(w, req)
 }
 
