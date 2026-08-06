@@ -3,31 +3,27 @@
 > Vision is big; delivery stays thin. **Do not break** Phase 1 or the ops weather app to chase the full living-world doc.
 > Promote ideas from [STORM_CHASER_VISION.md](./STORM_CHASER_VISION.md) into a phase only when the previous phase is stable.
 
-## Phase 1 — Shared world slice (current build contract)
+## Phase 1 — Shared world slice — **done**
 
 See [STORM_CHASER_PHASE1.md](./STORM_CHASER_PHASE1.md).
 
-- Expanded Maine corridor · open drive (no timer)
-- Presence (~10 Hz snapshots) · shared drops · SIM events
-- Server-authoritative inventory · craft · trade center
-- Trust labels on SIM content
+- [x] Expanded Maine corridor · open drive (no timer)
+- [x] Presence (~10 Hz snapshots) · shared drops · SIM events
+- [x] Server-authoritative inventory · craft · trade center
+- [x] Trust labels on SIM content
+- [x] Harden: Desk loot, trade CAS, event rollback, End leaves world
 
-**Status:** implemented — continue hardening (inventory on Desk, trade CAS, event rollback, End leaves world). Do not rip out for bigger features.
-
-## Phase 2 — Camera feel + exploration density
-
-Small UX/content upgrades on the **existing** world room:
+## Phase 2 — Camera feel + exploration density — **done**
 
 - [x] Follow-vehicle / free camera toggle · center · wheel/pinch zoom
 - [x] Richer drop catalog (still server-spawned) without regional biomes yet
 - [x] Clearer SIM chrome + toast / HUD copy
 - [x] More SIM event types · denser respawns
-- Soft anti-cheat polish (already started: speed clamp, pickup radius)
+- [x] Soft anti-cheat polish: pickup/event cooldowns, hello teleport closed, snap ≤ pickup radius, bag XP from item defs
 
-**Status:** gameplay slice shipping on the Storm World branch.  
 **Out of scope here:** deployables, weather-typed research ticks, full region biomes.
 
-## Phase 3 — Regional spawn tables
+## Phase 3 — Regional spawn tables — **next**
 
 - Hand-authored or land-cover zones (forest / coast / city / farm …)
 - Biased material tables per zone

@@ -61,7 +61,8 @@ See aspirational scope in [STORM_CHASER_VISION.md](./STORM_CHASER_VISION.md) and
 - Desk `/auth/me` loot includes Storm World stacks (world → loot MetaLookup bridge)
 - Trade buy/cancel uses status CAS (`open` → `sold`/`cancelled`); craft refunds on grant failure
 - SIM event grant failure reactivates the event
-- Pickup sync snap tightened (~0.12°) so radius checks still matter
+- Pickup sync snap tightened to ≤ pickup radius (`MaxActionSnapDeg`); hello teleport only on first welcome
+- Pickup / event_place cooldowns; bagging awards catalog XP via `progress.AwardFlat`
 - End run disconnects world WS; results link to Trade & Craft
 
 ## Deploy
