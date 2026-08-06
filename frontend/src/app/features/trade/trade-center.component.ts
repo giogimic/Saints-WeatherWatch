@@ -187,8 +187,8 @@ export class TradeCenterComponent implements OnInit {
 
   reload(): void {
     if (!this.auth.isLoggedIn()) return;
-    this.world.getInventory().subscribe(rows => {
-      this.inventory = rows || [];
+    this.world.getInventory().subscribe(res => {
+      this.inventory = res.items || [];
       for (const it of this.inventory) this.nameByKey.set(it.key, it.name);
       if (!this.offerKey && this.inventory.length) this.offerKey = this.inventory[0].key;
       if (this.offerKey && !this.inventory.some(i => i.key === this.offerKey)) {

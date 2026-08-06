@@ -21,6 +21,7 @@ export interface ChaserUser {
   xpIntoLevel: number;
   xpForNext: number;
   levelTitle: string;
+  stormCredits?: number;
   createdAt: string;
   vehicleKeys: string[];
   loot?: LootItem[];

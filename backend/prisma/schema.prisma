@@ -20,6 +20,7 @@ model User {
   equippedVehicleKey  String   @default("starter_car")
   xp                  Int      @default(0)
   level               Int      @default(1)
+  stormCredits        Int      @default(75)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

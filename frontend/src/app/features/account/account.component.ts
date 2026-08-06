@@ -19,7 +19,7 @@ import { OpsStateService } from '../../core/ops-state.service';
             <div class="text-[10px] font-black uppercase tracking-widest text-primary">Signed in</div>
             <div class="text-2xl font-black text-white italic">{{ u.chaserName }}</div>
             <p class="text-xs text-base-content/50 font-semibold">Equipped: {{ u.equippedVehicleKey }}</p>
-            <a routerLink="/dashboard" class="btn btn-primary w-full rounded-xl font-black uppercase min-h-12">Open dashboard</a>
+            <a routerLink="/dashboard" class="btn btn-primary w-full rounded-xl font-black uppercase min-h-12">Open profile</a>
             <button type="button" class="btn btn-ghost border border-base-300 w-full rounded-xl font-black uppercase min-h-12" (click)="logout()">Log out</button>
           </article>
         } @else {
