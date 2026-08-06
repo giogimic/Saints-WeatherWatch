@@ -7,7 +7,7 @@ Status: **implemented**
 - Player marker = equipped garage truck SVG
 - Floating virtual joystick (bottom-left, low opacity) + WASD / arrow keys
 - Continuous movement via rAF; 60s runs; auto-pickup when close
-- Mobile: **Start fullscreen** immersive shell (safe-area), larger stick, Exit / Exit full
+- **Start fullscreen** / in-run Fullscreen on phone and PC; Exit / Exit full; larger stick on mobile/immersive
 - Random weighted drops (common / uncommon / rare)
 
 ## Collectables

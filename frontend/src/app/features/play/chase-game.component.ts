@@ -82,7 +82,7 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
         } @else if (phase !== 'ready') {
           <button
             type="button"
-            class="btn btn-sm btn-primary rounded-xl font-black uppercase text-[10px] min-h-11 shrink-0 md:hidden"
+            class="btn btn-sm btn-primary rounded-xl font-black uppercase text-[10px] min-h-11 shrink-0"
             (click)="enterFullscreen()"
           >
             Fullscreen
@@ -102,25 +102,23 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
             </div>
           </div>
           <p class="text-sm font-semibold text-base-content/70">
-            On phones: use the floating stick.
-            On desktop: stick or <span class="text-white font-black">WASD</span>.
-            Get close to a drop to auto-bag it.
+            Stick or <span class="text-white font-black">WASD</span> / arrows.
+            Fullscreen works on phone and PC. Get close to a drop to auto-bag it.
           </p>
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col sm:flex-row gap-2">
             <button
               type="button"
-              class="btn btn-primary w-full rounded-xl font-black uppercase tracking-wider min-h-12 md:hidden"
+              class="btn btn-primary w-full rounded-xl font-black uppercase tracking-wider min-h-12 sm:flex-1"
               (click)="startRun(true)"
             >
               Start fullscreen
             </button>
             <button
               type="button"
-              class="btn w-full rounded-xl font-black uppercase tracking-wider min-h-12"
-              [ngClass]="isMobile() ? 'btn-ghost border border-base-300' : 'btn-primary'"
+              class="btn btn-ghost border border-base-300 w-full rounded-xl font-black uppercase tracking-wider min-h-12 sm:flex-1"
               (click)="startRun(false)"
             >
-              {{ isMobile() ? 'Start in page' : 'Start chase' }}
+              Start in page
             </button>
           </div>
         </article>
@@ -150,7 +148,7 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
                 @if (!immersive) {
                   <button
                     type="button"
-                    class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11 md:hidden"
+                    class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
                     (click)="enterFullscreen()"
                   >
                     Full
