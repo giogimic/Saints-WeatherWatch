@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { OpsStateService } from '../../core/ops-state.service';
-import { QuizAttempt, WeatherService } from '../../core/weather.service';
+import { QuizAttempt, QuizAward, WeatherService } from '../../core/weather.service';
 import {
   QUIZ_TRACKS,
   QuizCategory,
@@ -13,6 +13,7 @@ import {
   expertRank,
   questionsFor,
 } from './play.questions';
+import { ChaseGameComponent } from './chase-game.component';
 
 interface TrackProgress {
   bestPercent: number;
@@ -21,7 +22,7 @@ interface TrackProgress {
   plays: number;
 }
 
-type View = 'hub' | 'quiz' | 'results';
+type View = 'hub' | 'quiz' | 'results' | 'chase';
 
 const STORAGE_KEY = 'ww-play-progress-v1';
 const CALLSIGN_KEY = 'ww-play-callsign';
@@ -29,10 +30,10 @@ const CALLSIGN_KEY = 'ww-play-callsign';
 @Component({
   selector: 'app-play',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, ChaseGameComponent],
   template: `
     <div class="min-h-[calc(100vh-4rem)] p-4 md:p-6">
-      <div class="max-w-3xl mx-auto">
+      <div class="mx-auto" [class.max-w-3xl]="view !== 'chase'" [class.max-w-5xl]="view === 'chase'">
 
         @if (view === 'hub') {
           <div class="mb-6 md:mb-8">
@@ -56,17 +57,56 @@ const CALLSIGN_KEY = 'ww-play-callsign';
               >
             </label>
 
-            @if (overallRank) {
-              <div class="mt-3 storm-card px-4 py-3 flex items-center gap-3">
-                <span class="text-2xl">🏆</span>
-                <div>
-                  <div class="text-[10px] uppercase tracking-widest text-base-content/40 font-bold">Your rank</div>
-                  <div class="font-black text-primary text-lg leading-tight">{{ overallRank.title }}</div>
-                  <div class="text-xs text-base-content/55 font-semibold">{{ overallRank.blurb }}</div>
+            @if (auth.user(); as u) {
+              <div class="mt-3 storm-card px-4 py-3 space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <div>
+                    <div class="text-[10px] uppercase tracking-widest text-base-content/40 font-bold">Chaser level</div>
+                    <div class="font-black text-primary text-lg leading-tight">
+                      Level {{ u.level }} · {{ u.levelTitle }}
+                    </div>
+                  </div>
+                  <div class="text-right text-[10px] font-black uppercase tracking-wider text-accent tabular-nums">
+                    {{ u.xpIntoLevel }}/{{ u.xpForNext }} XP
+                  </div>
                 </div>
+                <div class="h-2 rounded-full bg-base-300 overflow-hidden">
+                  <div
+                    class="h-full bg-primary transition-all duration-500"
+                    [style.width.%]="xpBarPct(u.xpIntoLevel, u.xpForNext)"
+                  ></div>
+                </div>
+                <p class="text-xs text-base-content/55 font-semibold">
+                  Quiz runs earn XP. Level up to unlock chase trucks in your garage.
+                </p>
+              </div>
+            } @else if (overallRank) {
+              <div class="mt-3 storm-card px-4 py-3">
+                <div class="text-[10px] uppercase tracking-widest text-base-content/40 font-bold">Your rank</div>
+                <div class="font-black text-primary text-lg leading-tight">{{ overallRank.title }}</div>
+                <div class="text-xs text-base-content/55 font-semibold">{{ overallRank.blurb }}</div>
               </div>
             }
           </div>
+
+          <button
+            type="button"
+            class="storm-card w-full text-left p-4 mb-3 hover:border-accent/50 transition-colors group"
+            (click)="openChase()"
+          >
+            <div class="flex items-start gap-3">
+              <div class="min-w-0 flex-1">
+                <p class="text-[10px] font-black uppercase tracking-widest text-accent mb-1">New · Map game</p>
+                <h2 class="font-black uppercase italic text-white text-lg leading-tight group-hover:text-accent transition-colors">
+                  Radar Chase
+                </h2>
+                <p class="text-xs text-base-content/55 font-semibold mt-1">
+                  Drive your garage truck on live radar. Bag random field drops for your profile.
+                </p>
+              </div>
+              <span class="text-base-content/30 text-sm self-center">▶</span>
+            </div>
+          </button>
 
           <div class="grid gap-3 sm:grid-cols-2">
             @for (track of tracks; track track.id) {
@@ -127,15 +167,18 @@ const CALLSIGN_KEY = 'ww-play-callsign';
             routerLink="/archive"
             class="storm-card mt-3 p-4 flex items-center gap-3 hover:border-secondary/40 transition-colors block"
           >
-            <span class="text-2xl">📒</span>
             <div class="flex-1 min-w-0">
               <div class="font-black uppercase italic text-sm text-white">Chase Reports</div>
               <p class="text-xs text-base-content/50 font-semibold">
-                Log real intercepts in Archive · map chase game coming later
+                Log real intercepts in Archive
               </p>
             </div>
             <span class="text-base-content/30 text-sm">→</span>
           </a>
+        }
+
+        @if (view === 'chase') {
+          <app-chase-game (exit)="backToHub()"></app-chase-game>
         }
 
         @if (view === 'quiz' && activeTrack && current) {
@@ -287,16 +330,29 @@ const CALLSIGN_KEY = 'ww-play-callsign';
             @if (postedToBoard) {
               <p class="text-xs font-bold text-success uppercase tracking-wider">Posted to Top Experts</p>
             }
+            @if (lastAward) {
+              <div class="rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 space-y-1">
+                <p class="text-sm font-black text-accent uppercase tracking-wider">
+                  +{{ lastAward.xpGained }} XP
+                  @if (lastAward.levelUp) {
+                    <span class="text-primary"> · Level up! Now {{ lastAward.level }}</span>
+                  }
+                </p>
+                <p class="text-xs font-semibold text-base-content/60">
+                  {{ lastAward.title }} · {{ lastAward.xpIntoLevel }}/{{ lastAward.xpForNext }} to next level
+                </p>
+              </div>
+            }
             @if (unlockedKeys.length) {
               <p class="text-xs font-bold text-secondary uppercase tracking-wider">
-                Unlocked: {{ unlockedKeys.join(', ') }}
+                Garage unlock: {{ unlockedKeys.join(', ') }}
               </p>
             }
             @if (!auth.isLoggedIn()) {
               <div class="rounded-xl border border-primary/40 bg-primary/10 p-4 text-left space-y-2">
                 <p class="text-sm font-black text-white uppercase italic">Save this run</p>
                 <p class="text-xs text-base-content/60 font-semibold">
-                  Create a chaser profile to keep scores, unlock cartoon chase vehicles, and open your live dashboard.
+                  Create a chaser profile to keep XP, level up, unlock chase trucks, and open your live dashboard.
                 </p>
                 <button
                   type="button"
@@ -352,6 +408,7 @@ export class PlayComponent implements OnInit {
   leaderboard: QuizAttempt[] = [];
   postedToBoard = false;
   unlockedKeys: string[] = [];
+  lastAward: QuizAward | null = null;
   private startedAt = 0;
   private lastSeconds = 0;
 
@@ -425,6 +482,12 @@ export class PlayComponent implements OnInit {
     this.view = 'quiz';
   }
 
+  openChase(): void {
+    this.view = 'chase';
+    this.activeTrack = null;
+    this.deck = [];
+  }
+
   backToHub(): void {
     this.view = 'hub';
     this.activeTrack = null;
@@ -487,6 +550,7 @@ export class PlayComponent implements OnInit {
     this.saveProgress();
     this.view = 'results';
     this.unlockedKeys = [];
+    this.lastAward = null;
 
     const seconds = Math.max(1, Math.round((Date.now() - this.startedAt) / 1000));
     this.lastSeconds = seconds;
@@ -501,12 +565,18 @@ export class PlayComponent implements OnInit {
       if (res?.attempt?.id) {
         this.postedToBoard = true;
         this.unlockedKeys = res.unlocked || [];
+        this.lastAward = res.award ?? null;
         this.loadLeaderboard();
         if (this.auth.isLoggedIn()) {
           this.auth.refreshMe().subscribe(() => this.ops.reloadAccountData());
         }
       }
     });
+  }
+
+  xpBarPct(into: number, need: number): number {
+    if (!need || need <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.round((into / need) * 100)));
   }
 
   private loadCallsign(): void {

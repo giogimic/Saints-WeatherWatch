@@ -207,14 +207,16 @@ export class WeatherService {
     score: number;
     total: number;
     seconds: number;
-  }): Observable<{ attempt: QuizAttempt; unlocked: string[] } | null> {
-    return this.http.post<{ attempt: QuizAttempt; unlocked: string[] } | QuizAttempt>(
+  }): Observable<{ attempt: QuizAttempt; unlocked: string[]; award?: QuizAward | null } | null> {
+    return this.http.post<{ attempt: QuizAttempt; unlocked: string[]; award?: QuizAward | null } | QuizAttempt>(
       '/api/quiz/attempts',
       attempt,
     ).pipe(
       map(res => {
-        if (res && 'attempt' in res) return res as { attempt: QuizAttempt; unlocked: string[] };
-        if (res && 'id' in res) return { attempt: res as QuizAttempt, unlocked: [] };
+        if (res && 'attempt' in res) {
+          return res as { attempt: QuizAttempt; unlocked: string[]; award?: QuizAward | null };
+        }
+        if (res && 'id' in res) return { attempt: res as QuizAttempt, unlocked: [], award: null };
         return null;
       }),
       catchError(err => {
@@ -237,6 +239,37 @@ export class WeatherService {
   getMyQuizAttempts(): Observable<QuizAttempt[]> {
     return this.http.get<QuizAttempt[]>('/api/quiz/mine').pipe(
       catchError(() => of([]))
+    );
+  }
+
+  getChaseCatalog(): Observable<ChaseLootDef[]> {
+    return this.http.get<ChaseLootDef[]>('/api/chase/catalog').pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  getMyLoot(): Observable<ChaseLootItem[]> {
+    return this.http.get<ChaseLootItem[]>('/api/chase/loot').pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  saveChaseRun(run: { items: string[]; seconds: number }): Observable<{
+    items: string[];
+    inventory: ChaseLootItem[];
+    award?: QuizAward | null;
+    unlocked: string[];
+  } | null> {
+    return this.http.post<{
+      items: string[];
+      inventory: ChaseLootItem[];
+      award?: QuizAward | null;
+      unlocked: string[];
+    }>('/api/chase/runs', run).pipe(
+      catchError(err => {
+        console.error('saveChaseRun error:', err);
+        return of(null);
+      })
     );
   }
 
@@ -346,6 +379,29 @@ export interface QuizAttempt {
   userId?: string;
 }
 
+export interface QuizAward {
+  xpGained: number;
+  xp: number;
+  level: number;
+  prevLevel: number;
+  levelUp: boolean;
+  xpIntoLevel: number;
+  xpForNext: number;
+  title: string;
+}
+
+export interface ChaseLootDef {
+  key: string;
+  name: string;
+  blurb: string;
+  rarity: string;
+  xp: number;
+}
+
+export interface ChaseLootItem extends ChaseLootDef {
+  count: number;
+}
+
 export interface SavedLocation {
   id: string;
   label: string;
@@ -375,4 +431,5 @@ export interface VehicleDef {
   name: string;
   blurb: string;
   unlockHint: string;
+  minLevel?: number;
 }

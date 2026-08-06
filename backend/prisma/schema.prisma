@@ -18,18 +18,22 @@ model User {
   pinHash             String
   email               String?  @unique
   equippedVehicleKey  String   @default("starter_car")
+  xp                  Int      @default(0)
+  level               Int      @default(1)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   sessions             Session[]
   quizAttempts         QuizAttempt[]
   vehicles             UserVehicle[]
+  collectibles         UserCollectible[]
   favoriteCameras      FavoriteCamera[]
   watchedAreas         WatchedArea[]
   savedLocations       SavedLocation[]
   dashboardPreference  DashboardPreference?
 
   @@index([createdAt])
+  @@index([level])
 }
 
 model Session {
@@ -74,6 +78,21 @@ model UserVehicle {
   @@index([userId])
 }
 
+/// Field loot from Radar Chase mini-game (profile collectables).
+model UserCollectible {
+  id        String   @id @default(cuid())
+  userId    String
+  itemKey   String
+  count     Int      @default(1)
+  firstAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemKey])
+  @@index([userId])
+}
+
 model FavoriteCamera {
   id       String   @id @default(cuid())
   userId   String
@@ -103,7 +122,7 @@ model WatchedArea {
 model DashboardPreference {
   id          String @id @default(cuid())
   userId      String @unique
-  cardOrder   String @default("profile,progress,garage,cams,areas,map")
+  cardOrder   String @default("profile,progress,garage,loot,cams,areas,map")
   hiddenCards String @default("")
   mapLayers   String @default("radar,warnings,cams")
 
