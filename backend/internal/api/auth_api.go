@@ -85,7 +85,7 @@ func signupHandler(st *store.Store, limiter *auth.PINLimiter) http.HandlerFunc {
 			http.Error(w, "Could not create account", http.StatusInternalServerError)
 			return
 		}
-		_ = vehicles.Grant(st, r.Context(), user.ID, vehicles.StarterKey)
+		_ = vehicles.Grant(st, r.Context(), user.ID, vehicles.StarterKey) // starter always granted
 
 		if err := issueSession(w, r, st, user); err != nil {
 			http.Error(w, "Account created but session failed", http.StatusInternalServerError)

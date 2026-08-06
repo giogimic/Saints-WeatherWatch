@@ -207,14 +207,16 @@ export class WeatherService {
     score: number;
     total: number;
     seconds: number;
-  }): Observable<{ attempt: QuizAttempt; unlocked: string[] } | null> {
-    return this.http.post<{ attempt: QuizAttempt; unlocked: string[] } | QuizAttempt>(
+  }): Observable<{ attempt: QuizAttempt; unlocked: string[]; award?: QuizAward | null } | null> {
+    return this.http.post<{ attempt: QuizAttempt; unlocked: string[]; award?: QuizAward | null } | QuizAttempt>(
       '/api/quiz/attempts',
       attempt,
     ).pipe(
       map(res => {
-        if (res && 'attempt' in res) return res as { attempt: QuizAttempt; unlocked: string[] };
-        if (res && 'id' in res) return { attempt: res as QuizAttempt, unlocked: [] };
+        if (res && 'attempt' in res) {
+          return res as { attempt: QuizAttempt; unlocked: string[]; award?: QuizAward | null };
+        }
+        if (res && 'id' in res) return { attempt: res as QuizAttempt, unlocked: [], award: null };
         return null;
       }),
       catchError(err => {
@@ -346,6 +348,17 @@ export interface QuizAttempt {
   userId?: string;
 }
 
+export interface QuizAward {
+  xpGained: number;
+  xp: number;
+  level: number;
+  prevLevel: number;
+  levelUp: boolean;
+  xpIntoLevel: number;
+  xpForNext: number;
+  title: string;
+}
+
 export interface SavedLocation {
   id: string;
   label: string;
@@ -375,4 +388,5 @@ export interface VehicleDef {
   name: string;
   blurb: string;
   unlockHint: string;
+  minLevel?: number;
 }

@@ -12,9 +12,10 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/cams"
 	"github.com/saints-weatherwatch/backend/internal/nws"
+	"github.com/saints-weatherwatch/backend/internal/progress"
 	"github.com/saints-weatherwatch/backend/internal/store"
-	"github.com/saints-weatherwatch/backend/internal/vehicles"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
+	"github.com/saints-weatherwatch/backend/internal/vehicles"
 )
 
 type overviewResponse struct {
@@ -116,11 +117,11 @@ func overviewHandler(cache *nws.Cache) http.HandlerFunc {
 		}
 
 		response := overviewResponse{
-			GeneratedAt:    payload.GeneratedAt,
-			TotalAlerts:    len(payload.Alerts),
-			SevereAlerts:   0,
-			WatchCount:     0,
-			Categories:     categories,
+			GeneratedAt:  payload.GeneratedAt,
+			TotalAlerts:  len(payload.Alerts),
+			SevereAlerts: 0,
+			WatchCount:   0,
+			Categories:   categories,
 		}
 
 		if len(payload.Alerts) > 0 {
@@ -145,14 +146,14 @@ func overviewHandler(cache *nws.Cache) http.HandlerFunc {
 func historyHandler(st *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if st == nil {
 			_ = json.NewEncoder(w).Encode([]any{})
 			return
 		}
 
 		ctx := r.Context()
-		
+
 		var filters []db.TrackerIncidentWhereParam
 
 		// Optional filters
@@ -215,13 +216,13 @@ func deleteHistoryHandler(st *store.Store) http.HandlerFunc {
 }
 
 type createChaseLogReq struct {
-	Title       string  `json:"title"`
-	ChaseDate   string  `json:"chaseDate"` // ISO8601
-	State       string  `json:"state"`
+	Title       string   `json:"title"`
+	ChaseDate   string   `json:"chaseDate"` // ISO8601
+	State       string   `json:"state"`
 	Lat         *float64 `json:"lat,omitempty"`
 	Lon         *float64 `json:"lon,omitempty"`
-	EfRating    *int    `json:"efRating,omitempty"`
-	MilesDriven int     `json:"milesDriven"`
+	EfRating    *int     `json:"efRating,omitempty"`
+	MilesDriven int      `json:"milesDriven"`
 	Notes       *string  `json:"notes,omitempty"`
 }
 
@@ -378,12 +379,24 @@ func createQuizAttemptHandler(st *store.Store) http.HandlerFunc {
 		}
 
 		unlocked := []string{}
+		var award any
 		if loggedIn {
-			unlocked = vehicles.EvaluateAfterAttempt(st, r.Context(), user.ID, req.Category, req.Score, req.Total)
+			awarded, err := progress.Award(st, r.Context(), user.ID, req.Score, req.Total)
+			if err == nil && awarded != nil {
+				award = awarded
+				unlocked = vehicles.EvaluateAfterAttempt(
+					st, r.Context(), user.ID, req.Category, req.Score, req.Total, awarded.Level,
+				)
+			} else {
+				unlocked = vehicles.EvaluateAfterAttempt(
+					st, r.Context(), user.ID, req.Category, req.Score, req.Total, user.Level,
+				)
+			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"attempt":  entry,
 			"unlocked": unlocked,
+			"award":    award,
 		})
 	}
 }

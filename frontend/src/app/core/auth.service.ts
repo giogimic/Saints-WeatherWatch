@@ -7,6 +7,11 @@ export interface ChaserUser {
   chaserName: string;
   email?: string | null;
   equippedVehicleKey: string;
+  xp: number;
+  level: number;
+  xpIntoLevel: number;
+  xpForNext: number;
+  levelTitle: string;
   createdAt: string;
   vehicleKeys: string[];
 }

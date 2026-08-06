@@ -62,10 +62,19 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'cams' | 'areas' | 'map';
                   @if (auth.user(); as u) {
                     <div class="flex items-center gap-3">
                       <div class="w-12 h-8 shrink-0" [innerHTML]="svg(u.equippedVehicleKey)"></div>
-                      <div>
+                      <div class="min-w-0 flex-1">
                         <div class="text-xl font-black text-white italic">{{ u.chaserName }}</div>
-                        <div class="text-[10px] uppercase tracking-wider text-base-content/45 font-bold">
-                          {{ u.vehicleKeys.length }} vehicles unlocked
+                        <div class="text-[10px] uppercase tracking-wider text-primary font-black">
+                          Level {{ u.level }} · {{ u.levelTitle }}
+                        </div>
+                        <div class="mt-1.5 h-1.5 rounded-full bg-base-300 overflow-hidden max-w-[12rem]">
+                          <div
+                            class="h-full bg-primary"
+                            [style.width.%]="xpBarPct(u.xpIntoLevel, u.xpForNext)"
+                          ></div>
+                        </div>
+                        <div class="text-[10px] uppercase tracking-wider text-base-content/45 font-bold mt-1">
+                          {{ u.xpIntoLevel }}/{{ u.xpForNext }} XP · {{ u.vehicleKeys.length }} vehicles
                         </div>
                       </div>
                     </div>
@@ -75,6 +84,11 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'cams' | 'areas' | 'map';
               @case ('progress') {
                 <article class="storm-card p-4 space-y-2">
                   <h2 class="text-xs font-black uppercase tracking-widest text-secondary">Quiz progress</h2>
+                  @if (auth.user(); as u) {
+                    <p class="text-xs font-semibold text-base-content/60">
+                      Level {{ u.level }} {{ u.levelTitle }} — keep training to unlock garage trucks.
+                    </p>
+                  }
                   @if (ops.myAttempts().length === 0) {
                     <p class="text-xs text-base-content/50 font-semibold">No saved attempts yet — hit Play.</p>
                   } @else {
@@ -237,6 +251,11 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   svg(key: string): SafeHtml {
     return this.sanitizer.bypassSecurityTrustHtml(vehicleSvg(key));
+  }
+
+  xpBarPct(into: number, need: number): number {
+    if (!need || need <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.round((into / need) * 100)));
   }
 
   owned(key: string): boolean {

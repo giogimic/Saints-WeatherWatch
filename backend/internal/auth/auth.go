@@ -11,15 +11,16 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/saints-weatherwatch/backend/internal/progress"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 )
 
 const (
-	CookieName   = "ww_session"
-	SessionTTL   = 30 * 24 * time.Hour
-	bcryptCost   = 10
-	ctxUserKey   = contextKey("wwUser")
+	CookieName    = "ww_session"
+	SessionTTL    = 30 * 24 * time.Hour
+	bcryptCost    = 10
+	ctxUserKey    = contextKey("wwUser")
 	ctxSessionKey = contextKey("wwSession")
 )
 
@@ -30,6 +31,11 @@ type UserView struct {
 	ChaserName         string   `json:"chaserName"`
 	Email              *string  `json:"email,omitempty"`
 	EquippedVehicleKey string   `json:"equippedVehicleKey"`
+	XP                 int      `json:"xp"`
+	Level              int      `json:"level"`
+	XPIntoLevel        int      `json:"xpIntoLevel"`
+	XPForNext          int      `json:"xpForNext"`
+	LevelTitle         string   `json:"levelTitle"`
 	CreatedAt          string   `json:"createdAt"`
 	VehicleKeys        []string `json:"vehicleKeys"`
 }
@@ -164,6 +170,10 @@ func RequireUser(next http.Handler) http.Handler {
 func ToUserView(st *store.Store, ctx context.Context, u *db.UserModel) UserView {
 	keys := []string{}
 	if st != nil && u != nil {
+		_ = progress.BackfillFromAttempts(st, ctx, u.ID)
+		if refreshed, err := st.Client.User.FindUnique(db.User.ID.Equals(u.ID)).Exec(ctx); err == nil && refreshed != nil {
+			u = refreshed
+		}
 		rows, err := st.Client.UserVehicle.FindMany(db.UserVehicle.UserID.Equals(u.ID)).Exec(ctx)
 		if err == nil {
 			for _, row := range rows {
@@ -175,11 +185,22 @@ func ToUserView(st *store.Store, ctx context.Context, u *db.UserModel) UserView 
 	if v, ok := u.Email(); ok {
 		email = &v
 	}
+	xp := u.Xp
+	level := u.Level
+	if level < 1 {
+		level = progress.LevelFromXP(xp)
+	}
+	into, need := progress.XPProgress(xp)
 	return UserView{
 		ID:                 u.ID,
 		ChaserName:         u.ChaserName,
 		Email:              email,
 		EquippedVehicleKey: u.EquippedVehicleKey,
+		XP:                 xp,
+		Level:              level,
+		XPIntoLevel:        into,
+		XPForNext:          need,
+		LevelTitle:         progress.Title(level),
 		CreatedAt:          u.CreatedAt.UTC().Format(time.RFC3339),
 		VehicleKeys:        keys,
 	}

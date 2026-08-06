@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { OpsStateService } from '../../core/ops-state.service';
-import { QuizAttempt, WeatherService } from '../../core/weather.service';
+import { QuizAttempt, QuizAward, WeatherService } from '../../core/weather.service';
 import {
   QUIZ_TRACKS,
   QuizCategory,
@@ -56,14 +56,34 @@ const CALLSIGN_KEY = 'ww-play-callsign';
               >
             </label>
 
-            @if (overallRank) {
-              <div class="mt-3 storm-card px-4 py-3 flex items-center gap-3">
-                <span class="text-2xl">🏆</span>
-                <div>
-                  <div class="text-[10px] uppercase tracking-widest text-base-content/40 font-bold">Your rank</div>
-                  <div class="font-black text-primary text-lg leading-tight">{{ overallRank.title }}</div>
-                  <div class="text-xs text-base-content/55 font-semibold">{{ overallRank.blurb }}</div>
+            @if (auth.user(); as u) {
+              <div class="mt-3 storm-card px-4 py-3 space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <div>
+                    <div class="text-[10px] uppercase tracking-widest text-base-content/40 font-bold">Chaser level</div>
+                    <div class="font-black text-primary text-lg leading-tight">
+                      Level {{ u.level }} · {{ u.levelTitle }}
+                    </div>
+                  </div>
+                  <div class="text-right text-[10px] font-black uppercase tracking-wider text-accent tabular-nums">
+                    {{ u.xpIntoLevel }}/{{ u.xpForNext }} XP
+                  </div>
                 </div>
+                <div class="h-2 rounded-full bg-base-300 overflow-hidden">
+                  <div
+                    class="h-full bg-primary transition-all duration-500"
+                    [style.width.%]="xpBarPct(u.xpIntoLevel, u.xpForNext)"
+                  ></div>
+                </div>
+                <p class="text-xs text-base-content/55 font-semibold">
+                  Quiz runs earn XP. Level up to unlock chase trucks in your garage.
+                </p>
+              </div>
+            } @else if (overallRank) {
+              <div class="mt-3 storm-card px-4 py-3">
+                <div class="text-[10px] uppercase tracking-widest text-base-content/40 font-bold">Your rank</div>
+                <div class="font-black text-primary text-lg leading-tight">{{ overallRank.title }}</div>
+                <div class="text-xs text-base-content/55 font-semibold">{{ overallRank.blurb }}</div>
               </div>
             }
           </div>
@@ -287,16 +307,29 @@ const CALLSIGN_KEY = 'ww-play-callsign';
             @if (postedToBoard) {
               <p class="text-xs font-bold text-success uppercase tracking-wider">Posted to Top Experts</p>
             }
+            @if (lastAward) {
+              <div class="rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 space-y-1">
+                <p class="text-sm font-black text-accent uppercase tracking-wider">
+                  +{{ lastAward.xpGained }} XP
+                  @if (lastAward.levelUp) {
+                    <span class="text-primary"> · Level up! Now {{ lastAward.level }}</span>
+                  }
+                </p>
+                <p class="text-xs font-semibold text-base-content/60">
+                  {{ lastAward.title }} · {{ lastAward.xpIntoLevel }}/{{ lastAward.xpForNext }} to next level
+                </p>
+              </div>
+            }
             @if (unlockedKeys.length) {
               <p class="text-xs font-bold text-secondary uppercase tracking-wider">
-                Unlocked: {{ unlockedKeys.join(', ') }}
+                Garage unlock: {{ unlockedKeys.join(', ') }}
               </p>
             }
             @if (!auth.isLoggedIn()) {
               <div class="rounded-xl border border-primary/40 bg-primary/10 p-4 text-left space-y-2">
                 <p class="text-sm font-black text-white uppercase italic">Save this run</p>
                 <p class="text-xs text-base-content/60 font-semibold">
-                  Create a chaser profile to keep scores, unlock cartoon chase vehicles, and open your live dashboard.
+                  Create a chaser profile to keep XP, level up, unlock chase trucks, and open your live dashboard.
                 </p>
                 <button
                   type="button"
@@ -352,6 +385,7 @@ export class PlayComponent implements OnInit {
   leaderboard: QuizAttempt[] = [];
   postedToBoard = false;
   unlockedKeys: string[] = [];
+  lastAward: QuizAward | null = null;
   private startedAt = 0;
   private lastSeconds = 0;
 
@@ -487,6 +521,7 @@ export class PlayComponent implements OnInit {
     this.saveProgress();
     this.view = 'results';
     this.unlockedKeys = [];
+    this.lastAward = null;
 
     const seconds = Math.max(1, Math.round((Date.now() - this.startedAt) / 1000));
     this.lastSeconds = seconds;
@@ -501,12 +536,18 @@ export class PlayComponent implements OnInit {
       if (res?.attempt?.id) {
         this.postedToBoard = true;
         this.unlockedKeys = res.unlocked || [];
+        this.lastAward = res.award ?? null;
         this.loadLeaderboard();
         if (this.auth.isLoggedIn()) {
           this.auth.refreshMe().subscribe(() => this.ops.reloadAccountData());
         }
       }
     });
+  }
+
+  xpBarPct(into: number, need: number): number {
+    if (!need || need <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.round((into / need) * 100)));
   }
 
   private loadCallsign(): void {
