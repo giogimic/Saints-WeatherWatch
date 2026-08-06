@@ -1,148 +1,137 @@
 /** Stable vehicle keys for rewards + future map chase game.
- * Side-view cartoon art, hand-authored so it stays original and scales cleanly.
+ * Compact side-view storm-chase trucks — small footprint, bold outline, chase gear.
  */
 
-const OUTLINE = '#0b1120';
+const OUT = '#0b1120';
 
+/** Extra padding in the viewBox so icons read smaller in garage cards. */
 function frame(inner: string): string {
-  return `<svg viewBox="0 0 200 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+  return `<svg viewBox="0 0 180 96" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
 }
 
-const shadow = `<ellipse cx="100" cy="108" rx="82" ry="7" fill="#020617" opacity="0.35"/>`;
+const shadow = `<ellipse cx="90" cy="86" rx="58" ry="5" fill="#020617" opacity="0.32"/>`;
 
-/** Treaded wheel with rim spokes. */
-function wheel(cx: number, cy: number, r: number, rim = '#e2e8f0'): string {
-  const tread = Math.max(4, r * 0.3);
-  const spokes = [0, 60, 120, 240, 300].map(deg => {
-    const a = (deg * Math.PI) / 180;
-    const inner = r * 0.22;
-    const outer = r * 0.46;
-    return `<line x1="${(cx + Math.cos(a) * inner).toFixed(1)}" y1="${(cy + Math.sin(a) * inner).toFixed(1)}" x2="${(cx + Math.cos(a) * outer).toFixed(1)}" y2="${(cy + Math.sin(a) * outer).toFixed(1)}" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>`;
-  }).join('');
+function wheel(cx: number, cy: number, r: number, rim = '#cbd5e1'): string {
   return `<g>
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="#1f2937" stroke="${OUTLINE}" stroke-width="3"/>
-    <circle cx="${cx}" cy="${cy}" r="${(r * 0.83).toFixed(1)}" fill="none" stroke="#111827" stroke-width="${tread.toFixed(1)}" stroke-dasharray="6 8"/>
-    <circle cx="${cx}" cy="${cy}" r="${(r * 0.55).toFixed(1)}" fill="${rim}" stroke="#64748b" stroke-width="2"/>
-    ${spokes}
-    <circle cx="${cx}" cy="${cy}" r="${(r * 0.16).toFixed(1)}" fill="#475569"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="#111827" stroke="${OUT}" stroke-width="2.2"/>
+    <circle cx="${cx}" cy="${cy}" r="${(r * 0.78).toFixed(1)}" fill="none" stroke="#1f2937" stroke-width="${Math.max(2.5, r * 0.28).toFixed(1)}" stroke-dasharray="3.5 4.5"/>
+    <circle cx="${cx}" cy="${cy}" r="${(r * 0.48).toFixed(1)}" fill="${rim}" stroke="#64748b" stroke-width="1.4"/>
+    <circle cx="${cx}" cy="${cy}" r="${(r * 0.14).toFixed(1)}" fill="#334155"/>
   </g>`;
 }
 
-/** Diagonal shine streak clipped to the glass shape. */
-function glass(path: string, id: string, fill = '#bae6fd'): string {
-  return `<g>
-    <clipPath id="${id}"><path d="${path}"/></clipPath>
-    <path d="${path}" fill="${fill}" stroke="${OUTLINE}" stroke-width="2.5" stroke-linejoin="round"/>
-    <g clip-path="url(#${id})" opacity="0.55">
-      <path d="M-40 60 L20 -20 L36 -20 L-24 60 Z" fill="#ffffff"/>
-      <path d="M0 60 L60 -20 L70 -20 L10 60 Z" fill="#ffffff"/>
-    </g>
-  </g>`;
+function glass(d: string, fill = '#7dd3fc'): string {
+  return `<path d="${d}" fill="${fill}" stroke="${OUT}" stroke-width="1.8" stroke-linejoin="round"/>`;
 }
 
+/** Compact sedan with roof antenna — starter chase car. */
 const starterCar = frame(`
   ${shadow}
-  <path d="M22 82 L22 66 Q22 58 32 56 L54 52 L70 34 Q74 28 82 28 L120 28 Q128 28 132 34 L146 54 L168 59 Q178 61 178 70 L178 82 Z"
-        fill="#38bdf8" stroke="${OUTLINE}" stroke-width="3.5" stroke-linejoin="round"/>
-  <path d="M26 72 H174" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
-  ${glass('M76 52 L88 33 L108 33 L108 52 Z', 'g-car-a')}
-  ${glass('M114 33 L128 33 L140 52 L114 52 Z', 'g-car-b')}
-  <rect x="20" y="64" width="12" height="8" rx="3" fill="#fde68a" stroke="${OUTLINE}" stroke-width="2"/>
-  <rect x="170" y="64" width="9" height="8" rx="3" fill="#f87171" stroke="${OUTLINE}" stroke-width="2"/>
-  <path d="M60 82 H140" stroke="#0369a1" stroke-width="3" opacity="0.5"/>
-  ${wheel(62, 86, 17)}
-  ${wheel(146, 86, 17)}
+  <line x1="98" y1="28" x2="98" y2="40" stroke="#475569" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="98" cy="26" r="2.5" fill="#fbbf24" stroke="${OUT}" stroke-width="1.2"/>
+  <path d="M38 68 L38 56 Q38 50 46 49 L58 47 L68 36 Q70 33 76 33 L108 33 Q114 33 116 37 L124 48 L138 51 Q144 53 144 58 L144 68 Z"
+        fill="#38bdf8" stroke="${OUT}" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M42 60 H140" stroke="#0284c7" stroke-width="2.5" stroke-linecap="round"/>
+  ${glass('M70 47 L78 36 L96 36 L96 47 Z')}
+  ${glass('M100 36 L110 36 L120 47 L100 47 Z')}
+  <rect x="36" y="54" width="8" height="5" rx="1.5" fill="#fde68a" stroke="${OUT}" stroke-width="1.2"/>
+  <rect x="136" y="54" width="6" height="5" rx="1.5" fill="#f87171" stroke="${OUT}" stroke-width="1.2"/>
+  ${wheel(58, 70, 11)}
+  ${wheel(126, 70, 11)}
 `);
 
+/** Box van with roof radar dish. */
 const radarVan = frame(`
   ${shadow}
-  <rect x="112" y="18" width="6" height="20" rx="2" fill="#475569" stroke="${OUTLINE}" stroke-width="2"/>
-  <ellipse cx="115" cy="16" rx="20" ry="7" fill="#fbbf24" stroke="${OUTLINE}" stroke-width="2.5"/>
-  <path d="M138 10 a14 14 0 0 1 0 14" fill="none" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M146 6 a20 20 0 0 1 0 22" fill="none" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
-  <path d="M20 82 L20 62 Q20 54 30 52 L44 50 L58 36 Q62 30 70 30 L162 30 Q174 30 174 42 L174 82 Z"
-        fill="#a78bfa" stroke="${OUTLINE}" stroke-width="3.5" stroke-linejoin="round"/>
-  <path d="M24 70 H170" stroke="#8b5cf6" stroke-width="5" stroke-linecap="round"/>
-  ${glass('M62 50 L74 35 L92 35 L92 50 Z', 'g-van-a', '#ddd6fe')}
-  ${glass('M100 35 L124 35 L124 50 L100 50 Z', 'g-van-b', '#ddd6fe')}
-  ${glass('M132 35 L156 35 L156 50 L132 50 Z', 'g-van-c', '#ddd6fe')}
-  <rect x="18" y="60" width="12" height="8" rx="3" fill="#fde68a" stroke="${OUTLINE}" stroke-width="2"/>
-  ${wheel(58, 86, 17)}
-  ${wheel(146, 86, 17)}
+  <ellipse cx="118" cy="22" rx="14" ry="5" fill="#fbbf24" stroke="${OUT}" stroke-width="1.8"/>
+  <rect x="116" y="26" width="4" height="12" rx="1" fill="#475569" stroke="${OUT}" stroke-width="1.2"/>
+  <path d="M132 18 a10 10 0 0 1 0 10" fill="none" stroke="#fbbf24" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M36 68 L36 52 Q36 46 44 45 L54 44 L62 34 Q64 31 70 31 L140 31 Q148 31 148 40 L148 68 Z"
+        fill="#a78bfa" stroke="${OUT}" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M40 58 H144" stroke="#7c3aed" stroke-width="3" stroke-linecap="round"/>
+  ${glass('M64 44 L72 34 L86 34 L86 44 Z', '#ddd6fe')}
+  ${glass('M92 34 L112 34 L112 44 L92 44 Z', '#ddd6fe')}
+  ${glass('M118 34 L138 34 L138 44 L118 44 Z', '#ddd6fe')}
+  <rect x="34" y="52" width="8" height="5" rx="1.5" fill="#fde68a" stroke="${OUT}" stroke-width="1.2"/>
+  ${wheel(56, 70, 11)}
+  ${wheel(128, 70, 11)}
 `);
 
+/** Lifted SUV with emergency light bar. */
 const rescueSuv = frame(`
   ${shadow}
-  <rect x="76" y="20" width="52" height="9" rx="4" fill="#0f172a" stroke="${OUTLINE}" stroke-width="2"/>
-  <rect x="80" y="22" width="20" height="5" rx="2" fill="#ef4444"/>
-  <rect x="104" y="22" width="20" height="5" rx="2" fill="#3b82f6"/>
-  <path d="M20 82 L20 64 Q20 56 30 54 L46 51 L62 32 Q66 29 74 29 L138 29 Q148 29 152 36 L164 54 L172 58 Q180 61 180 70 L180 82 Z"
-        fill="#34d399" stroke="${OUTLINE}" stroke-width="3.5" stroke-linejoin="round"/>
-  <path d="M24 71 H176" stroke="#10b981" stroke-width="5" stroke-linecap="round"/>
-  ${glass('M66 51 L78 34 L96 34 L96 51 Z', 'g-suv-a', '#d1fae5')}
-  ${glass('M104 34 L128 34 L128 51 L104 51 Z', 'g-suv-b', '#d1fae5')}
-  ${glass('M136 34 L146 34 L158 51 L136 51 Z', 'g-suv-c', '#d1fae5')}
-  <path d="M108 60 h14 M115 56 v13" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
-  <rect x="18" y="62" width="12" height="8" rx="3" fill="#fde68a" stroke="${OUTLINE}" stroke-width="2"/>
-  ${wheel(60, 86, 18)}
-  ${wheel(148, 86, 18)}
+  <rect x="72" y="26" width="40" height="6" rx="2.5" fill="#0f172a" stroke="${OUT}" stroke-width="1.5"/>
+  <rect x="75" y="27.5" width="15" height="3" rx="1" fill="#ef4444"/>
+  <rect x="94" y="27.5" width="15" height="3" rx="1" fill="#3b82f6"/>
+  <path d="M34 68 L34 54 Q34 48 42 47 L54 45 L64 34 Q66 31 72 31 L118 31 Q126 31 128 36 L136 46 L144 49 Q148 51 148 56 L148 68 Z"
+        fill="#34d399" stroke="${OUT}" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M38 58 H144" stroke="#059669" stroke-width="3" stroke-linecap="round"/>
+  ${glass('M66 45 L74 35 L90 35 L90 45 Z', '#a7f3d0')}
+  ${glass('M96 35 L114 35 L114 45 L96 45 Z', '#a7f3d0')}
+  ${glass('M120 35 L126 35 L134 45 L120 45 Z', '#a7f3d0')}
+  <path d="M98 52 h10 M103 49 v10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <rect x="32" y="52" width="8" height="5" rx="1.5" fill="#fde68a" stroke="${OUT}" stroke-width="1.2"/>
+  ${wheel(56, 70, 12)}
+  ${wheel(128, 70, 12)}
 `);
 
+/** Crew-cab research truck with instrument box + sensors. */
 const researchTruck = frame(`
   ${shadow}
-  <rect x="104" y="24" width="76" height="56" rx="6" fill="#d97706" stroke="${OUTLINE}" stroke-width="3.5"/>
-  <rect x="112" y="34" width="60" height="20" rx="3" fill="#fbbf24" opacity="0.7"/>
-  <rect x="112" y="60" width="60" height="10" rx="3" fill="#b45309"/>
-  <rect x="130" y="8" width="5" height="18" rx="2" fill="#475569" stroke="${OUTLINE}" stroke-width="2"/>
-  <circle cx="126" cy="8" r="5" fill="#38bdf8" stroke="${OUTLINE}" stroke-width="2"/>
-  <circle cx="140" cy="8" r="5" fill="#38bdf8" stroke="${OUTLINE}" stroke-width="2"/>
-  <path d="M20 80 L20 60 Q20 52 30 50 L42 48 L56 32 Q60 28 68 28 L96 28 Q104 28 104 36 L104 80 Z"
-        fill="#f59e0b" stroke="${OUTLINE}" stroke-width="3.5" stroke-linejoin="round"/>
-  ${glass('M60 48 L72 33 L94 33 L94 48 Z', 'g-truck-a', '#fef3c7')}
-  <rect x="18" y="58" width="12" height="8" rx="3" fill="#fde68a" stroke="${OUTLINE}" stroke-width="2"/>
-  ${wheel(56, 86, 17)}
-  ${wheel(132, 86, 17)}
-  ${wheel(168, 86, 17)}
+  <rect x="96" y="34" width="52" height="34" rx="3" fill="#d97706" stroke="${OUT}" stroke-width="2.4"/>
+  <rect x="102" y="40" width="40" height="12" rx="2" fill="#fbbf24" opacity="0.75"/>
+  <rect x="102" y="56" width="40" height="6" rx="1.5" fill="#b45309"/>
+  <line x1="118" y1="18" x2="118" y2="34" stroke="#475569" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="114" cy="16" r="3.5" fill="#38bdf8" stroke="${OUT}" stroke-width="1.3"/>
+  <circle cx="122" cy="16" r="3.5" fill="#38bdf8" stroke="${OUT}" stroke-width="1.3"/>
+  <path d="M34 68 L34 52 Q34 46 42 45 L52 43 L60 34 Q62 31 68 31 L92 31 Q96 31 96 36 L96 68 Z"
+        fill="#f59e0b" stroke="${OUT}" stroke-width="2.4" stroke-linejoin="round"/>
+  ${glass('M62 43 L70 34 L90 34 L90 43 Z', '#fef3c7')}
+  <rect x="32" y="52" width="8" height="5" rx="1.5" fill="#fde68a" stroke="${OUT}" stroke-width="1.2"/>
+  ${wheel(54, 70, 11)}
+  ${wheel(114, 70, 11)}
+  ${wheel(140, 70, 11)}
 `);
 
+/** Lifted chase pickup — bed rack, light bar, bull bar. */
 const damagePickup = frame(`
   ${shadow}
-  <path d="M74 32 Q84 14 104 14 L120 14" fill="none" stroke="#1f2937" stroke-width="5" stroke-linecap="round"/>
-  <rect x="96" y="8" width="30" height="8" rx="3" fill="#0f172a" stroke="${OUTLINE}" stroke-width="2"/>
-  <circle cx="104" cy="12" r="3" fill="#fde68a"/>
-  <circle cx="112" cy="12" r="3" fill="#fde68a"/>
-  <circle cx="120" cy="12" r="3" fill="#fde68a"/>
-  <path d="M18 80 L18 62 L26 56 L44 52 L60 30 Q64 25 72 25 L112 25 Q120 25 124 31 L136 52 L136 58 L182 58 L182 80 Z"
-        fill="#ef4444" stroke="${OUTLINE}" stroke-width="3.5" stroke-linejoin="round"/>
-  <rect x="134" y="52" width="50" height="8" rx="3" fill="#dc2626" stroke="${OUTLINE}" stroke-width="2.5"/>
-  ${glass('M64 52 L76 30 L96 30 L96 52 Z', 'g-pk-a', '#fecdd3')}
-  ${glass('M104 30 L118 30 L130 52 L104 52 Z', 'g-pk-b', '#fecdd3')}
-  <path d="M40 70 H130" stroke="#b91c1c" stroke-width="4" stroke-linecap="round"/>
-  <path d="M60 80 H128" stroke="#cbd5e1" stroke-width="5" stroke-linecap="round"/>
-  <path d="M14 58 L14 76 L20 76 L20 58 Z" fill="#0f172a" stroke="${OUTLINE}" stroke-width="2"/>
-  <rect x="20" y="60" width="10" height="8" rx="2" fill="#fbbf24" stroke="${OUTLINE}" stroke-width="2"/>
-  ${wheel(62, 84, 22, '#fca5a5')}
-  ${wheel(154, 84, 22, '#fca5a5')}
+  <path d="M78 30 Q86 18 100 18 L112 18" fill="none" stroke="#1f2937" stroke-width="3.2" stroke-linecap="round"/>
+  <rect x="94" y="14" width="22" height="5.5" rx="2" fill="#0f172a" stroke="${OUT}" stroke-width="1.3"/>
+  <circle cx="100" cy="16.5" r="1.8" fill="#fde68a"/>
+  <circle cx="105" cy="16.5" r="1.8" fill="#fde68a"/>
+  <circle cx="110" cy="16.5" r="1.8" fill="#fde68a"/>
+  <path d="M32 68 L32 54 L38 50 L50 47 L60 34 Q62 30 68 30 L100 30 Q106 30 108 35 L116 48 L116 52 L152 52 L152 68 Z"
+        fill="#ef4444" stroke="${OUT}" stroke-width="2.4" stroke-linejoin="round"/>
+  <rect x="114" y="46" width="40" height="6" rx="1.5" fill="#b91c1c" stroke="${OUT}" stroke-width="1.5"/>
+  ${glass('M62 47 L70 34 L88 34 L88 47 Z', '#fecdd3')}
+  ${glass('M94 34 L104 34 L112 47 L94 47 Z', '#fecdd3')}
+  <path d="M48 58 H108" stroke="#991b1b" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M28 50 L28 64 L34 64 L34 50 Z" fill="#0f172a" stroke="${OUT}" stroke-width="1.4"/>
+  <rect x="34" y="52" width="7" height="5" rx="1" fill="#fbbf24" stroke="${OUT}" stroke-width="1.2"/>
+  ${wheel(58, 70, 13, '#fca5a5')}
+  ${wheel(132, 70, 13, '#fca5a5')}
 `);
 
+/** Armored interceptor — mesh cage, probe arm, light bar. */
 const tornadoInterceptor = frame(`
   ${shadow}
-  <path d="M150 16 c8 8 4 16 -2 22 c8 -3 16 -10 20 -20 c-6 4 -14 3 -18 -2 Z" fill="#94a3b8" opacity="0.85"/>
-  <path d="M70 30 Q82 12 104 12 L126 12 Q136 12 140 20" fill="none" stroke="#111827" stroke-width="5" stroke-linecap="round"/>
-  <rect x="86" y="6" width="40" height="8" rx="3" fill="#0f172a" stroke="${OUTLINE}" stroke-width="2"/>
-  <circle cx="94" cy="10" r="3" fill="#fbbf24"/>
-  <circle cx="104" cy="10" r="3" fill="#fbbf24"/>
-  <circle cx="114" cy="10" r="3" fill="#fbbf24"/>
-  <path d="M14 80 L14 62 L30 50 L56 46 L72 28 Q76 23 84 23 L118 23 Q126 23 130 29 L142 48 L170 54 Q180 57 180 68 L180 80 Z"
-        fill="#334155" stroke="${OUTLINE}" stroke-width="3.5" stroke-linejoin="round"/>
-  ${glass('M76 46 L88 28 L110 28 L110 46 Z', 'g-int-a', '#94a3b8')}
-  ${glass('M118 28 L126 28 L138 46 L118 46 Z', 'g-int-b', '#94a3b8')}
-  <path d="M30 66 H170" stroke="#ef4444" stroke-width="5" stroke-linecap="round"/>
-  <path d="M8 56 L8 78 L16 78 L16 56 Z" fill="#0f172a" stroke="${OUTLINE}" stroke-width="2"/>
-  <path d="M6 62 H24 M6 72 H24" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-  <path d="M164 40 L188 40 L188 46 L168 46 Z" fill="#0f172a" stroke="${OUTLINE}" stroke-width="2.5" stroke-linejoin="round"/>
-  ${wheel(58, 84, 20, '#fecaca')}
-  ${wheel(150, 84, 20, '#fecaca')}
+  <path d="M132 20 c5 5 2 11 -2 15 c5 -2 11 -7 14 -14 c-4 3 -9 2 -12 -1 Z" fill="#94a3b8" opacity="0.85"/>
+  <path d="M70 30 Q80 16 98 16 L116 16 Q122 16 124 22" fill="none" stroke="#111827" stroke-width="3.2" stroke-linecap="round"/>
+  <rect x="84" y="12" width="28" height="5.5" rx="2" fill="#0f172a" stroke="${OUT}" stroke-width="1.3"/>
+  <circle cx="90" cy="14.5" r="1.8" fill="#fbbf24"/>
+  <circle cx="98" cy="14.5" r="1.8" fill="#fbbf24"/>
+  <circle cx="106" cy="14.5" r="1.8" fill="#fbbf24"/>
+  <path d="M30 68 L30 54 L42 46 L56 44 L66 32 Q68 28 74 28 L106 28 Q112 28 114 33 L122 46 L146 50 Q152 52 152 58 L152 68 Z"
+        fill="#334155" stroke="${OUT}" stroke-width="2.4" stroke-linejoin="round"/>
+  ${glass('M70 44 L78 32 L96 32 L96 44 Z', '#94a3b8')}
+  ${glass('M102 32 L108 32 L116 44 L102 44 Z', '#94a3b8')}
+  <path d="M42 56 H146" stroke="#ef4444" stroke-width="3" stroke-linecap="round"/>
+  <path d="M24 48 L24 64 L30 64 L30 48 Z" fill="#0f172a" stroke="${OUT}" stroke-width="1.4"/>
+  <path d="M22 52 H34 M22 58 H34" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>
+  <path d="M140 38 L158 38 L158 42 L144 42 Z" fill="#0f172a" stroke="${OUT}" stroke-width="1.6" stroke-linejoin="round"/>
+  ${wheel(56, 70, 12.5, '#fecaca')}
+  ${wheel(128, 70, 12.5, '#fecaca')}
 `);
 
 export const VEHICLE_SVGS: Record<string, string> = {
