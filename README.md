@@ -101,7 +101,7 @@ Long-term vision (grain of salt — do not rewrite the ops app to chase it):
 
 - [docs/STORM_CHASER_VISION.md](docs/STORM_CHASER_VISION.md) — full living-world north star + trust boundary  
 - [docs/STORM_CHASER_PHASE1.md](docs/STORM_CHASER_PHASE1.md) — **current** shared-world build contract  
-- [docs/STORM_CHASER_ROADMAP.md](docs/STORM_CHASER_ROADMAP.md) — ordered later slices (camera, biomes, research, deployables)
+- [docs/STORM_CHASER_ROADMAP.md](docs/STORM_CHASER_ROADMAP.md) — ordered later slices (biomes done · research in progress · deployables next)
 
 ## Data Sources (all free, no API keys)
 

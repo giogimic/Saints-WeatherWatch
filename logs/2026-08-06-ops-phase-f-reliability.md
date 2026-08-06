@@ -14,4 +14,4 @@ Phase E (#16) merged. Continue A→F with Phase F on `giogimic/ops-phase-f-relia
 Official/licensed APIs only. County/municipality max for outages. No address-level scraping.
 
 ## Next
-Ops A→F complete for this corridor plan. Optional later: commercial outage GeoJSON, fire/smoke feed when stable, winter/marine.
+Ops A→F complete for this corridor plan (Phase F #17). Optional later: commercial outage GeoJSON, fire/smoke feed when stable, winter/marine. Storm World continued with Phase 4 research.

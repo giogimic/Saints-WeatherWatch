@@ -23,7 +23,7 @@ See [STORM_CHASER_PHASE1.md](./STORM_CHASER_PHASE1.md).
 
 **Out of scope here:** deployables, weather-typed research ticks, full region biomes.
 
-## Phase 3 — Regional spawn tables + lobbies — **in progress**
+## Phase 3 — Regional spawn tables + lobbies — **done**
 
 - [x] Hand-authored land-cover zones (forest / coast / town / farm) — approximate Maine match
 - [x] Biased material tables per zone
@@ -31,11 +31,14 @@ See [STORM_CHASER_PHASE1.md](./STORM_CHASER_PHASE1.md).
 - [x] Presence rendezvous + lobby chat (mobile)
 - [ ] Optional: GIS land-cover tiles / finer region polygons
 
-## Phase 4 — Weather-linked research (real phenomena)
+## Phase 4 — Weather-linked research (real phenomena) — **in progress**
 
-- Server reads live alerts/radar context; awards **research** stacks for time-on-station
-- Never mutates official alert text or severity for gameplay
-- Personal research log / database UI
+- [x] Server reads live alerts context (NWS cache → world room, read-only)
+- [x] Awards **research_sample** stacks for time-on-station near alert cells
+- [x] Never mutates official alert text or severity for gameplay
+- [x] Personal research log (`GET /api/world/research` + Trade Center panel)
+- [ ] Optional: radar-freshness bonus tick
+- [ ] Optional: richer research database UI / filters
 
 ## Phase 5 — Deployables & field networks
 

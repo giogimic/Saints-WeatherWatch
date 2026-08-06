@@ -3,7 +3,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
-import { TradeListing, WorldItem, WorldRecipe, WorldService } from '../../core/world.service';
+import { TradeListing, ResearchLogEntry, WorldItem, WorldRecipe, WorldService } from '../../core/world.service';
 
 @Component({
   selector: 'app-trade-center',
@@ -129,6 +129,27 @@ import { TradeListing, WorldItem, WorldRecipe, WorldService } from '../../core/w
               }
             </ul>
           </article>
+
+          <article class="storm-card p-4 space-y-3">
+            <h2 class="text-xs font-black uppercase tracking-widest text-sky-300">Research log</h2>
+            <p class="text-[10px] text-base-content/50 font-semibold leading-relaxed">
+              {{ researchNote || 'SIM grants from time-on-station near live NWS cells. Official severity is never changed.' }}
+            </p>
+            <ul class="space-y-2 max-h-72 overflow-y-auto">
+              @for (row of researchLog; track row.id) {
+                <li class="border border-base-300/40 rounded-xl px-3 py-2 text-sm">
+                  <div class="font-black text-white text-xs uppercase tracking-wider">
+                    {{ row.severity || 'Alert' }}
+                    <span class="text-base-content/40 font-bold normal-case">· {{ row.createdAt | date:'short' }}</span>
+                  </div>
+                  <div class="font-semibold text-white/90 truncate">{{ row.headline }}</div>
+                  <div class="text-[10px] text-base-content/45 font-bold truncate">{{ row.area }} · +{{ row.qty }} {{ itemLabel(row.itemKey) }}</div>
+                </li>
+              } @empty {
+                <li class="text-xs text-base-content/50 font-semibold">No samples yet — hold near an active alert in Storm World.</li>
+              }
+            </ul>
+          </article>
         }
       </div>
     </div>
@@ -142,6 +163,8 @@ export class TradeCenterComponent implements OnInit {
   catalogItems: WorldItem[] = [];
   recipes: WorldRecipe[] = [];
   trades: TradeListing[] = [];
+  researchLog: ResearchLogEntry[] = [];
+  researchNote = '';
   offerKey = '';
   offerQty = 1;
   askKey = 'battery';
@@ -173,6 +196,10 @@ export class TradeCenterComponent implements OnInit {
       }
     });
     this.world.getTrades().subscribe(rows => this.trades = rows || []);
+    this.world.getResearchLog().subscribe(res => {
+      this.researchLog = res.items || [];
+      this.researchNote = res.note || '';
+    });
   }
 
   itemLabel(key: string): string {

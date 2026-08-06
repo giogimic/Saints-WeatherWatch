@@ -19,6 +19,7 @@ import (
 
 	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/loot"
+	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/progress"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
@@ -88,6 +89,7 @@ var ItemCatalog = []ItemDef{
 	{Key: "weather_journal", Name: "Weather Journal", Blurb: "Pages of sky notes.", Rarity: "uncommon", Kind: "material", XP: 8},
 	{Key: "blueprint_frag", Name: "Blueprint Fragment", Blurb: "Half a probe schematic.", Rarity: "rare", Kind: "material", XP: 15},
 	{Key: "advanced_sensor", Name: "Advanced Sensor", Blurb: "Lab-grade pickup.", Rarity: "rare", Kind: "material", XP: 20},
+	{Key: "research_sample", Name: "Research Sample", Blurb: "SIM loot from time-on-station near a real alert cell. Does not change official severity.", Rarity: "uncommon", Kind: "material", XP: 12},
 	{Key: "basic_probe", Name: "Basic Probe", Blurb: "Crafted field probe.", Rarity: "uncommon", Kind: "gear", XP: 0},
 	{Key: "repair_kit", Name: "Repair Kit", Blurb: "Tape, ties, hope.", Rarity: "common", Kind: "gear", XP: 0},
 	{Key: "field_journal", Name: "Field Journal", Blurb: "Bound notes for the desk.", Rarity: "uncommon", Kind: "gear", XP: 0},
@@ -116,6 +118,11 @@ var Recipes = []Recipe{
 		ID: "craft_field_journal", Name: "Field Journal", Blurb: "Bind notes into a usable log.",
 		Inputs: []StackNeed{{Key: "scientific_note", Qty: 3}, {Key: "weather_journal", Qty: 1}},
 		Output: StackNeed{Key: "field_journal", Qty: 1}, MinLevel: 1,
+	},
+	{
+		ID: "craft_research_bind", Name: "Bind Research Sample", Blurb: "Turn a live-cell sample into a weather journal page.",
+		Inputs: []StackNeed{{Key: "research_sample", Qty: 1}, {Key: "scientific_note", Qty: 1}},
+		Output: StackNeed{Key: "weather_journal", Qty: 1}, MinLevel: 1,
 	},
 	{
 		ID: "craft_solar_pack", Name: "Solar Pack", Blurb: "Keep probes topped up.",
@@ -245,18 +252,19 @@ type SimEvent struct {
 }
 
 type Envelope struct {
-	Type      string     `json:"type"`
-	Players   []Player   `json:"players"`
-	Drops     []Drop     `json:"drops,omitempty"`
-	DropID    string     `json:"dropId,omitempty"`
-	ItemKey   string     `json:"itemKey,omitempty"`
-	Event     *SimEvent  `json:"event,omitempty"`
-	Toast     string     `json:"toast,omitempty"`
-	You       *Player    `json:"you,omitempty"`
-	LobbyID   string     `json:"lobbyId,omitempty"`
-	LobbyName string     `json:"lobbyName,omitempty"`
-	Chat      *ChatLine  `json:"chat,omitempty"`
-	Chats     []ChatLine `json:"chats,omitempty"`
+	Type      string           `json:"type"`
+	Players   []Player         `json:"players"`
+	Drops     []Drop           `json:"drops,omitempty"`
+	DropID    string           `json:"dropId,omitempty"`
+	ItemKey   string           `json:"itemKey,omitempty"`
+	Event     *SimEvent        `json:"event,omitempty"`
+	Toast     string           `json:"toast,omitempty"`
+	You       *Player          `json:"you,omitempty"`
+	LobbyID   string           `json:"lobbyId,omitempty"`
+	LobbyName string           `json:"lobbyName,omitempty"`
+	Chat      *ChatLine        `json:"chat,omitempty"`
+	Chats     []ChatLine       `json:"chats,omitempty"`
+	Research  *ResearchStatus  `json:"research,omitempty"`
 }
 
 type ChatLine struct {
@@ -277,28 +285,35 @@ type clientMsg struct {
 }
 
 type client struct {
-	room       *Room
-	conn       *websocket.Conn
-	send       chan []byte
-	userID     string
-	name       string
-	veh        string
-	lat        float64
-	lng        float64
-	lastMove   time.Time
-	lastPickup time.Time
-	lastEvent  time.Time
-	lastChat   time.Time
-	dirty      bool // moved since last presence tick
-	welcomed   bool // first hello may snap; later hellos are clamped moves
+	room              *Room
+	conn              *websocket.Conn
+	send              chan []byte
+	userID            string
+	name              string
+	veh               string
+	lat               float64
+	lng               float64
+	lastMove          time.Time
+	lastPickup        time.Time
+	lastEvent         time.Time
+	lastChat          time.Time
+	dirty             bool // moved since last presence tick
+	welcomed          bool // first hello may snap; later hellos are clamped moves
+	stationAlertID    string
+	stationSince      time.Time
+	stationLat        float64
+	stationLng        float64
+	lastResearchAt    time.Time
+	lastResearchAlert string
 }
 
-// Room is one lobby shard (presence / drops / SIM events / chat). Inventory stays global.
+// Room is one lobby shard (presence / drops / SIM events / chat / research). Inventory stays global.
 type Room struct {
 	id         string
 	name       string
 	maxPlayers int
 	st         *store.Store
+	nws        *nws.Cache
 	mu         sync.Mutex
 	running    bool
 	clients    map[*client]struct{}
@@ -407,9 +422,11 @@ func (r *Room) Run(done <-chan struct{}) {
 	dropTick := time.NewTicker(DropRespawnEvery)
 	eventTick := time.NewTicker(EventEvery)
 	presenceTick := time.NewTicker(PresenceTick)
+	researchTick := time.NewTicker(ResearchTickEvery)
 	defer dropTick.Stop()
 	defer eventTick.Stop()
 	defer presenceTick.Stop()
+	defer researchTick.Stop()
 	r.mu.Lock()
 	r.ensureDropsLocked(22)
 	r.mu.Unlock()
@@ -450,6 +467,8 @@ func (r *Room) Run(done <-chan struct{}) {
 			}
 		case <-eventTick.C:
 			r.maybeSpawnEvent()
+		case <-researchTick.C:
+			r.tickResearch()
 		}
 	}
 }
