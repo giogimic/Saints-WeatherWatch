@@ -14,15 +14,17 @@ See [STORM_CHASER_PHASE1.md](./STORM_CHASER_PHASE1.md).
 
 **Status:** implemented on the Storm World branch; harden with playtests, do not rip out for bigger features.
 
-## Phase 2 — Camera feel + exploration density (next candidate)
+## Phase 2 — Camera feel + exploration density
 
 Small UX/content upgrades on the **existing** world room:
 
-- Follow-vehicle / free camera toggle · safer zoom while not steering
-- Richer drop catalog (still server-spawned) without regional biomes yet
-- Clearer SIM chrome + toast copy
+- [x] Follow-vehicle / free camera toggle · center · wheel/pinch zoom
+- [x] Richer drop catalog (still server-spawned) without regional biomes yet
+- [x] Clearer SIM chrome + toast / HUD copy
+- [x] More SIM event types · denser respawns
 - Soft anti-cheat polish (already started: speed clamp, pickup radius)
 
+**Status:** gameplay slice shipping on the Storm World branch.  
 **Out of scope here:** deployables, weather-typed research ticks, full region biomes.
 
 ## Phase 3 — Regional spawn tables

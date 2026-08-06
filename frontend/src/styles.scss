@@ -241,3 +241,25 @@ html {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.chase-sim-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: rgba(127, 29, 29, 0.95);
+  border: 2px solid #fbbf24;
+  box-shadow: 0 0 14px rgba(251, 191, 36, 0.45);
+}
+.chase-sim-badge {
+  font: 900 11px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  color: #fef3c7;
+}
+.chase-sim-sub {
+  font: 800 7px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.14em;
+  color: #fcd34d;
+}

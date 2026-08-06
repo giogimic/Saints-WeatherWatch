@@ -31,9 +31,9 @@ var Bounds = struct{ MinLat, MaxLat, MinLng, MaxLng float64 }{
 const (
 	PickupRadiusDeg  = 0.06
 	MaxMoveDegPerSec = 0.35
-	MaxDrops         = 40
-	DropRespawnEvery = 18 * time.Second
-	EventEvery       = 90 * time.Second
+	MaxDrops         = 55
+	DropRespawnEvery = 12 * time.Second
+	EventEvery       = 55 * time.Second
 	// PresenceTickHz: classic casual MMO-style snapshot rate (Gaffer / Gambetta).
 	// Clients send moves whenever; server broadcasts authoritative positions on a tick.
 	PresenceTick = 100 * time.Millisecond
@@ -67,14 +67,23 @@ var ItemCatalog = []ItemDef{
 	{Key: "wiring", Name: "Wiring", Blurb: "Copper strands from a ditch box.", Rarity: "common", Kind: "material", XP: 2},
 	{Key: "battery", Name: "Battery", Blurb: "Still has some charge.", Rarity: "common", Kind: "material", XP: 3},
 	{Key: "plastic_parts", Name: "Plastic Parts", Blurb: "Housings and clips.", Rarity: "common", Kind: "material", XP: 2},
+	{Key: "copper", Name: "Copper", Blurb: "Salvaged pipe and wire.", Rarity: "common", Kind: "material", XP: 2},
+	{Key: "aluminum", Name: "Aluminum", Blurb: "Light scrap from a road sign.", Rarity: "common", Kind: "material", XP: 2},
+	{Key: "electronics", Name: "Electronics", Blurb: "Broken boards and chips.", Rarity: "common", Kind: "material", XP: 3},
+	{Key: "scientific_note", Name: "Scientific Note", Blurb: "Someone else's field scribble.", Rarity: "common", Kind: "material", XP: 3},
 	{Key: "fuel_can", Name: "Fuel Can", Blurb: "A little go-juice.", Rarity: "uncommon", Kind: "material", XP: 5},
 	{Key: "camera_parts", Name: "Camera Parts", Blurb: "Lens bits for storm shots.", Rarity: "uncommon", Kind: "material", XP: 6},
 	{Key: "gps_module", Name: "GPS Module", Blurb: "Still locks satellites.", Rarity: "uncommon", Kind: "material", XP: 8},
 	{Key: "radio_parts", Name: "Radio Parts", Blurb: "Coils and a cracked PCB.", Rarity: "uncommon", Kind: "material", XP: 7},
+	{Key: "solar_cell", Name: "Solar Cell", Blurb: "Cracked but still juices.", Rarity: "uncommon", Kind: "material", XP: 7},
+	{Key: "spare_tire", Name: "Spare Tire", Blurb: "Ditched on a farm road.", Rarity: "uncommon", Kind: "material", XP: 6},
+	{Key: "weather_journal", Name: "Weather Journal", Blurb: "Pages of sky notes.", Rarity: "uncommon", Kind: "material", XP: 8},
 	{Key: "blueprint_frag", Name: "Blueprint Fragment", Blurb: "Half a probe schematic.", Rarity: "rare", Kind: "material", XP: 15},
 	{Key: "advanced_sensor", Name: "Advanced Sensor", Blurb: "Lab-grade pickup.", Rarity: "rare", Kind: "material", XP: 20},
 	{Key: "basic_probe", Name: "Basic Probe", Blurb: "Crafted field probe.", Rarity: "uncommon", Kind: "gear", XP: 0},
 	{Key: "repair_kit", Name: "Repair Kit", Blurb: "Tape, ties, hope.", Rarity: "common", Kind: "gear", XP: 0},
+	{Key: "field_journal", Name: "Field Journal", Blurb: "Bound notes for the desk.", Rarity: "uncommon", Kind: "gear", XP: 0},
+	{Key: "solar_pack", Name: "Solar Pack", Blurb: "Top-up juice for sensors.", Rarity: "uncommon", Kind: "gear", XP: 0},
 	{Key: "storm_photo", Name: "Storm Photo", Blurb: "Shelf cloud snapshot.", Rarity: "uncommon", Kind: "trophy", XP: 10},
 	{Key: "radar_core", Name: "Radar Core Ping", Blurb: "A bright blob on the scope.", Rarity: "common", Kind: "trophy", XP: 5},
 }
@@ -94,6 +103,56 @@ var Recipes = []Recipe{
 		ID: "craft_camera_rig", Name: "Storm Photo Kit", Blurb: "Turn parts into a trophy shot.",
 		Inputs: []StackNeed{{Key: "camera_parts", Qty: 2}, {Key: "battery", Qty: 1}},
 		Output: StackNeed{Key: "storm_photo", Qty: 1}, MinLevel: 1,
+	},
+	{
+		ID: "craft_field_journal", Name: "Field Journal", Blurb: "Bind notes into a usable log.",
+		Inputs: []StackNeed{{Key: "scientific_note", Qty: 3}, {Key: "weather_journal", Qty: 1}},
+		Output: StackNeed{Key: "field_journal", Qty: 1}, MinLevel: 1,
+	},
+	{
+		ID: "craft_solar_pack", Name: "Solar Pack", Blurb: "Keep probes topped up.",
+		Inputs: []StackNeed{{Key: "solar_cell", Qty: 2}, {Key: "wiring", Qty: 1}, {Key: "aluminum", Qty: 1}},
+		Output: StackNeed{Key: "solar_pack", Qty: 1}, MinLevel: 2,
+	},
+}
+
+type simTemplate struct {
+	Label     string
+	Blurb     string
+	RewardKey string
+}
+
+// Optional gameplay events — always labeled simulated / not real weather.
+var simEventPool = []simTemplate{
+	{
+		Label: "SIMULATED · Lost Research Convoy",
+		Blurb: "Gameplay only — not real weather. Reach the marker to secure surplus parts.",
+		RewardKey: "blueprint_frag",
+	},
+	{
+		Label: "SIMULATED · Weather Balloon Failure",
+		Blurb: "Gameplay only — not real weather. Recover the payload before it vanishes.",
+		RewardKey: "advanced_sensor",
+	},
+	{
+		Label: "SIMULATED · Drone Swarm Recovery",
+		Blurb: "Gameplay only — not real weather. Sweep the crash grid for solar cells.",
+		RewardKey: "solar_cell",
+	},
+	{
+		Label: "SIMULATED · Sensor Calibration",
+		Blurb: "Gameplay only — not real weather. Place your marker on the calibration ping.",
+		RewardKey: "electronics",
+	},
+	{
+		Label: "SIMULATED · Static Anomaly",
+		Blurb: "Gameplay only — not real weather. Bag rare radio scrap from the glitch.",
+		RewardKey: "radio_parts",
+	},
+	{
+		Label: "SIMULATED · Magnetic Disturbance",
+		Blurb: "Gameplay only — not real weather. Collect disrupted GPS modules.",
+		RewardKey: "gps_module",
 	},
 }
 
@@ -254,7 +313,7 @@ func (r *Room) Run(done <-chan struct{}) {
 	defer eventTick.Stop()
 	defer presenceTick.Stop()
 	r.mu.Lock()
-	r.ensureDropsLocked(12)
+	r.ensureDropsLocked(22)
 	r.mu.Unlock()
 
 	for {
@@ -569,19 +628,20 @@ func (r *Room) maybeSpawnEvent() {
 		r.mu.Unlock()
 		return
 	}
-	if mrand.Float64() > 0.55 {
+	if mrand.Float64() > 0.72 {
 		r.mu.Unlock()
 		return
 	}
+	tmpl := simEventPool[mrand.Intn(len(simEventPool))]
 	lat, lng := randomPoint()
 	ev := &SimEvent{
 		ID:        newID(),
-		Label:     "SIMULATED · Lost Research Convoy",
-		Blurb:     "Gameplay only — not real weather. Place a probe marker to secure surplus parts.",
+		Label:     tmpl.Label,
+		Blurb:     tmpl.Blurb,
 		Simulated: true,
 		Lat:       lat,
 		Lng:       lng,
-		RewardKey: "blueprint_frag",
+		RewardKey: tmpl.RewardKey,
 		Active:    true,
 	}
 	r.event = ev

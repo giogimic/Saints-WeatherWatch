@@ -33,7 +33,8 @@ const CENTER: [number, number] = [47.05, -68.35];
 const BOUNDS = { minLat: 44.6, maxLat: 47.5, minLng: -71.2, maxLng: -66.9 };
 const MOVE_SPEED = 0.14;
 const PICKUP_DIST = 0.055;
-const DROP_COUNT = 7;
+const DROP_COUNT = 12;
+const DEFAULT_ZOOM = 10;
 
 const LOOT_META: Record<string, { name: string; rarity: string; weight: number }> = {
   radar_core: { name: 'Radar Core Ping', rarity: 'common', weight: 5 },
@@ -52,14 +53,23 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
   wiring: { name: 'Wiring', rarity: 'common' },
   battery: { name: 'Battery', rarity: 'common' },
   plastic_parts: { name: 'Plastic Parts', rarity: 'common' },
+  copper: { name: 'Copper', rarity: 'common' },
+  aluminum: { name: 'Aluminum', rarity: 'common' },
+  electronics: { name: 'Electronics', rarity: 'common' },
+  scientific_note: { name: 'Scientific Note', rarity: 'common' },
   fuel_can: { name: 'Fuel Can', rarity: 'uncommon' },
   camera_parts: { name: 'Camera Parts', rarity: 'uncommon' },
   gps_module: { name: 'GPS Module', rarity: 'uncommon' },
   radio_parts: { name: 'Radio Parts', rarity: 'uncommon' },
+  solar_cell: { name: 'Solar Cell', rarity: 'uncommon' },
+  spare_tire: { name: 'Spare Tire', rarity: 'uncommon' },
+  weather_journal: { name: 'Weather Journal', rarity: 'uncommon' },
   blueprint_frag: { name: 'Blueprint Fragment', rarity: 'rare' },
   advanced_sensor: { name: 'Advanced Sensor', rarity: 'rare' },
   basic_probe: { name: 'Basic Probe', rarity: 'uncommon' },
   repair_kit: { name: 'Repair Kit', rarity: 'common' },
+  field_journal: { name: 'Field Journal', rarity: 'uncommon' },
+  solar_pack: { name: 'Solar Pack', rarity: 'uncommon' },
 };
 
 @Component({
@@ -123,8 +133,9 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
           </div>
           <p class="text-sm font-semibold text-base-content/70">
             Stick or <span class="text-white font-black">WASD</span>.
-            Logged-in chasers share the same server drops and events (first bag wins).
-            Guests still get a solo practice run.
+            Zoom with wheel / pinch. Use <span class="text-white font-black">Follow</span> or
+            <span class="text-white font-black">Free</span> cam while driving.
+            Logged-in chasers share server drops and SIM events (first bag wins).
           </p>
           <div class="flex flex-col sm:flex-row gap-2">
             <button
@@ -167,7 +178,30 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
             }
             <div class="flex-1"></div>
             @if (phase === 'running') {
-              <div class="pointer-events-auto flex gap-1.5">
+              <div class="pointer-events-auto flex flex-wrap gap-1.5 justify-end">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
+                  [class.btn-primary]="followCam"
+                  (click)="setFollowCam(true)"
+                >
+                  Follow
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
+                  [class.btn-primary]="!followCam"
+                  (click)="setFollowCam(false)"
+                >
+                  Free
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
+                  (click)="centerOnTruck()"
+                >
+                  Center
+                </button>
                 @if (!immersive) {
                   <button
                     type="button"
@@ -187,6 +221,18 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
               </div>
             }
           </div>
+
+          @if (phase === 'running' && activeSimLabel) {
+            <div class="absolute left-3 right-3 bottom-[7.5rem] sm:bottom-4 z-[1000] pointer-events-none flex justify-center">
+              <div class="storm-card px-3 py-2 max-w-md w-full border border-amber-400/60 bg-red-950/80">
+                <p class="text-[9px] font-black uppercase tracking-[0.2em] text-amber-300">Simulated event · not real weather</p>
+                <p class="text-xs font-black text-white leading-snug">{{ activeSimLabel }}</p>
+                @if (activeSimHint) {
+                  <p class="text-[10px] font-semibold text-base-content/70 mt-0.5">{{ activeSimHint }}</p>
+                }
+              </div>
+            </div>
+          }
 
           @if (phase === 'running') {
             <div
@@ -294,6 +340,9 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   stickKnobX = 0;
   stickKnobY = 0;
   worldMode = false;
+  followCam = true;
+  activeSimLabel = '';
+  activeSimHint = '';
 
   private map?: L.Map;
   private playerMarker?: L.Marker;
@@ -428,6 +477,9 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.inflightEvent = false;
     this.lastWorldToast = '';
     this.lastBagSeq = 0;
+    this.followCam = true;
+    this.activeSimLabel = '';
+    this.activeSimHint = '';
     if (this.worldMode) {
       this.world.connectWorld(this.lat, this.lng);
     }
@@ -488,6 +540,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.stickOriginX = rect.left + rect.width / 2;
     this.stickOriginY = rect.top + rect.height / 2;
     this.stickActive = true;
+    this.map?.dragging.disable();
     this.updateStickFromPointer(ev.clientX, ev.clientY);
     ev.preventDefault();
   }
@@ -502,6 +555,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     if (!this.stickActive) return;
     this.stickActive = false;
     this.resetStick();
+    this.applyCameraMode();
     try {
       (ev.currentTarget as HTMLElement).releasePointerCapture(ev.pointerId);
     } catch { /* ignore */ }
@@ -520,6 +574,28 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     const n = this.world.players().length;
     if (n <= 1) return '1 online (you)';
     return `${n} online`;
+  }
+
+  setFollowCam(on: boolean): void {
+    this.followCam = on;
+    this.applyCameraMode();
+    if (on) this.centerOnTruck();
+  }
+
+  centerOnTruck(): void {
+    if (!this.map) return;
+    this.map.setView([this.lat, this.lng], Math.max(this.map.getZoom(), DEFAULT_ZOOM), { animate: true });
+  }
+
+  private applyCameraMode(): void {
+    if (!this.map) return;
+    if (this.followCam) {
+      this.map.dragging.disable();
+    } else if (!this.stickActive) {
+      this.map.dragging.enable();
+    }
+    this.map.scrollWheelZoom.enable();
+    this.map.touchZoom.enable();
   }
 
   private teardownImmersive(exitBrowserFs: boolean): void {
@@ -693,18 +769,26 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
     const ev = this.world.event();
     if (ev?.active) {
+      this.activeSimLabel = ev.label || 'SIMULATED EVENT';
+      const dist = Math.hypot(ev.lat - this.lat, ev.lng - this.lng);
+      this.activeSimHint = dist <= PICKUP_DIST * 1.4
+        ? 'In range — stay on the marker to claim'
+        : `Drive to the amber SIM pin · ~${(dist * 69).toFixed(1)} mi`;
       const icon = L.divIcon({
-        className: 'chase-drop-icon',
-        html: `<div style="padding:4px 8px;border-radius:10px;background:#7c3aed;color:#fff;font:900 10px/1.2 sans-serif;border:2px solid #fde68a;">SIM</div>`,
-        iconSize: [48, 22],
-        iconAnchor: [24, 11],
+        className: 'chase-sim-icon',
+        html: `<div class="chase-sim-pin"><span class="chase-sim-badge">SIM</span><span class="chase-sim-sub">NOT REAL WX</span></div>`,
+        iconSize: [72, 36],
+        iconAnchor: [36, 18],
       });
       if (!this.eventMarker) {
-        this.eventMarker = L.marker([ev.lat, ev.lng], { icon, interactive: false }).addTo(this.map);
+        this.eventMarker = L.marker([ev.lat, ev.lng], { icon, interactive: false, zIndexOffset: 550 }).addTo(this.map);
       } else {
         this.eventMarker.setLatLng([ev.lat, ev.lng]);
+        this.eventMarker.setIcon(icon);
       }
     } else {
+      this.activeSimLabel = '';
+      this.activeSimHint = '';
       this.eventMarker?.remove();
       this.eventMarker = undefined;
     }
@@ -791,22 +875,22 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     if (!el) return;
     if (this.map) {
       this.map.invalidateSize();
+      this.applyCameraMode();
       return;
     }
-    // Disable map drag during chase so the stick owns touch gestures.
     this.map = L.map(el, {
-      zoomControl: false,
+      zoomControl: true,
       attributionControl: false,
       dragging: false,
-      scrollWheelZoom: false,
+      scrollWheelZoom: true,
       doubleClickZoom: false,
       touchZoom: true,
       boxZoom: false,
       keyboard: false,
-    }).setView(CENTER, 8);
+    }).setView([this.lat, this.lng], DEFAULT_ZOOM);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 12,
+      maxZoom: 14,
     }).addTo(this.map);
 
     this.radarLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi', {
@@ -816,6 +900,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       opacity: 0.75,
     } as L.WMSOptions);
     this.radarLayer.addTo(this.map);
+    this.applyCameraMode();
     setTimeout(() => this.map?.invalidateSize(), 80);
   }
 
@@ -823,8 +908,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.clearDrops();
     for (const m of this.otherMarkers.values()) m.remove();
     this.otherMarkers.clear();
+    this.peerMeta.clear();
     for (const m of this.worldDropMarkers.values()) m.remove();
     this.worldDropMarkers.clear();
+    this.dropMeta.clear();
     this.eventMarker?.remove();
     this.eventMarker = undefined;
     this.playerMarker?.remove();
@@ -848,11 +935,12 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       this.playerMarker.setLatLng([this.lat, this.lng]);
       this.playerMarker.setIcon(icon);
     }
+    if (!this.followCam) return;
     if (pan) {
       this.map.panTo([this.lat, this.lng], { animate: true, duration: 0.15 });
     } else {
       const center = this.map.getCenter();
-      if (Math.hypot(center.lat - this.lat, center.lng - this.lng) > 0.12) {
+      if (Math.hypot(center.lat - this.lat, center.lng - this.lng) > 0.08) {
         this.map.panTo([this.lat, this.lng], { animate: true, duration: 0.25 });
       }
     }
