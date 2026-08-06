@@ -238,6 +238,30 @@ export interface HazardAreaInfo {
   radiusMiles: number;
 }
 
+export interface DeskScore {
+  score: number;
+  band: 'quiet' | 'watch' | 'impact' | 'critical' | string;
+  parts: { alerts?: number; outage?: number; cams?: number; flood?: number; [k: string]: number | undefined };
+  note: string;
+}
+
+export interface StormPackage {
+  generatedAt: string;
+  scope: string;
+  sourceNote: string;
+  label: string;
+  live?: { generatedAt?: string; alertCount?: number; topHeadline?: string };
+  outage?: {
+    maineMetersOut?: number;
+    maineCountiesOut?: number;
+    maineCovered?: boolean;
+    source?: string;
+    generatedAt?: string;
+  };
+  incidents: TrackerIncident[];
+  incidentCount: number;
+}
+
 export interface CameraFeedDto {
   id: string;
   title: string;
@@ -523,6 +547,7 @@ export class WeatherService {
     outage?: AreaOutageInfo;
     cams?: CameraFeedDto[];
     hazards?: HazardAreaInfo;
+    deskScore?: DeskScore;
   }> {
     return this.http.get<{
       area: WatchedArea;
@@ -531,6 +556,7 @@ export class WeatherService {
       outage?: AreaOutageInfo;
       cams?: CameraFeedDto[];
       hazards?: HazardAreaInfo;
+      deskScore?: DeskScore;
     }>(`/api/watched-areas/${id}/expand`).pipe(
       catchError(() => of({ area: null as any, alerts: [], count: 0 })),
     );
@@ -578,12 +604,22 @@ export class WeatherService {
     );
   }
 
+  exportStormPackage(opts?: { scope?: string; days?: number; limit?: number }): Observable<StormPackage | null> {
+    const params: string[] = [];
+    params.push(`scope=${encodeURIComponent(opts?.scope || 'maine')}`);
+    if (opts?.days) params.push(`days=${opts.days}`);
+    if (opts?.limit) params.push(`limit=${opts.limit}`);
+    return this.http.get<StormPackage>(`/api/storm-packages/export?${params.join('&')}`).pipe(
+      catchError(() => of(null)),
+    );
+  }
+
   getDashboardPrefs(): Observable<DashboardPrefs> {
     return this.http.get<DashboardPrefs>('/api/dashboard/prefs').pipe(
       catchError(() => of({
         cardOrder: 'profile,progress,garage,cams,areas,map',
         hiddenCards: '',
-        mapLayers: 'radar,warnings,cams',
+        mapLayers: 'radar,warnings,lsr,cams,outages,flood,quakes',
       }))
     );
   }

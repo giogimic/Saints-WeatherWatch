@@ -26,7 +26,7 @@ Storm World / game stays a separate labeled SIM layer.
 - [x] Cams near active warning (+ watched-area expand cams)
 - [x] DOT / traffic via existing OpenCCTV NE511 + NB sources (no new scrapers)
 
-## Phase D — Multi-hazard — **in progress**
+## Phase D — Multi-hazard — **done**
 
 - [x] Shared live `Incident` model (`kind` + source + lat/lon)
 - [x] Flood gauges via NOAA NWPS/AHPS (St. John / Aroostook corridor)
@@ -35,12 +35,12 @@ Storm World / game stays a separate labeled SIM layer.
 - [ ] Fire/smoke when a stable open feed is available
 - [ ] Winter roads / marine as feeds allow
 
-## Phase E — Product surfaces
+## Phase E — Product surfaces — **in progress**
 
-- Map layer toggles unified
-- Live “Impact mode”
-- Desk watch-zone score (alert + outage + cam freshness)
-- Archive storm packages
+- [x] Map layer toggles unified (session + dashboard prefs CSV)
+- [x] Live / Map “Impact mode”
+- [x] Desk watch-zone score (alert + outage + cam + flood)
+- [x] Archive storm package export (`GET /api/storm-packages/export`)
 
 ## Phase F — Reliability
 

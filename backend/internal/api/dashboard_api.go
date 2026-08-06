@@ -12,6 +12,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/geo"
 	"github.com/saints-weatherwatch/backend/internal/hazards"
 	"github.com/saints-weatherwatch/backend/internal/nws"
+	"github.com/saints-weatherwatch/backend/internal/ops"
 	"github.com/saints-weatherwatch/backend/internal/outages"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
@@ -216,6 +217,36 @@ func expandWatchedAreaHandler(st *store.Store, cache *nws.Cache, outageCache *ou
 		if hazardCache != nil {
 			res["hazards"] = hazardCache.CorrelateArea(area.Lat, area.Lon, float64(area.RadiusMiles))
 		}
+
+		// Phase E — desk watch-zone score
+		alertInputs := make([]ops.AlertInput, 0, len(matched))
+		for _, m := range matched {
+			alertInputs = append(alertInputs, ops.AlertInput{Severity: m.Severity, Status: m.Status})
+		}
+		metersOut := 0
+		maineCovered := false
+		if out, ok := res["outage"].(map[string]any); ok {
+			if v, ok := out["metersOut"].(int); ok {
+				metersOut = v
+			}
+			if v, ok := out["maineCovered"].(bool); ok {
+				maineCovered = v
+			}
+		}
+		camInputs := []ops.CamInput{}
+		if camList, ok := res["cams"].([]cams.CameraMeta); ok {
+			for _, c := range camList {
+				camInputs = append(camInputs, ops.CamInput{Health: c.Health, AgeSec: c.AgeSec})
+			}
+		}
+		floodActionable := 0
+		if haz, ok := res["hazards"].(map[string]any); ok {
+			if v, ok := haz["floodActionable"].(int); ok {
+				floodActionable = v
+			}
+		}
+		res["deskScore"] = ops.ScoreWatchedZone(alertInputs, metersOut, maineCovered, camInputs, floodActionable)
+
 		_ = json.NewEncoder(w).Encode(res)
 	}
 }
@@ -230,11 +261,7 @@ func getDashboardPrefsHandler(st *store.Store) http.HandlerFunc {
 		}
 		row, err := st.Client.DashboardPreference.FindUnique(db.DashboardPreference.UserID.Equals(user.ID)).Exec(r.Context())
 		if err != nil || row == nil {
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"cardOrder":   "profile,progress,garage,loot,cams,areas,map",
-				"hiddenCards": "",
-				"mapLayers":   "radar,warnings,cams",
-			})
+			_ = json.NewEncoder(w).Encode(defaultPrefsPayload())
 			return
 		}
 		_ = json.NewEncoder(w).Encode(row)
@@ -264,7 +291,7 @@ func saveDashboardPrefsHandler(st *store.Store) http.HandlerFunc {
 			req.CardOrder = "profile,progress,garage,loot,cams,areas,map"
 		}
 		if req.MapLayers == "" {
-			req.MapLayers = "radar,warnings,cams"
+			req.MapLayers = ops.DefaultLayerCSV
 		}
 		existing, _ := st.Client.DashboardPreference.FindUnique(db.DashboardPreference.UserID.Equals(user.ID)).Exec(r.Context())
 		if existing == nil {

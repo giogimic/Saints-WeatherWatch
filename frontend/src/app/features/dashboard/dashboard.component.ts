@@ -11,6 +11,7 @@ import {
   AreaOutageInfo,
   CameraFeedDto,
   DashboardPrefs,
+  DeskScore,
   HazardAreaInfo,
   HazardIncident,
   VehicleDef,
@@ -198,10 +199,29 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | '
                           </button>
                           <button type="button" class="btn btn-ghost btn-xs text-error" (click)="removeArea(area.id)">✕</button>
                         </div>
-                        @if (expandedId === area.id) {
+                          @if (expandedId === area.id) {
                           <div class="text-[10px] font-bold uppercase tracking-wider text-accent">
                             {{ expandedAlerts.length }} alert(s) · {{ expandedCams.length }} cam(s) in range
                           </div>
+                          @if (expandedDeskScore) {
+                            <div class="rounded-lg border border-base-300/60 bg-base-200/40 px-2 py-1.5 space-y-0.5">
+                              <div class="text-[10px] font-black uppercase tracking-widest"
+                                [ngClass]="{
+                                  'text-success': expandedDeskScore.band === 'quiet',
+                                  'text-warning': expandedDeskScore.band === 'watch',
+                                  'text-orange-400': expandedDeskScore.band === 'impact',
+                                  'text-error': expandedDeskScore.band === 'critical'
+                                }">
+                                Desk {{ expandedDeskScore.score }} · {{ expandedDeskScore.band }}
+                              </div>
+                              <div class="text-[10px] text-base-content/50 font-semibold">
+                                A{{ expandedDeskScore.parts['alerts'] || 0 }}
+                                · O{{ expandedDeskScore.parts['outage'] || 0 }}
+                                · C{{ expandedDeskScore.parts['cams'] || 0 }}
+                                · F{{ expandedDeskScore.parts['flood'] || 0 }}
+                              </div>
+                            </div>
+                          }
                           @if (expandedOutage) {
                             <div class="text-[10px] font-semibold text-base-content/60">
                               {{ expandedOutage.county }} Co. ·
@@ -282,6 +302,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   expandedOutage: AreaOutageInfo | null = null;
   expandedCams: CameraFeedDto[] = [];
   expandedHazards: HazardAreaInfo | null = null;
+  expandedDeskScore: DeskScore | null = null;
 
   get hazardPreview(): HazardIncident[] {
     if (!this.expandedHazards) return [];
@@ -374,6 +395,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.expandedOutage = null;
         this.expandedCams = [];
         this.expandedHazards = null;
+        this.expandedDeskScore = null;
       }
       this.ops.reloadAccountData();
       setTimeout(() => this.redrawMap(), 200);
@@ -387,6 +409,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.expandedOutage = null;
       this.expandedCams = [];
       this.expandedHazards = null;
+      this.expandedDeskScore = null;
       return;
     }
     this.expandedId = area.id;
@@ -395,6 +418,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.expandedOutage = res.outage || null;
       this.expandedCams = res.cams || [];
       this.expandedHazards = res.hazards || null;
+      this.expandedDeskScore = res.deskScore || null;
       this.map?.flyTo([area.lat, area.lon], 8, { duration: 0.6 });
     });
   }

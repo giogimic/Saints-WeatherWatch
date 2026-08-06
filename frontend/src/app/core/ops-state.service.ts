@@ -37,10 +37,15 @@ export class OpsStateService {
   /** Newest warning pushed over WebSocket (banner). */
   readonly bannerAlert = signal<WeatherAlert | null>(null);
   readonly wsConnected = this.realtime.connected;
+  /** Phase E — Impact mode focuses ops surfaces on warnings/outages/flood/cams. */
+  readonly impactMode = signal(false);
 
   start(): void {
     if (this.started) return;
     this.started = true;
+    try {
+      this.impactMode.set(sessionStorage.getItem('ww-impact-mode') === '1');
+    } catch { /* ignore */ }
 
     // HTTP poll as fallback (slower when WS is healthy).
     this.sub = timer(0, 60_000).pipe(
@@ -110,6 +115,17 @@ export class OpsStateService {
   dismissBanner(): void {
     if (this.bannerTimer) clearTimeout(this.bannerTimer);
     this.bannerAlert.set(null);
+  }
+
+  setImpactMode(on: boolean): void {
+    this.impactMode.set(on);
+    try {
+      sessionStorage.setItem('ww-impact-mode', on ? '1' : '0');
+    } catch { /* ignore */ }
+  }
+
+  toggleImpactMode(): void {
+    this.setImpactMode(!this.impactMode());
   }
 
   stop(): void {
