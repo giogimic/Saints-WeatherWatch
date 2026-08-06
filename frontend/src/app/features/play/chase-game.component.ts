@@ -15,7 +15,7 @@ import { RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import { AuthService } from '../../core/auth.service';
 import { vehicleSvg } from '../../core/vehicles';
-import { QuizAward, WeatherService } from '../../core/weather.service';
+import { QuizAward } from '../../core/weather.service';
 import { WorldLobby, WorldService } from '../../core/world.service';
 
 type ChasePhase = 'ready' | 'running' | 'done';
@@ -127,10 +127,7 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
             <div>
               <p class="text-sm font-black text-white italic">{{ vehicleLabel }}</p>
               <p class="text-xs text-base-content/55 font-semibold">
-                Open drive · full Maine corridor · live radar
-                @if (auth.isLoggedIn()) {
-                  · shared multiplayer world
-                }
+                Open drive · full Maine corridor · live radar · shared multiplayer
               </p>
             </div>
           </div>
@@ -138,44 +135,42 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
             Stick or <span class="text-white font-black">WASD</span>.
             Zoom with wheel / pinch. Use <span class="text-white font-black">Follow</span> or
             <span class="text-white font-black">Free</span> cam while driving.
-            Logged-in chasers share server drops and SIM events (first bag wins).
+            Server drops and SIM events are shared (first bag wins).
             Drops bias by land cover (forest · coast · town · farm).
           </p>
-          @if (auth.isLoggedIn()) {
-            <div class="space-y-2">
-              <p class="text-[10px] font-black uppercase tracking-widest text-base-content/45">Lobby / shard</p>
-              <p class="text-xs font-semibold text-base-content/60">
-                Stay on <span class="text-accent font-black">Main Corridor</span> to see each other.
-                Other shards are separate rooms on the same map.
-              </p>
-              <div class="grid gap-2 sm:grid-cols-2">
-                @for (lobby of lobbies; track lobby.id) {
-                  <button
-                    type="button"
-                    class="text-left px-3 py-2 rounded-xl border transition-colors border-base-300"
-                    [class.border-primary]="selectedLobby === lobby.id"
-                    [class.bg-base-200]="selectedLobby === lobby.id"
-                    [class.opacity-50]="lobby.full && selectedLobby !== lobby.id"
-                    [disabled]="lobby.full && selectedLobby !== lobby.id"
-                    (click)="selectLobby(lobby.id)"
+          <div class="space-y-2">
+            <p class="text-[10px] font-black uppercase tracking-widest text-base-content/45">Lobby / shard</p>
+            <p class="text-xs font-semibold text-base-content/60">
+              Stay on <span class="text-accent font-black">Main Corridor</span> to see each other.
+              Other shards are separate rooms on the same map.
+            </p>
+            <div class="grid gap-2 sm:grid-cols-2">
+              @for (lobby of lobbies; track lobby.id) {
+                <button
+                  type="button"
+                  class="text-left px-3 py-2 rounded-xl border transition-colors border-base-300"
+                  [class.border-primary]="selectedLobby === lobby.id"
+                  [class.bg-base-200]="selectedLobby === lobby.id"
+                  [class.opacity-50]="lobby.full && selectedLobby !== lobby.id"
+                  [disabled]="lobby.full && selectedLobby !== lobby.id"
+                  (click)="selectLobby(lobby.id)"
+                >
+                  <div class="font-black uppercase text-sm text-white italic leading-tight">{{ lobby.name }}</div>
+                  <div class="text-[10px] font-semibold text-base-content/50 mt-0.5">{{ lobby.blurb }}</div>
+                  <div
+                    class="text-[10px] font-black uppercase tracking-wider mt-1"
+                    [class.text-accent]="!lobby.full"
+                    [class.text-error]="lobby.full"
                   >
-                    <div class="font-black uppercase text-sm text-white italic leading-tight">{{ lobby.name }}</div>
-                    <div class="text-[10px] font-semibold text-base-content/50 mt-0.5">{{ lobby.blurb }}</div>
-                    <div
-                      class="text-[10px] font-black uppercase tracking-wider mt-1"
-                      [class.text-accent]="!lobby.full"
-                      [class.text-error]="lobby.full"
-                    >
-                      {{ lobby.players }}/{{ lobby.maxPlayers }}{{ lobby.full ? ' · full' : '' }}
-                    </div>
-                  </button>
-                }
-              </div>
-              @if (!lobbies.length) {
-                <p class="text-xs text-base-content/50 font-semibold">Loading lobbies… (defaults to Main Corridor)</p>
+                    {{ lobby.players }}/{{ lobby.maxPlayers }}{{ lobby.full ? ' · full' : '' }}
+                  </div>
+                </button>
               }
             </div>
-          }
+            @if (!lobbies.length) {
+              <p class="text-xs text-base-content/50 font-semibold">Loading lobbies… (defaults to Main Corridor)</p>
+            }
+          </div>
           <div class="flex flex-col sm:flex-row gap-2">
             <button
               type="button"
@@ -400,26 +395,16 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
         }
         @if (savedLoot) {
           <p class="text-xs font-bold text-success uppercase tracking-wider">
-            {{ worldMode ? 'Saved to your packs (server)' : 'Loot saved to your profile' }}
+            Saved to your packs (server)
           </p>
-        } @else if (!auth.isLoggedIn() && bagged.length) {
-          <button
-            type="button"
-            class="btn btn-primary btn-sm rounded-xl font-black uppercase min-h-11"
-            (click)="promptSave()"
-          >
-            Log in to keep loot
-          </button>
         }
         <div class="flex flex-col sm:flex-row gap-2 justify-center pt-1">
           <button type="button" class="btn btn-primary rounded-xl font-black uppercase min-h-12" (click)="startRun(immersive || isMobile())">
             Chase again
           </button>
-          @if (auth.isLoggedIn()) {
-            <a routerLink="/trade" class="btn btn-secondary rounded-xl font-black uppercase min-h-12">
-              Trade & Craft
-            </a>
-          }
+          <a routerLink="/trade" class="btn btn-secondary rounded-xl font-black uppercase min-h-12">
+            Trade & Craft
+          </a>
           <button type="button" class="btn btn-ghost border border-base-300 rounded-xl font-black uppercase min-h-12" (click)="leaveGame()">
             Exit to Play
           </button>
@@ -434,7 +419,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   @ViewChild('chatLog') chatLogRef?: ElementRef<HTMLElement>;
 
   readonly auth = inject(AuthService);
-  private readonly weather = inject(WeatherService);
   readonly world = inject(WorldService);
   private readonly sanitizer = inject(DomSanitizer);
 
@@ -495,6 +479,11 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.refreshVehicle();
+    if (!this.auth.isLoggedIn()) {
+      this.auth.openModal('signup');
+      this.exit.emit();
+      return;
+    }
     this.refreshLobbies();
     this.lobbyPoll = setInterval(() => {
       if (this.phase === 'ready') this.refreshLobbies();
@@ -589,6 +578,11 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   }
 
   startRun(preferFullscreen = false): void {
+    if (!this.auth.isLoggedIn()) {
+      this.auth.openModal('signup');
+      this.exit.emit();
+      return;
+    }
     this.refreshVehicle();
     this.phase = 'running';
     this.bagged = [];
@@ -597,8 +591,8 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.savedLoot = false;
     this.keys.clear();
     this.resetStick();
-    this.lat = CENTER[0] + (Math.random() - 0.5) * (this.auth.isLoggedIn() ? 0.03 : 0.1);
-    this.lng = CENTER[1] + (Math.random() - 0.5) * (this.auth.isLoggedIn() ? 0.03 : 0.1);
+    this.lat = CENTER[0] + (Math.random() - 0.5) * 0.03;
+    this.lng = CENTER[1] + (Math.random() - 0.5) * 0.03;
     this.startedAt = Date.now();
     this.stopLoop();
     this.adoptedServerSpawn = false;
@@ -612,7 +606,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     }
 
     this.stickRadius = (this.immersive || this.isMobile()) ? 44 : 36;
-    this.worldMode = this.auth.isLoggedIn();
+    this.worldMode = true;
     this.pendingPickups.clear();
     this.inflightPickups.clear();
     this.inflightEvent = false;
@@ -621,19 +615,13 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.followCam = true;
     this.activeSimLabel = '';
     this.activeSimHint = '';
-    if (this.worldMode) {
-      this.world.connectWorld(this.lat, this.lng, this.selectedLobby);
-    }
+    this.world.connectWorld(this.lat, this.lng, this.selectedLobby);
 
     setTimeout(() => {
       this.ensureMap();
-      if (this.worldMode) {
-        this.clearDrops();
-        this.world.connectWorld(this.lat, this.lng, this.selectedLobby);
-        this.startWorldSync();
-      } else {
-        this.spawnDrops();
-      }
+      this.clearDrops();
+      this.world.connectWorld(this.lat, this.lng, this.selectedLobby);
+      this.startWorldSync();
       this.placePlayer();
       this.startLoop();
       this.map?.invalidateSize();
@@ -647,31 +635,11 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.resetStick();
     this.keys.clear();
     this.phase = 'done';
-    const seconds = Math.max(1, Math.round((Date.now() - this.startedAt) / 1000));
-    // Shared world already granted items server-side — never trust client bag for that path.
-    if (this.worldMode) {
-      this.savedLoot = this.bagged.length > 0;
-      this.world.disconnectWorld();
-      this.world.refreshInventory().subscribe();
-      this.auth.refreshMe().subscribe();
-      return;
-    }
-    if (this.auth.isLoggedIn() && this.bagged.length) {
-      this.weather.saveChaseRun({ items: [...this.bagged], seconds }).subscribe(res => {
-        if (!res) return;
-        this.savedLoot = true;
-        this.lastAward = res.award ?? null;
-        this.auth.refreshMe().subscribe();
-      });
-    }
-  }
-
-  promptSave(): void {
-    this.auth.pendingChase = {
-      items: [...this.bagged],
-      seconds: Math.max(1, Math.round((Date.now() - this.startedAt) / 1000)),
-    };
-    this.auth.openModal('signup');
+    // Shared world already granted items server-side — never trust client bag.
+    this.savedLoot = this.bagged.length > 0;
+    this.world.disconnectWorld();
+    this.world.refreshInventory().subscribe();
+    this.auth.refreshMe().subscribe();
   }
 
   onStickDown(ev: PointerEvent): void {
@@ -905,8 +873,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       this.world.sendMove(this.lat, this.lng);
       this.tryWorldPickups();
       this.tryEventPlace();
-    } else {
-      this.checkPickups();
     }
   }
 

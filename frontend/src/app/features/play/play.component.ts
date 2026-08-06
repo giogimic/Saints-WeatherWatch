@@ -96,15 +96,19 @@ const CALLSIGN_KEY = 'ww-play-callsign';
           >
             <div class="flex items-start gap-3">
               <div class="min-w-0 flex-1">
-                <p class="text-[10px] font-black uppercase tracking-widest text-accent mb-1">Shared world · lobbies</p>
+                <p class="text-[10px] font-black uppercase tracking-widest text-accent mb-1">Shared world · login required</p>
                 <h2 class="font-black uppercase italic text-white text-lg leading-tight group-hover:text-accent transition-colors">
                   Storm World
                 </h2>
                 <p class="text-xs text-base-content/55 font-semibold mt-1">
-                  Pick a lobby shard, then drive the Maine corridor. Land cover biases what you find.
+                  @if (auth.isLoggedIn()) {
+                    Pick a lobby shard, then drive the Maine corridor. Land cover biases what you find.
+                  } @else {
+                    Chaser account required — shared multiplayer map, drops, chat, and lobbies.
+                  }
                 </p>
               </div>
-              <span class="text-base-content/30 text-sm self-center">▶</span>
+              <span class="text-base-content/30 text-sm self-center">{{ auth.isLoggedIn() ? '▶' : '🔒' }}</span>
             </div>
           </button>
 
@@ -501,6 +505,10 @@ export class PlayComponent implements OnInit {
   }
 
   openChase(): void {
+    if (!this.auth.isLoggedIn()) {
+      this.auth.openModal('signup');
+      return;
+    }
     this.view = 'chase';
     this.activeTrack = null;
     this.deck = [];
