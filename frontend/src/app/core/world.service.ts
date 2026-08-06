@@ -89,6 +89,30 @@ export interface WorldEnvelope {
   you?: WorldPlayer;
   chat?: WorldChatLine;
   chats?: WorldChatLine[];
+  research?: WorldResearchStatus;
+}
+
+export interface WorldResearchStatus {
+  studying: boolean;
+  alertId?: string;
+  headline?: string;
+  severity?: string;
+  holdSec?: number;
+  needSec?: number;
+  note?: string;
+}
+
+export interface ResearchLogEntry {
+  id: string;
+  alertId: string;
+  headline: string;
+  severity: string;
+  area: string;
+  itemKey: string;
+  qty: number;
+  lat: number;
+  lng: number;
+  createdAt: string;
 }
 
 export interface WorldChatLine {
@@ -120,6 +144,8 @@ export class WorldService {
   readonly chatLines = signal<WorldChatLine[]>([]);
   /** Latest successful server bag (for UI). */
   readonly lastBag = signal<{ seq: number; itemKey: string; dropId?: string } | null>(null);
+  /** Phase 4 — weather-linked research HUD. */
+  readonly research = signal<WorldResearchStatus | null>(null);
 
   private socket?: WebSocket;
   private intentionalClose = true; // idle until Play explicitly connects
@@ -150,6 +176,12 @@ export class WorldService {
 
   getInventory(): Observable<WorldItem[]> {
     return this.http.get<WorldItem[]>('/api/world/inventory').pipe(catchError(() => of([])));
+  }
+
+  getResearchLog(): Observable<{ note?: string; items: ResearchLogEntry[] }> {
+    return this.http.get<{ note?: string; items: ResearchLogEntry[] }>('/api/world/research').pipe(
+      catchError(() => of({ items: [] })),
+    );
   }
 
   refreshInventory(): Observable<WorldItem[]> {
@@ -219,6 +251,7 @@ export class WorldService {
     this.chatLines.set([]);
     this.lobbyName.set('');
     this.socketLobby = '';
+    this.research.set(null);
   }
 
   sendMove(lat: number, lng: number): void {
@@ -372,6 +405,9 @@ export class WorldService {
     }
     if (env.type === 'event' || env.type === 'snapshot') {
       this.event.set(env.event ?? null);
+    }
+    if (env.type === 'research' && env.research) {
+      this.research.set(env.research);
     }
     if (env.type === 'event_done') {
       this.event.set(null);

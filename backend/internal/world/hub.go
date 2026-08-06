@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/saints-weatherwatch/backend/internal/auth"
+	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/store"
 )
 
@@ -36,6 +37,7 @@ var DefaultLobbies = []LobbyDef{
 // Hub owns multiple Rooms (shards). Inventory/craft/trade stay global.
 type Hub struct {
 	st      *store.Store
+	nws     *nws.Cache
 	origins []string
 	defs    []LobbyDef
 	mu      sync.Mutex
@@ -49,6 +51,19 @@ func NewHub(st *store.Store, allowedOrigins []string) *Hub {
 		origins: append([]string(nil), allowedOrigins...),
 		defs:    append([]LobbyDef(nil), DefaultLobbies...),
 		rooms:   map[string]*Room{},
+	}
+}
+
+// AttachAlerts wires the live NWS cache for Phase 4 research ticks (read-only).
+func (h *Hub) AttachAlerts(cache *nws.Cache) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.nws = cache
+	for _, r := range h.rooms {
+		r.nws = cache
 	}
 }
 
@@ -87,6 +102,7 @@ func (h *Hub) ensureRoomLocked(id string) *Room {
 	r.id = def.ID
 	r.name = def.Name
 	r.maxPlayers = def.MaxPlayers
+	r.nws = h.nws
 	h.rooms[id] = r
 	return r
 }

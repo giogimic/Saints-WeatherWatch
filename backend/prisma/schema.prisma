@@ -28,6 +28,7 @@ model User {
   vehicles             UserVehicle[]
   collectibles         UserCollectible[]
   tradeListings        TradeListing[] @relation("SellerListings")
+  researchLogs         ResearchLogEntry[]
   favoriteCameras      FavoriteCamera[]
   watchedAreas         WatchedArea[]
   savedLocations       SavedLocation[]
@@ -92,6 +93,27 @@ model UserCollectible {
 
   @@unique([userId, itemKey])
   @@index([userId])
+}
+
+/// Storm World Phase 4 — personal weather research grants (SIM loot from real WX context).
+/// Copies alert metadata for the log only; never mutates NWS payloads.
+model ResearchLogEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  alertId   String
+  headline  String
+  severity  String
+  area      String
+  itemKey   String
+  qty       Int      @default(1)
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, alertId])
 }
 
 /// Barter listings for the Trade Center (server-authoritative).

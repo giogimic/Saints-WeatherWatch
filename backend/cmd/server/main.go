@@ -59,9 +59,11 @@ func main() {
 	go hub.Run(bgCtx.Done())
 
 	worldHub := world.NewHub(st, cfg.AllowedOrigins)
-	go worldHub.Run(bgCtx.Done())
 
 	nwsCache := nws.NewCache(st)
+	worldHub.AttachAlerts(nwsCache)
+	go worldHub.Run(bgCtx.Done())
+
 	nwsCache.OnUpdate(func(live nws.AlertsResponse, newAlerts []nws.Alert) {
 		if len(newAlerts) > 0 {
 			hub.PublishNewAlerts(live, newAlerts)

@@ -71,6 +71,7 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
   basic_probe: { name: 'Basic Probe', rarity: 'uncommon' },
   repair_kit: { name: 'Repair Kit', rarity: 'common' },
   field_journal: { name: 'Field Journal', rarity: 'uncommon' },
+  research_sample: { name: 'Research Sample', rarity: 'uncommon' },
   solar_pack: { name: 'Solar Pack', rarity: 'uncommon' },
 };
 
@@ -211,6 +212,13 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
                 <span class="text-secondary">{{ zoneHud() }}</span>
               }
             </div>
+            @if (worldMode && researchHud()) {
+              <div
+                class="pointer-events-none storm-card px-3 py-2 text-[10px] font-black uppercase tracking-wider max-w-xs text-sky-200"
+              >
+                {{ researchHud() }}
+              </div>
+            }
             @if (toast) {
               <div class="storm-card px-3 py-2 text-xs font-black uppercase tracking-wider text-secondary">
                 {{ toast }}
@@ -709,6 +717,15 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     const n = this.world.players().length;
     const who = n <= 1 ? '1 online' : `${n} online`;
     return `${lobby} · ${who}`;
+  }
+
+  researchHud(): string {
+    const rs = this.world.research();
+    if (!rs) return '';
+    if (!rs.studying) return 'Research idle · near alert to study';
+    const sev = rs.severity ? ` · ${rs.severity}` : '';
+    const head = (rs.headline || 'Alert cell').slice(0, 48);
+    return `Study ${rs.holdSec || 0}/${rs.needSec || 25}s${sev} · ${head}`;
   }
 
   zoneHud(): string {

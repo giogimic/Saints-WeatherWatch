@@ -20,6 +20,7 @@ func mountWorldRoutes(r chi.Router, st *store.Store, hub *world.Hub) {
 	r.Get("/world/catalog", worldCatalogHandler())
 	r.Get("/world/lobbies", worldLobbiesHandler(hub))
 	r.Get("/world/inventory", worldInventoryHandler(st))
+	r.Get("/world/research", worldResearchHandler(st))
 	r.Post("/world/craft", worldCraftHandler(st))
 	r.Get("/world/trades", worldTradesHandler(st))
 	r.Post("/world/trades", worldCreateTradeHandler(st))
@@ -66,6 +67,23 @@ func worldInventoryHandler(st *store.Store) http.HandlerFunc {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(mergedInventory(st, r, user.ID))
+	}
+}
+
+func worldResearchHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		rows := world.ListResearchLog(st, r.Context(), user.ID, 40)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"generatedAt": time.Now().UTC().Format(time.RFC3339),
+			"note":        "SIM research grants from time-on-station near live NWS alert cells. Official severity/text are never changed.",
+			"items":       rows,
+		})
 	}
 }
 
