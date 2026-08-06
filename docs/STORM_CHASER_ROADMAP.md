@@ -28,6 +28,7 @@ See [STORM_CHASER_PHASE1.md](./STORM_CHASER_PHASE1.md).
 - [x] Hand-authored land-cover zones (forest / coast / town / farm) — approximate Maine match
 - [x] Biased material tables per zone
 - [x] Lobby select + sharding (parallel rooms, same map; inventory/craft/trade stay global)
+- [x] Presence rendezvous + lobby chat (mobile)
 - [ ] Optional: GIS land-cover tiles / finer region polygons
 
 ## Phase 4 — Weather-linked research (real phenomena)
