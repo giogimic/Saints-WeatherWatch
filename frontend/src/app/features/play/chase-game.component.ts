@@ -3,6 +3,7 @@ import {
   AfterViewInit,
   Component,
   EventEmitter,
+  HostListener,
   OnDestroy,
   Output,
   inject,
@@ -27,9 +28,11 @@ interface DropMarker {
 const CENTER: [number, number] = [47.05, -68.35];
 const BOUNDS = { minLat: 46.55, maxLat: 47.55, minLng: -69.15, maxLng: -67.55 };
 const RUN_SECONDS = 60;
-const STEP = 0.028;
+/** Degrees per second at full stick / full WASD. */
+const MOVE_SPEED = 0.11;
 const PICKUP_DIST = 0.035;
 const DROP_COUNT = 7;
+const STICK_RADIUS = 36;
 
 const LOOT_META: Record<string, { name: string; rarity: string; weight: number }> = {
   radar_core: { name: 'Radar Core Ping', rarity: 'common', weight: 5 },
@@ -76,7 +79,8 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
             </div>
           </div>
           <p class="text-sm font-semibold text-base-content/70">
-            Use the big arrows to roll. When you get close to a drop, you auto-bag it.
+            Drag the floating stick or use <span class="text-white font-black">WASD</span> / arrow keys.
+            Get close to a drop to auto-bag it.
             @if (!auth.isLoggedIn()) {
               Log in after a run to keep loot on your profile.
             }
@@ -93,9 +97,9 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
 
       @if (phase === 'running' || phase === 'done') {
         <div class="relative rounded-2xl overflow-hidden border border-base-300 min-h-[48vh] md:min-h-[420px]">
-          <div #mapHost id="chase-map" class="absolute inset-0 z-0"></div>
+          <div id="chase-map" class="absolute inset-0 z-0"></div>
 
-          <div class="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap gap-2 pointer-events-none">
+          <div class="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-start gap-2 pointer-events-none">
             <div class="pointer-events-none storm-card px-3 py-2 text-xs font-black uppercase tracking-wider">
               <span class="text-primary">{{ timeLeft }}s</span>
               <span class="text-base-content/40 mx-2">·</span>
@@ -106,21 +110,35 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
                 {{ toast }}
               </div>
             }
+            <div class="flex-1"></div>
+            @if (phase === 'running') {
+              <button
+                type="button"
+                class="pointer-events-auto btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/40 backdrop-blur-sm font-black uppercase text-[10px] min-h-10"
+                (click)="endRun()"
+              >
+                End
+              </button>
+            }
           </div>
 
           @if (phase === 'running') {
-            <div class="absolute bottom-3 left-0 right-0 z-[1000] flex justify-center pointer-events-none">
-              <div class="pointer-events-auto grid grid-cols-3 gap-1.5 w-44">
-                <div></div>
-                <button type="button" class="btn btn-primary btn-sm min-h-12 rounded-xl font-black text-lg" (click)="nudge(0, 1)">▲</button>
-                <div></div>
-                <button type="button" class="btn btn-primary btn-sm min-h-12 rounded-xl font-black text-lg" (click)="nudge(-1, 0)">◀</button>
-                <button type="button" class="btn btn-ghost btn-sm min-h-12 rounded-xl border border-base-300 font-black text-[10px] uppercase" (click)="endRun()">End</button>
-                <button type="button" class="btn btn-primary btn-sm min-h-12 rounded-xl font-black text-lg" (click)="nudge(1, 0)">▶</button>
-                <div></div>
-                <button type="button" class="btn btn-primary btn-sm min-h-12 rounded-xl font-black text-lg" (click)="nudge(0, -1)">▼</button>
-                <div></div>
+            <!-- Floating virtual joystick (bottom-left, semi-transparent) -->
+            <div
+              class="chase-stick absolute bottom-4 left-4 z-[1000] select-none touch-none"
+              (pointerdown)="onStickDown($event)"
+              (pointermove)="onStickMove($event)"
+              (pointerup)="onStickUp($event)"
+              (pointercancel)="onStickUp($event)"
+              aria-label="Drive stick"
+            >
+              <div class="chase-stick-base">
+                <div
+                  class="chase-stick-knob"
+                  [style.transform]="'translate(' + stickKnobX + 'px,' + stickKnobY + 'px)'"
+                ></div>
               </div>
+              <p class="chase-stick-hint">WASD</p>
             </div>
           }
         </div>
@@ -137,7 +155,7 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
               @for (item of bagged; track $index) {
                 <li class="flex justify-between gap-2 text-sm">
                   <span class="font-bold text-white">{{ itemName(item) }}</span>
-                  <span class="text-[10px] font-black uppercase tracking-wider text-base-content/45">{{ rarityOf(item) }}</span>
+                  <span class="text-[10px] uppercase tracking-wider text-base-content/45 font-bold">{{ rarityOf(item) }}</span>
                 </li>
               }
             </ul>
@@ -193,6 +211,8 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   savedLoot = false;
   vehicleIcon: SafeHtml = this.sanitizer.bypassSecurityTrustHtml(vehicleSvg('starter_car'));
   vehicleLabel = 'Starter Chase Car';
+  stickKnobX = 0;
+  stickKnobY = 0;
 
   private map?: L.Map;
   private playerMarker?: L.Marker;
@@ -205,13 +225,41 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private startedAt = 0;
   private mapReady = false;
 
+  private keys = new Set<string>();
+  private stickX = 0;
+  private stickY = 0;
+  private stickActive = false;
+  private stickOriginX = 0;
+  private stickOriginY = 0;
+  private rafId = 0;
+  private lastFrame = 0;
+
   ngAfterViewInit(): void {
     this.refreshVehicle();
   }
 
   ngOnDestroy(): void {
+    this.stopLoop();
     this.clearTimer();
     this.destroyMap();
+    this.keys.clear();
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  onKeyDown(ev: KeyboardEvent): void {
+    if (this.phase !== 'running') return;
+    const k = ev.key.toLowerCase();
+    if (!this.isMoveKey(k)) return;
+    if (ev.repeat) return;
+    ev.preventDefault();
+    this.keys.add(k);
+  }
+
+  @HostListener('window:keyup', ['$event'])
+  onKeyUp(ev: KeyboardEvent): void {
+    const k = ev.key.toLowerCase();
+    if (!this.isMoveKey(k)) return;
+    this.keys.delete(k);
   }
 
   startRun(): void {
@@ -222,15 +270,19 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.toast = '';
     this.lastAward = null;
     this.savedLoot = false;
+    this.keys.clear();
+    this.resetStick();
     this.lat = CENTER[0] + (Math.random() - 0.5) * 0.1;
     this.lng = CENTER[1] + (Math.random() - 0.5) * 0.1;
     this.startedAt = Date.now();
     this.clearTimer();
+    this.stopLoop();
 
     setTimeout(() => {
       this.ensureMap();
       this.spawnDrops();
       this.placePlayer();
+      this.startLoop();
       this.timer = setInterval(() => {
         this.timeLeft -= 1;
         if (this.timeLeft <= 0) this.endRun();
@@ -238,17 +290,12 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     }, 40);
   }
 
-  nudge(dx: number, dy: number): void {
-    if (this.phase !== 'running') return;
-    this.lng = this.clamp(this.lng + dx * STEP, BOUNDS.minLng, BOUNDS.maxLng);
-    this.lat = this.clamp(this.lat + dy * STEP, BOUNDS.minLat, BOUNDS.maxLat);
-    this.placePlayer();
-    this.checkPickups();
-  }
-
   endRun(): void {
     if (this.phase !== 'running') return;
+    this.stopLoop();
     this.clearTimer();
+    this.resetStick();
+    this.keys.clear();
     this.phase = 'done';
     const seconds = Math.max(1, Math.round((Date.now() - this.startedAt) / 1000));
     if (this.auth.isLoggedIn() && this.bagged.length) {
@@ -266,12 +313,106 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.auth.openModal('signup');
   }
 
+  onStickDown(ev: PointerEvent): void {
+    if (this.phase !== 'running') return;
+    const el = ev.currentTarget as HTMLElement;
+    el.setPointerCapture(ev.pointerId);
+    const rect = el.getBoundingClientRect();
+    this.stickOriginX = rect.left + rect.width / 2;
+    this.stickOriginY = rect.top + rect.height / 2;
+    this.stickActive = true;
+    this.updateStickFromPointer(ev.clientX, ev.clientY);
+    ev.preventDefault();
+  }
+
+  onStickMove(ev: PointerEvent): void {
+    if (!this.stickActive) return;
+    this.updateStickFromPointer(ev.clientX, ev.clientY);
+    ev.preventDefault();
+  }
+
+  onStickUp(ev: PointerEvent): void {
+    if (!this.stickActive) return;
+    this.stickActive = false;
+    this.resetStick();
+    try {
+      (ev.currentTarget as HTMLElement).releasePointerCapture(ev.pointerId);
+    } catch { /* ignore */ }
+  }
+
   itemName(key: string): string {
     return LOOT_META[key]?.name || key;
   }
 
   rarityOf(key: string): string {
     return LOOT_META[key]?.rarity || 'common';
+  }
+
+  private isMoveKey(k: string): boolean {
+    return k === 'w' || k === 'a' || k === 's' || k === 'd'
+      || k === 'arrowup' || k === 'arrowdown' || k === 'arrowleft' || k === 'arrowright';
+  }
+
+  private updateStickFromPointer(clientX: number, clientY: number): void {
+    let dx = clientX - this.stickOriginX;
+    let dy = clientY - this.stickOriginY;
+    const mag = Math.hypot(dx, dy);
+    if (mag > STICK_RADIUS) {
+      dx = (dx / mag) * STICK_RADIUS;
+      dy = (dy / mag) * STICK_RADIUS;
+    }
+    this.stickKnobX = dx;
+    this.stickKnobY = dy;
+    // Screen Y down → map south (negative lat), so invert Y for map north.
+    this.stickX = dx / STICK_RADIUS;
+    this.stickY = -dy / STICK_RADIUS;
+  }
+
+  private resetStick(): void {
+    this.stickX = 0;
+    this.stickY = 0;
+    this.stickKnobX = 0;
+    this.stickKnobY = 0;
+    this.stickActive = false;
+  }
+
+  private startLoop(): void {
+    this.lastFrame = performance.now();
+    const tick = (now: number) => {
+      if (this.phase !== 'running') return;
+      const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
+      this.lastFrame = now;
+      this.applyMovement(dt);
+      this.rafId = requestAnimationFrame(tick);
+    };
+    this.rafId = requestAnimationFrame(tick);
+  }
+
+  private stopLoop(): void {
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = 0;
+  }
+
+  private applyMovement(dt: number): void {
+    let dx = this.stickX;
+    let dy = this.stickY;
+    if (this.keys.has('a') || this.keys.has('arrowleft')) dx -= 1;
+    if (this.keys.has('d') || this.keys.has('arrowright')) dx += 1;
+    if (this.keys.has('w') || this.keys.has('arrowup')) dy += 1;
+    if (this.keys.has('s') || this.keys.has('arrowdown')) dy -= 1;
+
+    const mag = Math.hypot(dx, dy);
+    if (mag < 0.08) return;
+    if (mag > 1) {
+      dx /= mag;
+      dy /= mag;
+    }
+
+    const step = MOVE_SPEED * dt;
+    this.lng = this.clamp(this.lng + dx * step, BOUNDS.minLng, BOUNDS.maxLng);
+    this.lat = this.clamp(this.lat + dy * step, BOUNDS.minLat, BOUNDS.maxLat);
+    this.placePlayer(false);
+    this.checkPickups();
   }
 
   private refreshVehicle(): void {
@@ -319,7 +460,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.mapReady = false;
   }
 
-  private placePlayer(): void {
+  private placePlayer(pan = true): void {
     if (!this.map) return;
     const html = `<div class="chase-truck">${vehicleSvg(this.auth.user()?.equippedVehicleKey || 'starter_car')}</div>`;
     const icon = L.divIcon({
@@ -334,7 +475,15 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       this.playerMarker.setLatLng([this.lat, this.lng]);
       this.playerMarker.setIcon(icon);
     }
-    this.map.panTo([this.lat, this.lng], { animate: true, duration: 0.2 });
+    if (pan) {
+      this.map.panTo([this.lat, this.lng], { animate: true, duration: 0.15 });
+    } else {
+      // Gentle follow without fighting the stick every frame.
+      const center = this.map.getCenter();
+      if (Math.hypot(center.lat - this.lat, center.lng - this.lng) > 0.12) {
+        this.map.panTo([this.lat, this.lng], { animate: true, duration: 0.25 });
+      }
+    }
   }
 
   private spawnDrops(): void {
