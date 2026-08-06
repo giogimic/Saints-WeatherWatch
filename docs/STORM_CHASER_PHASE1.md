@@ -52,7 +52,9 @@ Follow the usual casual authoritative pattern (not a custom protocol):
 
 ## Out of scope for Phase 1
 
-Full MMO economy, deployable persistence networks, vehicle part tree, weather-typed research loops, anti-cheat physics, chat, entity interpolation buffers.
+Full MMO economy, deployable persistence networks, vehicle part tree, weather-typed research loops, regional biomes, anti-cheat physics, chat, entity interpolation buffers.
+
+See aspirational scope in [STORM_CHASER_VISION.md](./STORM_CHASER_VISION.md) and ordered later slices in [STORM_CHASER_ROADMAP.md](./STORM_CHASER_ROADMAP.md). **Do not implement those here** until Phase 1 is stable in production.
 
 ## Deploy
 
