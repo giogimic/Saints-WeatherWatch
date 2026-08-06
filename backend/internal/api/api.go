@@ -89,7 +89,7 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Get("/watched-areas", getWatchedAreasHandler(st))
 		r.Post("/watched-areas", createWatchedAreaHandler(st))
 		r.Delete("/watched-areas/{id}", deleteWatchedAreaHandler(st))
-		r.Get("/watched-areas/{id}/expand", expandWatchedAreaHandler(st, cache, outageCache))
+		r.Get("/watched-areas/{id}/expand", expandWatchedAreaHandler(st, cache, outageCache, camCache))
 		r.Get("/dashboard/prefs", getDashboardPrefsHandler(st))
 		r.Put("/dashboard/prefs", saveDashboardPrefsHandler(st))
 
@@ -98,8 +98,10 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Post("/locations", createSavedLocationHandler(st))
 		r.Delete("/locations/{id}", deleteSavedLocationHandler(st))
 
-		// Camera proxy + listing
-		r.Get("/cams", camListHandler(camCache))
+		// Camera proxy + listing (Phase C health / near-warnings)
+		r.Get("/cams", camListHandler(camCache, cache))
+		r.Get("/cams/near-warnings", camNearWarningsHandler(camCache, cache))
+		r.Get("/cams/corridors", camCorridorsHandler())
 		r.Get("/cams/{id}", camImageHandler(camCache))
 	})
 }
@@ -558,11 +560,58 @@ func deleteSavedLocationHandler(st *store.Store) http.HandlerFunc {
 	}
 }
 
-func camListHandler(camCache *cams.Cache) http.HandlerFunc {
+func camListHandler(camCache *cams.Cache, nwsCache *nws.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(camCache.ListMeta())
+		_ = json.NewEncoder(w).Encode(camCache.ListMetaWithAlerts(alertRefsFromCache(nwsCache)))
 	}
+}
+
+func camNearWarningsHandler(camCache *cams.Cache, nwsCache *nws.Cache) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		refs := alertRefsFromCache(nwsCache)
+		rows := camCache.NearWarnings(refs, 40)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"generatedAt": time.Now().UTC().Format(time.RFC3339),
+			"radiusMiles": 40,
+			"count":       len(rows),
+			"items":       rows,
+			"note":        "Road cams within ~40 mi of active alert geometry/centroid.",
+		})
+	}
+}
+
+func camCorridorsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"corridors": cams.Corridors,
+			"note":      "Named buckets for northern Maine / St. John Valley road cams.",
+		})
+	}
+}
+
+func alertRefsFromCache(nwsCache *nws.Cache) []cams.AlertRef {
+	if nwsCache == nil {
+		return nil
+	}
+	payload := nwsCache.Get()
+	out := make([]cams.AlertRef, 0, len(payload.Alerts))
+	for _, a := range payload.Alerts {
+		if strings.EqualFold(a.Status, "expired") {
+			continue
+		}
+		out = append(out, cams.AlertRef{
+			ID:          a.ID,
+			Headline:    a.Headline,
+			Severity:    a.Severity,
+			CentroidLat: a.CentroidLat,
+			CentroidLon: a.CentroidLon,
+			Geometry:    a.Geometry,
+		})
+	}
+	return out
 }
 
 func camImageHandler(camCache *cams.Cache) http.HandlerFunc {
@@ -577,6 +626,11 @@ func camImageHandler(camCache *cams.Cache) http.HandlerFunc {
 		w.Header().Set("Content-Type", img.ContentType)
 		w.Header().Set("Cache-Control", "public, max-age=30")
 		w.Header().Set("X-Last-Updated", img.LastUpdated.UTC().Format(time.RFC3339))
+		if img.BlackFrame {
+			w.Header().Set("X-Frame-Health", "black")
+		} else {
+			w.Header().Set("X-Frame-Health", "ok")
+		}
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(img.Data)))
 		_, _ = w.Write(img.Data)
 	}

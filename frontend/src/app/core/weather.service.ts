@@ -214,6 +214,14 @@ export interface CameraFeedDto {
   lng?: number;
   km?: number;
   category?: string;
+  health?: 'ok' | 'stale' | 'black' | 'pending' | 'error' | string;
+  lastUpdated?: string;
+  ageSec?: number;
+  blackFrame?: boolean;
+  corridorId?: string;
+  corridorLabel?: string;
+  nearAlertIds?: string[];
+  nearAlertCount?: number;
 }
 
 @Injectable({
@@ -237,6 +245,24 @@ export class WeatherService {
         console.error('getCams error:', err);
         return of([]);
       })
+    );
+  }
+
+  getCamsNearWarnings(): Observable<{
+    generatedAt: string;
+    radiusMiles: number;
+    count: number;
+    items: { camera: CameraFeedDto; nearAlertIds: string[]; nearAlertCount: number }[];
+    note?: string;
+  } | null> {
+    return this.http.get<{
+      generatedAt: string;
+      radiusMiles: number;
+      count: number;
+      items: { camera: CameraFeedDto; nearAlertIds: string[]; nearAlertCount: number }[];
+      note?: string;
+    }>('/api/cams/near-warnings').pipe(
+      catchError(() => of(null)),
     );
   }
 
@@ -455,12 +481,14 @@ export class WeatherService {
     alerts: WeatherAlert[];
     count: number;
     outage?: AreaOutageInfo;
+    cams?: CameraFeedDto[];
   }> {
     return this.http.get<{
       area: WatchedArea;
       alerts: WeatherAlert[];
       count: number;
       outage?: AreaOutageInfo;
+      cams?: CameraFeedDto[];
     }>(`/api/watched-areas/${id}/expand`).pipe(
       catchError(() => of({ area: null as any, alerts: [], count: 0 })),
     );

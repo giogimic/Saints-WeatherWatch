@@ -947,17 +947,26 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         );
         this.camsLayer.clearLayers();
         this.camMarkers.clear();
-        const icon = L.divIcon({
-          html: '<span style="font-size:18px;filter:drop-shadow(0 1px 2px #000)">📷</span>',
-          className: '',
-          iconSize: [22, 22],
-          iconAnchor: [11, 11],
-        });
         for (const cam of this.camsWithCoords) {
+          const color = camHealthColor(cam.health, cam.nearAlertCount);
+          const warn = (cam.nearAlertCount || 0) > 0 ? '⚠' : '📷';
+          const icon = L.divIcon({
+            html: `<span style="font-size:16px;filter:drop-shadow(0 1px 2px #000);color:${color}">${warn}</span>`,
+            className: '',
+            iconSize: [22, 22],
+            iconAnchor: [11, 11],
+          });
+          const age = cam.ageSec != null
+            ? (cam.ageSec < 90 ? `${cam.ageSec}s` : `${Math.round(cam.ageSec / 60)}m`)
+            : '—';
           const marker = L.marker([cam.lat!, cam.lng!], { icon }).bindPopup(
             `<strong>${cam.title}</strong><br>` +
-              `<span style="font-size:11px;opacity:.7">${cam.region}</span><br>` +
-              `<a href="/live?cam=${encodeURIComponent(cam.id)}" style="color:#38bdf8;font-weight:700">Open Live →</a>`
+              `<span style="font-size:11px;opacity:.7">${cam.corridorLabel || cam.region}</span><br>` +
+              `<span style="font-size:11px">Health ${cam.health || cam.status} · age ${age}</span>` +
+              ((cam.nearAlertCount || 0) > 0
+                ? `<br><span style="font-size:11px;color:#fbbf24;font-weight:700">Near ${cam.nearAlertCount} warning(s)</span>`
+                : '') +
+              `<br><a href="/live?cam=${encodeURIComponent(cam.id)}" style="color:#38bdf8;font-weight:700">Open Live →</a>`
           );
           marker.addTo(this.camsLayer);
           this.camMarkers.set(cam.id, marker);
@@ -1125,5 +1134,22 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
+  }
+}
+
+function camHealthColor(health?: string, nearCount?: number): string {
+  if ((nearCount || 0) > 0) return '#fbbf24';
+  switch ((health || '').toLowerCase()) {
+    case 'ok':
+      return '#4ade80';
+    case 'stale':
+      return '#fbbf24';
+    case 'black':
+    case 'error':
+      return '#f87171';
+    case 'pending':
+      return '#94a3b8';
+    default:
+      return '#e2e8f0';
   }
 }

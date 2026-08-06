@@ -40,20 +40,28 @@ type LatLng struct {
 
 // CameraMeta is the public listing shape for /api/cams.
 type CameraMeta struct {
-	ID          string  `json:"id"`
-	Title       string  `json:"title"`
-	Region      string  `json:"region"`
-	Description string  `json:"description"`
-	Status      string  `json:"status"`
-	Type        string  `json:"type"` // image
-	Group       string  `json:"group"` // cams | satellite | radar
-	ImageURL    string  `json:"imageUrl"`
-	Attribution string  `json:"attribution"`
-	SourceURL   string  `json:"sourceUrl,omitempty"`
-	Lat         float64 `json:"lat,omitempty"`
-	Lng         float64 `json:"lng,omitempty"`
-	Km          float64 `json:"km,omitempty"`
-	Category    string  `json:"category,omitempty"`
+	ID             string   `json:"id"`
+	Title          string   `json:"title"`
+	Region         string   `json:"region"`
+	Description    string   `json:"description"`
+	Status         string   `json:"status"`
+	Type           string   `json:"type"` // image
+	Group          string   `json:"group"` // cams | satellite | radar
+	ImageURL       string   `json:"imageUrl"`
+	Attribution    string   `json:"attribution"`
+	SourceURL      string   `json:"sourceUrl,omitempty"`
+	Lat            float64  `json:"lat,omitempty"`
+	Lng            float64  `json:"lng,omitempty"`
+	Km             float64  `json:"km,omitempty"`
+	Category       string   `json:"category,omitempty"`
+	Health         string   `json:"health,omitempty"` // ok | stale | black | pending | error
+	LastUpdated    string   `json:"lastUpdated,omitempty"`
+	AgeSec         int      `json:"ageSec,omitempty"`
+	BlackFrame     bool     `json:"blackFrame,omitempty"`
+	CorridorID     string   `json:"corridorId,omitempty"`
+	CorridorLabel  string   `json:"corridorLabel,omitempty"`
+	NearAlertIDs   []string `json:"nearAlertIds,omitempty"`
+	NearAlertCount int      `json:"nearAlertCount,omitempty"`
 }
 
 type CameraConfig struct {
@@ -76,6 +84,12 @@ type CachedImage struct {
 	Data        []byte
 	ContentType string
 	LastUpdated time.Time
+	BlackFrame  bool
+}
+
+type camRuntime struct {
+	ConsecutiveFails int
+	LastError        string
 }
 
 type fallbackFile struct {
@@ -105,6 +119,7 @@ type Cache struct {
 	mu       sync.RWMutex
 	configs  []CameraConfig
 	images   map[string]CachedImage
+	runtime  map[string]*camRuntime
 	client   *http.Client
 	faaURLs  map[string]string // cameraId -> current image URI
 	faaSites map[int]struct{}  // nearby FAA siteIds to refresh
@@ -119,6 +134,7 @@ type Cache struct {
 func NewCache() *Cache {
 	c := &Cache{
 		images:   make(map[string]CachedImage),
+		runtime:  make(map[string]*camRuntime),
 		faaURLs:  make(map[string]string),
 		faaSites: make(map[int]struct{}),
 		pollers:  make(map[string]struct{}),
@@ -329,6 +345,7 @@ func (c *Cache) fetch(cfg CameraConfig) {
 			c.mu.RUnlock()
 			if !ok || resolved == "" {
 				log.Printf("[Cams] FAA camera %s not resolved yet", camID)
+				c.noteFetchFail(cfg.ID, "faa unresolved")
 				return
 			}
 		}
@@ -338,6 +355,7 @@ func (c *Cache) fetch(cfg CameraConfig) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Printf("[Cams] bad request %s: %v", cfg.ID, err)
+		c.noteFetchFail(cfg.ID, err.Error())
 		return
 	}
 	if !strings.Contains(url, "weathercams.faa.gov") && !strings.Contains(url, "wcams-static.faa.gov") {
@@ -353,20 +371,24 @@ func (c *Cache) fetch(cfg CameraConfig) {
 	resp, err := c.client.Do(req)
 	if err != nil {
 		log.Printf("[Cams] fetch %s failed: %v", cfg.ID, err)
+		c.noteFetchFail(cfg.ID, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("[Cams] %s status %d", cfg.ID, resp.StatusCode)
+		c.noteFetchFail(cfg.ID, fmt.Sprintf("status %d", resp.StatusCode))
 		return
 	}
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("[Cams] read %s failed: %v", cfg.ID, err)
+		c.noteFetchFail(cfg.ID, err.Error())
 		return
 	}
 	if len(data) < 100 {
 		log.Printf("[Cams] %s payload too small (%d bytes), skipping", cfg.ID, len(data))
+		c.noteFetchFail(cfg.ID, "payload too small")
 		return
 	}
 	ct := resp.Header.Get("Content-Type")
@@ -374,10 +396,39 @@ func (c *Cache) fetch(cfg CameraConfig) {
 		ct = "image/jpeg"
 	}
 
+	fh := analyzeFrame(data)
 	c.mu.Lock()
-	c.images[cfg.ID] = CachedImage{Data: data, ContentType: ct, LastUpdated: time.Now()}
+	c.images[cfg.ID] = CachedImage{
+		Data:        data,
+		ContentType: ct,
+		LastUpdated: time.Now(),
+		BlackFrame:  fh.Black,
+	}
+	rt := c.runtime[cfg.ID]
+	if rt == nil {
+		rt = &camRuntime{}
+		c.runtime[cfg.ID] = rt
+	}
+	rt.ConsecutiveFails = 0
+	rt.LastError = ""
 	c.mu.Unlock()
-	log.Printf("[Cams] Updated %s (%d bytes)", cfg.ID, len(data))
+	if fh.Black {
+		log.Printf("[Cams] Updated %s (%d bytes) · black-frame suspected", cfg.ID, len(data))
+	} else {
+		log.Printf("[Cams] Updated %s (%d bytes)", cfg.ID, len(data))
+	}
+}
+
+func (c *Cache) noteFetchFail(id, reason string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	rt := c.runtime[id]
+	if rt == nil {
+		rt = &camRuntime{}
+		c.runtime[id] = rt
+	}
+	rt.ConsecutiveFails++
+	rt.LastError = reason
 }
 
 func (c *Cache) GetImage(id string) (CachedImage, bool) {
@@ -387,33 +438,186 @@ func (c *Cache) GetImage(id string) (CachedImage, bool) {
 	return img, ok
 }
 
+// AlertRef is the minimal alert geometry needed for cam proximity.
+type AlertRef struct {
+	ID          string
+	Headline    string
+	Severity    string
+	CentroidLat *float64
+	CentroidLon *float64
+	Geometry    interface{}
+}
+
 func (c *Cache) ListMeta() []CameraMeta {
+	return c.ListMetaWithAlerts(nil)
+}
+
+func (c *Cache) ListMetaWithAlerts(alerts []AlertRef) []CameraMeta {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	now := time.Now()
 	out := make([]CameraMeta, 0, len(c.configs))
 	for _, cfg := range c.configs {
-		status := "LIVE"
-		if _, ok := c.images[cfg.ID]; !ok {
-			status = "PENDING"
+		img, hasImg := c.images[cfg.ID]
+		fails := 0
+		if rt := c.runtime[cfg.ID]; rt != nil {
+			fails = rt.ConsecutiveFails
 		}
-		out = append(out, CameraMeta{
-			ID:          cfg.ID,
-			Title:       cfg.Title,
-			Region:      cfg.Region,
-			Description: cfg.Description,
-			Status:      status,
-			Type:        "image",
-			Group:       cfg.Group,
-			ImageURL:    "/api/cams/" + cfg.ID,
-			Attribution: cfg.Attribution,
-			SourceURL:   cfg.SourceURL,
-			Lat:         cfg.Lat,
-			Lng:         cfg.Lng,
-			Km:          cfg.Km,
-			Category:    cfg.Category,
+		black := hasImg && img.BlackFrame
+		health, ageSec := classifyHealth(cfg.Group, hasImg, img.LastUpdated, black, fails, now)
+		status := "LIVE"
+		switch health {
+		case HealthPending:
+			status = "PENDING"
+		case HealthBlack:
+			status = "BLACK"
+		case HealthStale:
+			status = "STALE"
+		case HealthError:
+			status = "ERROR"
+		}
+		corrID, corrLabel := AssignCorridor(cfg.Lat, cfg.Lng)
+		meta := CameraMeta{
+			ID:            cfg.ID,
+			Title:         cfg.Title,
+			Region:        cfg.Region,
+			Description:   cfg.Description,
+			Status:        status,
+			Type:          "image",
+			Group:         cfg.Group,
+			ImageURL:      "/api/cams/" + cfg.ID,
+			Attribution:   cfg.Attribution,
+			SourceURL:     cfg.SourceURL,
+			Lat:           cfg.Lat,
+			Lng:           cfg.Lng,
+			Km:            cfg.Km,
+			Category:      cfg.Category,
+			Health:        health,
+			AgeSec:        ageSec,
+			BlackFrame:    black,
+			CorridorID:    corrID,
+			CorridorLabel: corrLabel,
+		}
+		if hasImg {
+			meta.LastUpdated = img.LastUpdated.UTC().Format(time.RFC3339)
+		}
+		if cfg.Group == "cams" && cfg.Lat != 0 && cfg.Lng != 0 && len(alerts) > 0 {
+			ids := nearAlertIDs(cfg.Lat, cfg.Lng, alerts, 40)
+			if len(ids) > 0 {
+				meta.NearAlertIDs = ids
+				meta.NearAlertCount = len(ids)
+			}
+		}
+		out = append(out, meta)
+	}
+	return out
+}
+
+// NearWarnings returns road cams near active alerts (within radiusMiles).
+func (c *Cache) NearWarnings(alerts []AlertRef, radiusMiles float64) []map[string]any {
+	if radiusMiles <= 0 {
+		radiusMiles = 40
+	}
+	list := c.ListMetaWithAlerts(alerts)
+	out := make([]map[string]any, 0)
+	for _, cam := range list {
+		if cam.Group != "cams" || cam.NearAlertCount == 0 {
+			continue
+		}
+		out = append(out, map[string]any{
+			"camera":         cam,
+			"nearAlertIds":   cam.NearAlertIDs,
+			"nearAlertCount": cam.NearAlertCount,
 		})
 	}
 	return out
+}
+
+// CamsNearPoint returns road cams within radiusMiles of a lat/lon.
+func (c *Cache) CamsNearPoint(lat, lon, radiusMiles float64) []CameraMeta {
+	if radiusMiles <= 0 {
+		radiusMiles = 25
+	}
+	list := c.ListMeta()
+	out := make([]CameraMeta, 0)
+	for _, cam := range list {
+		if cam.Group != "cams" || (cam.Lat == 0 && cam.Lng == 0) {
+			continue
+		}
+		// Convert km haversine → miles (~0.621371)
+		dMiles := haversineKM(LatLng{Lat: lat, Lng: lon}, LatLng{Lat: cam.Lat, Lng: cam.Lng}) * 0.621371
+		if dMiles <= radiusMiles {
+			out = append(out, cam)
+		}
+	}
+	return out
+}
+
+func nearAlertIDs(lat, lng float64, alerts []AlertRef, radiusMiles float64) []string {
+	ids := make([]string, 0)
+	for _, a := range alerts {
+		okMatch, _ := alertNearCam(lat, lng, radiusMiles, a)
+		if okMatch {
+			ids = append(ids, a.ID)
+		}
+	}
+	return ids
+}
+
+func alertNearCam(lat, lng, radiusMiles float64, a AlertRef) (bool, bool) {
+	// Inline to avoid cams→geo import cycle concerns; duplicate thin check.
+	if a.Geometry != nil {
+		if m, ok := a.Geometry.(map[string]interface{}); ok {
+			coords := flattenCoords(m["coordinates"])
+			for _, c := range coords {
+				d := haversineKM(LatLng{Lat: lat, Lng: lng}, LatLng{Lat: c[1], Lng: c[0]}) * 0.621371
+				if d <= radiusMiles {
+					return true, false
+				}
+			}
+		}
+	}
+	if a.CentroidLat != nil && a.CentroidLon != nil {
+		d := haversineKM(LatLng{Lat: lat, Lng: lng}, LatLng{Lat: *a.CentroidLat, Lng: *a.CentroidLon}) * 0.621371
+		if d <= radiusMiles {
+			return true, true
+		}
+	}
+	return false, false
+}
+
+func flattenCoords(node interface{}) [][2]float64 {
+	arr, ok := node.([]interface{})
+	if !ok || len(arr) == 0 {
+		return nil
+	}
+	if len(arr) >= 2 {
+		lon, ok1 := asFloat(arr[0])
+		lat, ok2 := asFloat(arr[1])
+		if ok1 && ok2 {
+			if _, nested := arr[0].([]interface{}); !nested {
+				return [][2]float64{{lon, lat}}
+			}
+		}
+	}
+	out := make([][2]float64, 0, 32)
+	for _, child := range arr {
+		out = append(out, flattenCoords(child)...)
+	}
+	return out
+}
+
+func asFloat(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	default:
+		return 0, false
+	}
 }
 
 func (c *Cache) ListIDs() []string {
