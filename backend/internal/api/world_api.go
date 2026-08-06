@@ -16,14 +16,29 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/world"
 )
 
-func mountWorldRoutes(r chi.Router, st *store.Store) {
+func mountWorldRoutes(r chi.Router, st *store.Store, hub *world.Hub) {
 	r.Get("/world/catalog", worldCatalogHandler())
+	r.Get("/world/lobbies", worldLobbiesHandler(hub))
 	r.Get("/world/inventory", worldInventoryHandler(st))
 	r.Post("/world/craft", worldCraftHandler(st))
 	r.Get("/world/trades", worldTradesHandler(st))
 	r.Post("/world/trades", worldCreateTradeHandler(st))
 	r.Post("/world/trades/{id}/buy", worldBuyTradeHandler(st))
 	r.Delete("/world/trades/{id}", worldCancelTradeHandler(st))
+}
+
+func worldLobbiesHandler(hub *world.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		list := []world.LobbyStatus{}
+		if hub != nil {
+			list = hub.ListLobbies()
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"lobbies": list,
+			"zones":   world.ZoneCatalog,
+		})
+	}
 }
 
 func worldCatalogHandler() http.HandlerFunc {
@@ -36,7 +51,8 @@ func worldCatalogHandler() http.HandlerFunc {
 				"minLat": world.Bounds.MinLat, "maxLat": world.Bounds.MaxLat,
 				"minLng": world.Bounds.MinLng, "maxLng": world.Bounds.MaxLng,
 			},
-			"loot": loot.Catalog,
+			"loot":  loot.Catalog,
+			"zones": world.ZoneCatalog,
 		})
 	}
 }

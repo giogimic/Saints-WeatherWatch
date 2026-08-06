@@ -218,6 +218,7 @@ type Drop struct {
 	Rarity  string  `json:"rarity"`
 	Lat     float64 `json:"lat"`
 	Lng     float64 `json:"lng"`
+	Zone    string  `json:"zone,omitempty"`
 }
 
 type Player struct {
@@ -241,14 +242,16 @@ type SimEvent struct {
 }
 
 type Envelope struct {
-	Type    string    `json:"type"`
-	Players []Player  `json:"players,omitempty"`
-	Drops   []Drop    `json:"drops,omitempty"`
-	DropID  string    `json:"dropId,omitempty"`
-	ItemKey string    `json:"itemKey,omitempty"`
-	Event   *SimEvent `json:"event,omitempty"`
-	Toast   string    `json:"toast,omitempty"`
-	You     *Player   `json:"you,omitempty"`
+	Type      string    `json:"type"`
+	Players   []Player  `json:"players,omitempty"`
+	Drops     []Drop    `json:"drops,omitempty"`
+	DropID    string    `json:"dropId,omitempty"`
+	ItemKey   string    `json:"itemKey,omitempty"`
+	Event     *SimEvent `json:"event,omitempty"`
+	Toast     string    `json:"toast,omitempty"`
+	You       *Player   `json:"you,omitempty"`
+	LobbyID   string    `json:"lobbyId,omitempty"`
+	LobbyName string    `json:"lobbyName,omitempty"`
 }
 
 type clientMsg struct {
@@ -275,10 +278,14 @@ type client struct {
 	welcomed   bool // first hello may snap; later hellos are clamped moves
 }
 
-// Room is the single shared Phase 1 world instance.
+// Room is one lobby shard (presence / drops / SIM events). Inventory stays global.
 type Room struct {
+	id         string
+	name       string
+	maxPlayers int
 	st         *store.Store
 	mu         sync.Mutex
+	running    bool
 	clients    map[*client]struct{}
 	drops      map[string]*Drop
 	event      *SimEvent
@@ -287,6 +294,41 @@ type Room struct {
 	broadcast  chan []byte
 	register   chan *client
 	unregister chan *client
+}
+
+func (r *Room) start(done <-chan struct{}) {
+	r.mu.Lock()
+	if r.running || done == nil {
+		r.mu.Unlock()
+		return
+	}
+	r.running = true
+	r.mu.Unlock()
+	go r.Run(done)
+}
+
+func (r *Room) PlayerCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.clients)
+}
+
+// KickUser closes sockets for userID (unregister follows via readPump).
+func (r *Room) KickUser(userID string) {
+	if userID == "" {
+		return
+	}
+	r.mu.Lock()
+	var targets []*client
+	for c := range r.clients {
+		if c.userID == userID {
+			targets = append(targets, c)
+		}
+	}
+	r.mu.Unlock()
+	for _, c := range targets {
+		_ = c.conn.Close()
+	}
 }
 
 func NewRoom(st *store.Store, allowedOrigins []string) *Room {
@@ -299,6 +341,7 @@ func NewRoom(st *store.Store, allowedOrigins []string) *Room {
 	}
 	r := &Room{
 		st:         st,
+		maxPlayers: 32,
 		clients:    map[*client]struct{}{},
 		drops:      map[string]*Drop{},
 		origins:    origins,
@@ -713,12 +756,21 @@ func (r *Room) maybeSpawnEvent() {
 }
 
 func (r *Room) ensureDropsLocked(target int) {
+	ensureZoneWeights()
 	for len(r.drops) < target {
-		key := dropWeights[mrand.Intn(len(dropWeights))]
-		def := itemByKey[key]
 		lat, lng := randomPoint()
+		key, zone := PickDropForPoint(lat, lng)
+		def := itemByKey[key]
+		if def.Key == "" {
+			key = dropWeights[mrand.Intn(len(dropWeights))]
+			def = itemByKey[key]
+			zone = ZoneAt(lat, lng)
+		}
 		id := newID()
-		r.drops[id] = &Drop{ID: id, ItemKey: key, Name: def.Name, Rarity: def.Rarity, Lat: lat, Lng: lng}
+		r.drops[id] = &Drop{
+			ID: id, ItemKey: key, Name: def.Name, Rarity: def.Rarity,
+			Lat: lat, Lng: lng, Zone: string(zone),
+		}
 	}
 }
 
@@ -729,7 +781,10 @@ func (r *Room) sendSnapshot(c *client) {
 	ev := r.event
 	you := Player{UserID: c.userID, ChaserName: c.name, VehicleKey: c.veh, Lat: c.lat, Lng: c.lng, UpdatedAt: time.Now().Unix()}
 	r.mu.Unlock()
-	env := Envelope{Type: "snapshot", Players: players, Drops: drops, Event: ev, You: &you}
+	env := Envelope{
+		Type: "snapshot", Players: players, Drops: drops, Event: ev, You: &you,
+		LobbyID: r.id, LobbyName: r.name,
+	}
 	if b, err := json.Marshal(env); err == nil {
 		select {
 		case c.send <- b:

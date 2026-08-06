@@ -55,8 +55,8 @@ func main() {
 	hub := ws.NewHub(cfg.AllowedOrigins)
 	go hub.Run(bgCtx.Done())
 
-	room := world.NewRoom(st, cfg.AllowedOrigins)
-	go room.Run(bgCtx.Done())
+	worldHub := world.NewHub(st, cfg.AllowedOrigins)
+	go worldHub.Run(bgCtx.Done())
 
 	nwsCache := nws.NewCache(st)
 	nwsCache.OnUpdate(func(live nws.AlertsResponse, newAlerts []nws.Alert) {
@@ -83,11 +83,11 @@ func main() {
 	r.Get("/ws", serveWS)
 	// Also under /api so proxies that only forward /api still work.
 	r.Get("/api/ws", serveWS)
-	r.Get("/api/world/ws", room.ServeWS)
+	r.Get("/api/world/ws", worldHub.ServeWS)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(60 * time.Second))
-		api.Mount(r, st, nwsCache, camCache)
+		api.Mount(r, st, nwsCache, camCache, worldHub)
 	})
 
 	srv := &http.Server{

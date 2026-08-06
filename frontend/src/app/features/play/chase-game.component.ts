@@ -16,9 +16,10 @@ import * as L from 'leaflet';
 import { AuthService } from '../../core/auth.service';
 import { vehicleSvg } from '../../core/vehicles';
 import { QuizAward, WeatherService } from '../../core/weather.service';
-import { WorldService } from '../../core/world.service';
+import { WorldLobby, WorldService } from '../../core/world.service';
 
 type ChasePhase = 'ready' | 'running' | 'done';
+type LandZone = 'forest' | 'coast' | 'city' | 'farm';
 
 interface DropMarker {
   key: string;
@@ -137,7 +138,39 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
             Zoom with wheel / pinch. Use <span class="text-white font-black">Follow</span> or
             <span class="text-white font-black">Free</span> cam while driving.
             Logged-in chasers share server drops and SIM events (first bag wins).
+            Drops bias by land cover (forest · coast · town · farm).
           </p>
+          @if (auth.isLoggedIn()) {
+            <div class="space-y-2">
+              <p class="text-[10px] font-black uppercase tracking-widest text-base-content/45">Lobby / shard</p>
+              <div class="grid gap-2 sm:grid-cols-2">
+                @for (lobby of lobbies; track lobby.id) {
+                  <button
+                    type="button"
+                    class="text-left px-3 py-2 rounded-xl border transition-colors border-base-300"
+                    [class.border-primary]="selectedLobby === lobby.id"
+                    [class.bg-base-200]="selectedLobby === lobby.id"
+                    [class.opacity-50]="lobby.full && selectedLobby !== lobby.id"
+                    [disabled]="lobby.full && selectedLobby !== lobby.id"
+                    (click)="selectLobby(lobby.id)"
+                  >
+                    <div class="font-black uppercase text-sm text-white italic leading-tight">{{ lobby.name }}</div>
+                    <div class="text-[10px] font-semibold text-base-content/50 mt-0.5">{{ lobby.blurb }}</div>
+                    <div
+                      class="text-[10px] font-black uppercase tracking-wider mt-1"
+                      [class.text-accent]="!lobby.full"
+                      [class.text-error]="lobby.full"
+                    >
+                      {{ lobby.players }}/{{ lobby.maxPlayers }}{{ lobby.full ? ' · full' : '' }}
+                    </div>
+                  </button>
+                }
+              </div>
+              @if (!lobbies.length) {
+                <p class="text-xs text-base-content/50 font-semibold">Loading lobbies… (defaults to Main Corridor)</p>
+              }
+            </div>
+          }
           <div class="flex flex-col sm:flex-row gap-2">
             <button
               type="button"
@@ -170,6 +203,8 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
               @if (worldMode) {
                 <span class="text-base-content/40 mx-2">·</span>
                 <span class="text-primary">{{ onlineLabel() }}</span>
+                <span class="text-base-content/40 mx-2">·</span>
+                <span class="text-secondary">{{ zoneHud() }}</span>
               }
             </div>
             @if (toast) {
@@ -349,6 +384,8 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   followCam = true;
   activeSimLabel = '';
   activeSimHint = '';
+  lobbies: WorldLobby[] = [];
+  selectedLobby = 'main';
 
   private map?: L.Map;
   private playerMarker?: L.Marker;
@@ -358,6 +395,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private lng = CENTER[1];
   private toastTimer?: ReturnType<typeof setTimeout>;
   private startedAt = 0;
+  private lobbyPoll?: ReturnType<typeof setInterval>;
 
   private keys = new Set<string>();
   private stickX = 0;
@@ -384,15 +422,34 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.refreshVehicle();
+    this.refreshLobbies();
+    this.lobbyPoll = setInterval(() => {
+      if (this.phase === 'ready') this.refreshLobbies();
+    }, 8000);
   }
 
   ngOnDestroy(): void {
+    if (this.lobbyPoll) clearInterval(this.lobbyPoll);
     this.stopLoop();
     this.stopWorldSync();
     this.world.disconnectWorld();
     this.destroyMap();
     this.keys.clear();
     this.teardownImmersive(false);
+  }
+
+  selectLobby(id: string): void {
+    this.selectedLobby = id;
+  }
+
+  refreshLobbies(): void {
+    if (!this.auth.isLoggedIn()) return;
+    this.world.getLobbies().subscribe(res => {
+      this.lobbies = res.lobbies ?? [];
+      if (!this.lobbies.some(l => l.id === this.selectedLobby) && this.lobbies.length) {
+        this.selectedLobby = this.lobbies[0].id;
+      }
+    });
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -487,14 +544,14 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.activeSimLabel = '';
     this.activeSimHint = '';
     if (this.worldMode) {
-      this.world.connectWorld(this.lat, this.lng);
+      this.world.connectWorld(this.lat, this.lng, this.selectedLobby);
     }
 
     setTimeout(() => {
       this.ensureMap();
       if (this.worldMode) {
         this.clearDrops();
-        this.world.connectWorld(this.lat, this.lng);
+        this.world.connectWorld(this.lat, this.lng, this.selectedLobby);
         this.startWorldSync();
       } else {
         this.spawnDrops();
@@ -578,9 +635,38 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   onlineLabel(): string {
     if (!this.world.connected()) return 'connecting…';
+    const lobby = this.world.lobbyName() || this.selectedLobby;
     const n = this.world.players().length;
-    if (n <= 1) return '1 online (you)';
-    return `${n} online`;
+    const who = n <= 1 ? '1 online' : `${n} online`;
+    return `${lobby} · ${who}`;
+  }
+
+  zoneHud(): string {
+    const z = this.zoneAt(this.lat, this.lng);
+    switch (z) {
+      case 'coast': return 'coast';
+      case 'city': return 'town';
+      case 'farm': return 'farm';
+      default: return 'forest';
+    }
+  }
+
+  /** Mirrors server ZoneAt (approximate Maine land cover). */
+  private zoneAt(lat: number, lng: number): LandZone {
+    const cities: [number, number, number][] = [
+      [44.80, -68.77, 0.12],
+      [46.68, -68.02, 0.08],
+      [46.86, -68.01, 0.07],
+      [46.13, -67.84, 0.07],
+      [47.25, -68.59, 0.06],
+    ];
+    for (const [clat, clng, r] of cities) {
+      if (Math.hypot(lat - clat, lng - clng) <= r) return 'city';
+    }
+    if (lng >= -67.45 && lat <= 45.85) return 'coast';
+    if (lng >= -67.15) return 'coast';
+    if (lat >= 46.15 && lat <= 47.15 && lng >= -68.85 && lng <= -67.55) return 'farm';
+    return 'forest';
   }
 
   setFollowCam(on: boolean): void {

@@ -43,7 +43,7 @@ func mockCache() *nws.Cache {
 func TestAlertsEndpointReturnsStructuredPayload(t *testing.T) {
 	r := chi.NewRouter()
 	cache := mockCache()
-	Mount(r, nil, cache, cams.NewCache())
+	Mount(r, nil, cache, cams.NewCache(), nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/alerts", nil)
 	rr := httptest.NewRecorder()
@@ -87,7 +87,7 @@ func TestAlertsEndpointReturnsStructuredPayload(t *testing.T) {
 func TestOverviewEndpointReturnsSummary(t *testing.T) {
 	r := chi.NewRouter()
 	cache := mockCache()
-	Mount(r, nil, cache, cams.NewCache())
+	Mount(r, nil, cache, cams.NewCache(), nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/overview", nil)
 	rr := httptest.NewRecorder()

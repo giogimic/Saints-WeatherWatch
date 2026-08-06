@@ -47,6 +47,7 @@ export interface WorldDrop {
   rarity: string;
   lat: number;
   lng: number;
+  zone?: string;
 }
 
 export interface WorldEvent {
@@ -60,6 +61,21 @@ export interface WorldEvent {
   active: boolean;
 }
 
+export interface WorldLobby {
+  id: string;
+  name: string;
+  blurb: string;
+  maxPlayers: number;
+  players: number;
+  full: boolean;
+}
+
+export interface WorldZone {
+  id: string;
+  name: string;
+  blurb: string;
+}
+
 export interface WorldEnvelope {
   type: string;
   players?: WorldPlayer[];
@@ -68,6 +84,8 @@ export interface WorldEnvelope {
   itemKey?: string;
   event?: WorldEvent;
   toast?: string;
+  lobbyId?: string;
+  lobbyName?: string;
 }
 
 /**
@@ -84,6 +102,8 @@ export class WorldService {
   readonly event = signal<WorldEvent | null>(null);
   readonly toast = signal('');
   readonly connected = signal(false);
+  readonly lobbyId = signal('main');
+  readonly lobbyName = signal('');
   /** Latest successful server bag (for UI). */
   readonly lastBag = signal<{ seq: number; itemKey: string; dropId?: string } | null>(null);
 
@@ -99,10 +119,17 @@ export class WorldService {
   private lastMoveSent = 0;
   private bagSeq = 0;
   private visibilityBound = false;
+  private selectedLobby = 'main';
 
-  getCatalog(): Observable<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number> }> {
-    return this.http.get<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number> }>('/api/world/catalog').pipe(
+  getCatalog(): Observable<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number>; zones?: WorldZone[] }> {
+    return this.http.get<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number>; zones?: WorldZone[] }>('/api/world/catalog').pipe(
       catchError(() => of({ items: [], recipes: [], bounds: {} })),
+    );
+  }
+
+  getLobbies(): Observable<{ lobbies: WorldLobby[]; zones: WorldZone[] }> {
+    return this.http.get<{ lobbies: WorldLobby[]; zones: WorldZone[] }>('/api/world/lobbies').pipe(
+      catchError(() => of({ lobbies: [], zones: [] })),
     );
   }
 
@@ -141,10 +168,14 @@ export class WorldService {
     );
   }
 
-  connectWorld(lat?: number, lng?: number): void {
+  connectWorld(lat?: number, lng?: number, lobbyId?: string): void {
     if (typeof lat === 'number' && typeof lng === 'number') {
       this.lastLat = lat;
       this.lastLng = lng;
+    }
+    if (lobbyId) {
+      this.selectedLobby = lobbyId;
+      this.lobbyId.set(lobbyId);
     }
     this.intentionalClose = false;
     this.bindVisibility();
@@ -163,6 +194,7 @@ export class WorldService {
     this.players.set([]);
     this.drops.set([]);
     this.event.set(null);
+    this.lobbyName.set('');
   }
 
   sendMove(lat: number, lng: number): void {
@@ -216,7 +248,8 @@ export class WorldService {
 
     try {
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${proto}//${window.location.host}/api/world/ws`);
+      const lobby = encodeURIComponent(this.selectedLobby || 'main');
+      const ws = new WebSocket(`${proto}//${window.location.host}/api/world/ws?lobby=${lobby}`);
       this.socket = ws;
 
       ws.onopen = () => {
@@ -280,6 +313,8 @@ export class WorldService {
   }
 
   private apply(env: WorldEnvelope): void {
+    if (env.lobbyId) this.lobbyId.set(env.lobbyId);
+    if (env.lobbyName) this.lobbyName.set(env.lobbyName);
     if (env.type === 'snapshot' || env.type === 'presence') {
       if (env.players) this.players.set(env.players);
     }
