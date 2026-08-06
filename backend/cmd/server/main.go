@@ -73,9 +73,12 @@ func main() {
 	camCache.Start(bgCtx.Done(), discoverEvery)
 
 	// WebSocket stays outside Timeout middleware so long-lived connections work.
-	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+	serveWS := func(w http.ResponseWriter, r *http.Request) {
 		hub.ServeHTTP(w, r, nwsCache.Get)
-	})
+	}
+	r.Get("/ws", serveWS)
+	// Also under /api so proxies that only forward /api still work.
+	r.Get("/api/ws", serveWS)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(60 * time.Second))

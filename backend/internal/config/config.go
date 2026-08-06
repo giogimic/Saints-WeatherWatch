@@ -35,8 +35,13 @@ func Load() Config {
 		UserAgent:              envOr("USER_AGENT", "SaintsWeatherWatch/1.0 (saintsweatherwatch.app)"),
 	}
 
-	origins := envOr("ALLOWED_ORIGINS", "http://localhost:4200,http://127.0.0.1:4200,https://wn.saintsgaming.net")
-	c.AllowedOrigins = strings.Split(origins, ",")
+	origins := envOr("ALLOWED_ORIGINS", "http://localhost:4200,http://127.0.0.1:4200,https://wn.saintsgaming.net,https://ww.saintsgaming.net")
+	for _, part := range strings.Split(origins, ",") {
+		o := strings.TrimSpace(part)
+		if o != "" {
+			c.AllowedOrigins = append(c.AllowedOrigins, o)
+		}
+	}
 
 	return c
 }

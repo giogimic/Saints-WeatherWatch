@@ -69,6 +69,21 @@ Never mount a named volume at `/app`. Docker seeds a named volume from the image
 that volume is first created, so mounting `/app` permanently shadows the compiled `server`
 binary and every later `docker compose up --build` keeps running the original build.
 
+### WebSocket (`/ws`)
+
+The frontend container nginx must proxy WebSocket upgrades to the backend. After Phase 4,
+`frontend/nginx.conf` forwards `/ws` (and `/api/`) with `Upgrade` headers. Rebuild the
+**frontend** image when changing that config:
+
+```bash
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+If an outer reverse proxy sits in front of port 5080, it must also pass through WebSocket
+upgrades (or only terminate TLS and forward to the frontend container).
+
+
 If the backend appears to be missing new routes (for example `/api/cams` returning 404 while
 the frontend clearly updated), force a clean rebuild:
 
