@@ -2,10 +2,12 @@ import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
   Component,
+  ElementRef,
   EventEmitter,
   HostListener,
   OnDestroy,
   Output,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -28,11 +30,9 @@ interface DropMarker {
 const CENTER: [number, number] = [47.05, -68.35];
 const BOUNDS = { minLat: 46.55, maxLat: 47.55, minLng: -69.15, maxLng: -67.55 };
 const RUN_SECONDS = 60;
-/** Degrees per second at full stick / full WASD. */
 const MOVE_SPEED = 0.11;
 const PICKUP_DIST = 0.035;
 const DROP_COUNT = 7;
-const STICK_RADIUS = 36;
 
 const LOOT_META: Record<string, { name: string; rarity: string; weight: number }> = {
   radar_core: { name: 'Radar Core Ping', rarity: 'common', weight: 5 },
@@ -50,21 +50,44 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="space-y-3">
-      <div class="flex items-center gap-3">
+    <div
+      #shell
+      class="chase-shell space-y-3"
+      [class.chase-immersive]="immersive"
+    >
+      <div class="flex items-center gap-2 chase-topbar">
         <button
           type="button"
-          class="btn btn-ghost btn-sm rounded-xl font-black uppercase text-[10px] min-h-11 border border-base-300"
-          (click)="exit.emit()"
+          class="btn btn-ghost btn-sm rounded-xl font-black uppercase text-[10px] min-h-11 border border-base-300 shrink-0"
+          (click)="leaveGame()"
         >
           ← Exit
         </button>
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <h2 class="font-black uppercase italic text-white text-lg leading-tight">Radar Chase</h2>
-          <p class="text-xs text-base-content/55 font-semibold">
-            Drive your truck. Grab glowing drops. Save loot to your profile.
-          </p>
+          @if (!immersive) {
+            <p class="text-xs text-base-content/55 font-semibold hidden sm:block">
+              Drive your truck. Grab glowing drops. Save loot to your profile.
+            </p>
+          }
         </div>
+        @if (immersive) {
+          <button
+            type="button"
+            class="btn btn-sm rounded-xl font-black uppercase text-[10px] min-h-11 border border-base-300 bg-base-300/50 shrink-0"
+            (click)="exitFullscreen()"
+          >
+            Exit full
+          </button>
+        } @else if (phase !== 'ready') {
+          <button
+            type="button"
+            class="btn btn-sm btn-primary rounded-xl font-black uppercase text-[10px] min-h-11 shrink-0 md:hidden"
+            (click)="enterFullscreen()"
+          >
+            Fullscreen
+          </button>
+        }
       </div>
 
       @if (phase === 'ready') {
@@ -79,24 +102,35 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
             </div>
           </div>
           <p class="text-sm font-semibold text-base-content/70">
-            Drag the floating stick or use <span class="text-white font-black">WASD</span> / arrow keys.
+            On phones: use the floating stick.
+            On desktop: stick or <span class="text-white font-black">WASD</span>.
             Get close to a drop to auto-bag it.
-            @if (!auth.isLoggedIn()) {
-              Log in after a run to keep loot on your profile.
-            }
           </p>
-          <button
-            type="button"
-            class="btn btn-primary w-full rounded-xl font-black uppercase tracking-wider min-h-12"
-            (click)="startRun()"
-          >
-            Start chase
-          </button>
+          <div class="flex flex-col gap-2">
+            <button
+              type="button"
+              class="btn btn-primary w-full rounded-xl font-black uppercase tracking-wider min-h-12 md:hidden"
+              (click)="startRun(true)"
+            >
+              Start fullscreen
+            </button>
+            <button
+              type="button"
+              class="btn w-full rounded-xl font-black uppercase tracking-wider min-h-12"
+              [ngClass]="isMobile() ? 'btn-ghost border border-base-300' : 'btn-primary'"
+              (click)="startRun(false)"
+            >
+              {{ isMobile() ? 'Start in page' : 'Start chase' }}
+            </button>
+          </div>
         </article>
       }
 
       @if (phase === 'running' || phase === 'done') {
-        <div class="relative rounded-2xl overflow-hidden border border-base-300 min-h-[48vh] md:min-h-[420px]">
+        <div
+          class="chase-stage relative overflow-hidden border border-base-300 bg-base-300"
+          [class.rounded-2xl]="!immersive"
+        >
           <div id="chase-map" class="absolute inset-0 z-0"></div>
 
           <div class="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-start gap-2 pointer-events-none">
@@ -112,20 +146,31 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
             }
             <div class="flex-1"></div>
             @if (phase === 'running') {
-              <button
-                type="button"
-                class="pointer-events-auto btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/40 backdrop-blur-sm font-black uppercase text-[10px] min-h-10"
-                (click)="endRun()"
-              >
-                End
-              </button>
+              <div class="pointer-events-auto flex gap-1.5">
+                @if (!immersive) {
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11 md:hidden"
+                    (click)="enterFullscreen()"
+                  >
+                    Full
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
+                  (click)="endRun()"
+                >
+                  End
+                </button>
+              </div>
             }
           </div>
 
           @if (phase === 'running') {
-            <!-- Floating virtual joystick (bottom-left, semi-transparent) -->
             <div
-              class="chase-stick absolute bottom-4 left-4 z-[1000] select-none touch-none"
+              class="chase-stick absolute z-[1000] select-none touch-none"
+              [class.chase-stick-lg]="immersive || isMobile()"
               (pointerdown)="onStickDown($event)"
               (pointermove)="onStickMove($event)"
               (pointerup)="onStickUp($event)"
@@ -138,64 +183,77 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
                   [style.transform]="'translate(' + stickKnobX + 'px,' + stickKnobY + 'px)'"
                 ></div>
               </div>
-              <p class="chase-stick-hint">WASD</p>
+              <p class="chase-stick-hint">{{ isMobile() ? 'Steer' : 'WASD' }}</p>
+            </div>
+          }
+
+          @if (phase === 'done' && immersive) {
+            <div class="absolute inset-0 z-[1100] flex items-end sm:items-center justify-center p-3 bg-black/55">
+              <article class="storm-card p-4 text-center space-y-3 w-full max-w-md max-h-[85%] overflow-y-auto">
+                <ng-container *ngTemplateOutlet="resultsBody"></ng-container>
+              </article>
             </div>
           }
         </div>
       }
 
-      @if (phase === 'done') {
+      @if (phase === 'done' && !immersive) {
         <article class="storm-card p-4 text-center space-y-3">
-          <p class="text-[10px] font-black uppercase tracking-[0.25em] text-primary">Chase complete</p>
-          <h3 class="text-2xl font-black text-white italic uppercase">
-            {{ bagged.length }} drop{{ bagged.length === 1 ? '' : 's' }} bagged
-          </h3>
-          @if (bagged.length) {
-            <ul class="text-left space-y-1.5 max-w-sm mx-auto">
-              @for (item of bagged; track $index) {
-                <li class="flex justify-between gap-2 text-sm">
-                  <span class="font-bold text-white">{{ itemName(item) }}</span>
-                  <span class="text-[10px] uppercase tracking-wider text-base-content/45 font-bold">{{ rarityOf(item) }}</span>
-                </li>
-              }
-            </ul>
-          } @else {
-            <p class="text-sm font-semibold text-base-content/55">No drops this time — roll again and get closer.</p>
-          }
-          @if (lastAward) {
-            <p class="text-sm font-black text-accent uppercase tracking-wider">
-              +{{ lastAward.xpGained }} XP
-              @if (lastAward.levelUp) {
-                <span class="text-primary"> · Level {{ lastAward.level }}!</span>
-              }
-            </p>
-          }
-          @if (savedLoot) {
-            <p class="text-xs font-bold text-success uppercase tracking-wider">Loot saved to your profile</p>
-          } @else if (!auth.isLoggedIn() && bagged.length) {
-            <button
-              type="button"
-              class="btn btn-primary btn-sm rounded-xl font-black uppercase min-h-11"
-              (click)="promptSave()"
-            >
-              Log in to keep loot
-            </button>
-          }
-          <div class="flex flex-col sm:flex-row gap-2 justify-center pt-1">
-            <button type="button" class="btn btn-primary rounded-xl font-black uppercase min-h-12" (click)="startRun()">
-              Chase again
-            </button>
-            <button type="button" class="btn btn-ghost border border-base-300 rounded-xl font-black uppercase min-h-12" (click)="exit.emit()">
-              Back to Play
-            </button>
-          </div>
+          <ng-container *ngTemplateOutlet="resultsBody"></ng-container>
         </article>
       }
+
+      <ng-template #resultsBody>
+        <p class="text-[10px] font-black uppercase tracking-[0.25em] text-primary">Chase complete</p>
+        <h3 class="text-2xl font-black text-white italic uppercase">
+          {{ bagged.length }} drop{{ bagged.length === 1 ? '' : 's' }} bagged
+        </h3>
+        @if (bagged.length) {
+          <ul class="text-left space-y-1.5 max-w-sm mx-auto">
+            @for (item of bagged; track $index) {
+              <li class="flex justify-between gap-2 text-sm">
+                <span class="font-bold text-white">{{ itemName(item) }}</span>
+                <span class="text-[10px] uppercase tracking-wider text-base-content/45 font-bold">{{ rarityOf(item) }}</span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="text-sm font-semibold text-base-content/55">No drops this time — roll again and get closer.</p>
+        }
+        @if (lastAward) {
+          <p class="text-sm font-black text-accent uppercase tracking-wider">
+            +{{ lastAward.xpGained }} XP
+            @if (lastAward.levelUp) {
+              <span class="text-primary"> · Level {{ lastAward.level }}!</span>
+            }
+          </p>
+        }
+        @if (savedLoot) {
+          <p class="text-xs font-bold text-success uppercase tracking-wider">Loot saved to your profile</p>
+        } @else if (!auth.isLoggedIn() && bagged.length) {
+          <button
+            type="button"
+            class="btn btn-primary btn-sm rounded-xl font-black uppercase min-h-11"
+            (click)="promptSave()"
+          >
+            Log in to keep loot
+          </button>
+        }
+        <div class="flex flex-col sm:flex-row gap-2 justify-center pt-1">
+          <button type="button" class="btn btn-primary rounded-xl font-black uppercase min-h-12" (click)="startRun(immersive || isMobile())">
+            Chase again
+          </button>
+          <button type="button" class="btn btn-ghost border border-base-300 rounded-xl font-black uppercase min-h-12" (click)="leaveGame()">
+            Exit to Play
+          </button>
+        </div>
+      </ng-template>
     </div>
   `,
 })
 export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   @Output() exit = new EventEmitter<void>();
+  @ViewChild('shell') shellRef?: ElementRef<HTMLElement>;
 
   readonly auth = inject(AuthService);
   private readonly weather = inject(WeatherService);
@@ -204,6 +262,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   readonly RUN_SECONDS = RUN_SECONDS;
 
   phase: ChasePhase = 'ready';
+  immersive = false;
   timeLeft = RUN_SECONDS;
   bagged: string[] = [];
   toast = '';
@@ -223,7 +282,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private toastTimer?: ReturnType<typeof setTimeout>;
   private startedAt = 0;
-  private mapReady = false;
 
   private keys = new Set<string>();
   private stickX = 0;
@@ -231,6 +289,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private stickActive = false;
   private stickOriginX = 0;
   private stickOriginY = 0;
+  private stickRadius = 36;
   private rafId = 0;
   private lastFrame = 0;
 
@@ -243,11 +302,17 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.clearTimer();
     this.destroyMap();
     this.keys.clear();
+    this.teardownImmersive(false);
   }
 
   @HostListener('window:keydown', ['$event'])
   onKeyDown(ev: KeyboardEvent): void {
     if (this.phase !== 'running') return;
+    if (ev.key === 'Escape' && this.immersive) {
+      ev.preventDefault();
+      this.exitFullscreen();
+      return;
+    }
     const k = ev.key.toLowerCase();
     if (!this.isMoveKey(k)) return;
     if (ev.repeat) return;
@@ -262,7 +327,46 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.keys.delete(k);
   }
 
-  startRun(): void {
+  @HostListener('document:fullscreenchange')
+  onFsChange(): void {
+    // If user exits browser fullscreen via system UI, keep CSS immersive unless they hit Exit full.
+    if (!document.fullscreenElement && this.immersive) {
+      // stay in CSS immersive — that's the reliable mobile shell
+      setTimeout(() => this.map?.invalidateSize(), 80);
+    }
+  }
+
+  isMobile(): boolean {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches
+      || window.matchMedia('(pointer: coarse)').matches;
+  }
+
+  leaveGame(): void {
+    if (this.phase === 'running') this.endRun();
+    this.teardownImmersive(true);
+    this.exit.emit();
+  }
+
+  enterFullscreen(): void {
+    this.immersive = true;
+    this.lockBodyScroll(true);
+    this.stickRadius = this.isMobile() ? 44 : 36;
+    const el = this.shellRef?.nativeElement;
+    const req = el?.requestFullscreen?.bind(el)
+      || (el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> })?.webkitRequestFullscreen?.bind(el);
+    if (req) {
+      try { void Promise.resolve(req()).catch(() => undefined); } catch { /* iOS may throw */ }
+    }
+    setTimeout(() => this.map?.invalidateSize(), 120);
+  }
+
+  exitFullscreen(): void {
+    this.teardownImmersive(true);
+    setTimeout(() => this.map?.invalidateSize(), 120);
+  }
+
+  startRun(preferFullscreen = false): void {
     this.refreshVehicle();
     this.phase = 'running';
     this.timeLeft = RUN_SECONDS;
@@ -278,16 +382,23 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.clearTimer();
     this.stopLoop();
 
+    if (preferFullscreen) {
+      this.enterFullscreen();
+    }
+
+    this.stickRadius = (this.immersive || this.isMobile()) ? 44 : 36;
+
     setTimeout(() => {
       this.ensureMap();
       this.spawnDrops();
       this.placePlayer();
       this.startLoop();
+      this.map?.invalidateSize();
       this.timer = setInterval(() => {
         this.timeLeft -= 1;
         if (this.timeLeft <= 0) this.endRun();
       }, 1000);
-    }, 40);
+    }, 60);
   }
 
   endRun(): void {
@@ -348,6 +459,21 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     return LOOT_META[key]?.rarity || 'common';
   }
 
+  private teardownImmersive(exitBrowserFs: boolean): void {
+    this.immersive = false;
+    this.lockBodyScroll(false);
+    if (exitBrowserFs && document.fullscreenElement) {
+      const exitFs = document.exitFullscreen?.bind(document)
+        || (document as Document & { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen?.bind(document);
+      try { void Promise.resolve(exitFs?.()).catch(() => undefined); } catch { /* ignore */ }
+    }
+  }
+
+  private lockBodyScroll(lock: boolean): void {
+    if (typeof document === 'undefined') return;
+    document.body.classList.toggle('chase-noscroll', lock);
+  }
+
   private isMoveKey(k: string): boolean {
     return k === 'w' || k === 'a' || k === 's' || k === 'd'
       || k === 'arrowup' || k === 'arrowdown' || k === 'arrowleft' || k === 'arrowright';
@@ -357,15 +483,15 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     let dx = clientX - this.stickOriginX;
     let dy = clientY - this.stickOriginY;
     const mag = Math.hypot(dx, dy);
-    if (mag > STICK_RADIUS) {
-      dx = (dx / mag) * STICK_RADIUS;
-      dy = (dy / mag) * STICK_RADIUS;
+    const r = this.stickRadius;
+    if (mag > r) {
+      dx = (dx / mag) * r;
+      dy = (dy / mag) * r;
     }
     this.stickKnobX = dx;
     this.stickKnobY = dy;
-    // Screen Y down → map south (negative lat), so invert Y for map north.
-    this.stickX = dx / STICK_RADIUS;
-    this.stickY = -dy / STICK_RADIUS;
+    this.stickX = dx / r;
+    this.stickY = -dy / r;
   }
 
   private resetStick(): void {
@@ -428,12 +554,16 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       this.map.invalidateSize();
       return;
     }
+    // Disable map drag during chase so the stick owns touch gestures.
     this.map = L.map(el, {
       zoomControl: false,
       attributionControl: false,
-      dragging: true,
+      dragging: false,
       scrollWheelZoom: false,
       doubleClickZoom: false,
+      touchZoom: true,
+      boxZoom: false,
+      keyboard: false,
     }).setView(CENTER, 8);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -447,7 +577,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       opacity: 0.75,
     } as L.WMSOptions);
     this.radarLayer.addTo(this.map);
-    this.mapReady = true;
     setTimeout(() => this.map?.invalidateSize(), 80);
   }
 
@@ -457,7 +586,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.playerMarker = undefined;
     this.map?.remove();
     this.map = undefined;
-    this.mapReady = false;
   }
 
   private placePlayer(pan = true): void {
@@ -478,7 +606,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     if (pan) {
       this.map.panTo([this.lat, this.lng], { animate: true, duration: 0.15 });
     } else {
-      // Gentle follow without fighting the stick every frame.
       const center = this.map.getCenter();
       if (Math.hypot(center.lat - this.lat, center.lng - this.lng) > 0.12) {
         this.map.panTo([this.lat, this.lng], { animate: true, duration: 0.25 });
