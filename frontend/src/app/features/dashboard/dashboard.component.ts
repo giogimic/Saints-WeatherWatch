@@ -87,7 +87,8 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | '
                   <h2 class="text-xs font-black uppercase tracking-widest text-accent">Field loot</h2>
                   @if (!(auth.user()?.loot?.length)) {
                     <p class="text-xs text-base-content/50 font-semibold">
-                      Bag drops in <a routerLink="/play" class="text-primary underline">Radar Chase</a>.
+                      Bag drops in <a routerLink="/play" class="text-primary underline">Storm World</a>
+                      then craft or trade at <a routerLink="/trade" class="text-accent underline">Trade</a>.
                     </p>
                   } @else {
                     <ul class="space-y-1.5 max-h-40 overflow-y-auto">
@@ -101,6 +102,7 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | '
                         </li>
                       }
                     </ul>
+                    <a routerLink="/trade" class="btn btn-ghost btn-xs font-black uppercase">Open Trade & Craft</a>
                   }
                 </article>
               }

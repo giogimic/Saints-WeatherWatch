@@ -3,6 +3,7 @@ package loot
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/saints-weatherwatch/backend/internal/store"
@@ -73,6 +74,10 @@ type ItemView struct {
 	XP     int    `json:"xp"`
 }
 
+// MetaLookup resolves non–Radar-Chase keys (e.g. Storm World materials).
+// Set by world.RegisterInventoryBridge to avoid an import cycle.
+var MetaLookup func(key string) (Def, bool)
+
 func Inventory(st *store.Store, ctx context.Context, userID string) []ItemView {
 	out := []ItemView{}
 	if st == nil || userID == "" {
@@ -80,22 +85,45 @@ func Inventory(st *store.Store, ctx context.Context, userID string) []ItemView {
 	}
 	rows, err := st.Client.UserCollectible.FindMany(
 		db.UserCollectible.UserID.Equals(userID),
-	).Exec(ctx)
+	).OrderBy(db.UserCollectible.ItemKey.Order(db.SortOrderAsc)).Exec(ctx)
 	if err != nil {
 		return out
 	}
-	counts := map[string]int{}
 	for _, r := range rows {
-		counts[r.ItemKey] = r.Count
-	}
-	for _, d := range Catalog {
-		if c, ok := counts[d.Key]; ok && c > 0 {
-			out = append(out, ItemView{
-				Key: d.Key, Name: d.Name, Blurb: d.Blurb, Rarity: d.Rarity, Count: c, XP: d.XP,
-			})
+		if r.Count <= 0 {
+			continue
 		}
+		if d, ok := Lookup(r.ItemKey); ok {
+			out = append(out, ItemView{
+				Key: d.Key, Name: d.Name, Blurb: d.Blurb, Rarity: d.Rarity, Count: r.Count, XP: d.XP,
+			})
+			continue
+		}
+		if MetaLookup != nil {
+			if d, ok := MetaLookup(r.ItemKey); ok {
+				out = append(out, ItemView{
+					Key: d.Key, Name: d.Name, Blurb: d.Blurb, Rarity: d.Rarity, Count: r.Count, XP: d.XP,
+				})
+				continue
+			}
+		}
+		// Unknown stack — still show so world scrap is never invisible on the desk.
+		out = append(out, ItemView{
+			Key: r.ItemKey, Name: humanizeKey(r.ItemKey), Blurb: "", Rarity: "common", Count: r.Count, XP: 0,
+		})
 	}
 	return out
+}
+
+func humanizeKey(key string) string {
+	parts := strings.Split(key, "_")
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(p[:1]) + p[1:]
+	}
+	return strings.Join(parts, " ")
 }
 
 // GrantOne increments inventory for a known item. Returns false if unknown.

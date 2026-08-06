@@ -29,11 +29,14 @@ var Bounds = struct{ MinLat, MaxLat, MinLng, MaxLng float64 }{
 }
 
 const (
-	PickupRadiusDeg  = 0.04
-	MaxMoveDegPerSec = 0.25
-	MaxDrops         = 40
-	DropRespawnEvery = 18 * time.Second
-	EventEvery       = 90 * time.Second
+	PickupRadiusDeg  = 0.06
+	MaxMoveDegPerSec = 0.35
+	MaxDrops         = 55
+	DropRespawnEvery = 12 * time.Second
+	EventEvery       = 55 * time.Second
+	// PresenceTickHz: classic casual MMO-style snapshot rate (Gaffer / Gambetta).
+	// Clients send moves whenever; server broadcasts authoritative positions on a tick.
+	PresenceTick = 100 * time.Millisecond
 )
 
 type ItemDef struct {
@@ -64,14 +67,23 @@ var ItemCatalog = []ItemDef{
 	{Key: "wiring", Name: "Wiring", Blurb: "Copper strands from a ditch box.", Rarity: "common", Kind: "material", XP: 2},
 	{Key: "battery", Name: "Battery", Blurb: "Still has some charge.", Rarity: "common", Kind: "material", XP: 3},
 	{Key: "plastic_parts", Name: "Plastic Parts", Blurb: "Housings and clips.", Rarity: "common", Kind: "material", XP: 2},
+	{Key: "copper", Name: "Copper", Blurb: "Salvaged pipe and wire.", Rarity: "common", Kind: "material", XP: 2},
+	{Key: "aluminum", Name: "Aluminum", Blurb: "Light scrap from a road sign.", Rarity: "common", Kind: "material", XP: 2},
+	{Key: "electronics", Name: "Electronics", Blurb: "Broken boards and chips.", Rarity: "common", Kind: "material", XP: 3},
+	{Key: "scientific_note", Name: "Scientific Note", Blurb: "Someone else's field scribble.", Rarity: "common", Kind: "material", XP: 3},
 	{Key: "fuel_can", Name: "Fuel Can", Blurb: "A little go-juice.", Rarity: "uncommon", Kind: "material", XP: 5},
 	{Key: "camera_parts", Name: "Camera Parts", Blurb: "Lens bits for storm shots.", Rarity: "uncommon", Kind: "material", XP: 6},
 	{Key: "gps_module", Name: "GPS Module", Blurb: "Still locks satellites.", Rarity: "uncommon", Kind: "material", XP: 8},
 	{Key: "radio_parts", Name: "Radio Parts", Blurb: "Coils and a cracked PCB.", Rarity: "uncommon", Kind: "material", XP: 7},
+	{Key: "solar_cell", Name: "Solar Cell", Blurb: "Cracked but still juices.", Rarity: "uncommon", Kind: "material", XP: 7},
+	{Key: "spare_tire", Name: "Spare Tire", Blurb: "Ditched on a farm road.", Rarity: "uncommon", Kind: "material", XP: 6},
+	{Key: "weather_journal", Name: "Weather Journal", Blurb: "Pages of sky notes.", Rarity: "uncommon", Kind: "material", XP: 8},
 	{Key: "blueprint_frag", Name: "Blueprint Fragment", Blurb: "Half a probe schematic.", Rarity: "rare", Kind: "material", XP: 15},
 	{Key: "advanced_sensor", Name: "Advanced Sensor", Blurb: "Lab-grade pickup.", Rarity: "rare", Kind: "material", XP: 20},
 	{Key: "basic_probe", Name: "Basic Probe", Blurb: "Crafted field probe.", Rarity: "uncommon", Kind: "gear", XP: 0},
 	{Key: "repair_kit", Name: "Repair Kit", Blurb: "Tape, ties, hope.", Rarity: "common", Kind: "gear", XP: 0},
+	{Key: "field_journal", Name: "Field Journal", Blurb: "Bound notes for the desk.", Rarity: "uncommon", Kind: "gear", XP: 0},
+	{Key: "solar_pack", Name: "Solar Pack", Blurb: "Top-up juice for sensors.", Rarity: "uncommon", Kind: "gear", XP: 0},
 	{Key: "storm_photo", Name: "Storm Photo", Blurb: "Shelf cloud snapshot.", Rarity: "uncommon", Kind: "trophy", XP: 10},
 	{Key: "radar_core", Name: "Radar Core Ping", Blurb: "A bright blob on the scope.", Rarity: "common", Kind: "trophy", XP: 5},
 }
@@ -91,6 +103,56 @@ var Recipes = []Recipe{
 		ID: "craft_camera_rig", Name: "Storm Photo Kit", Blurb: "Turn parts into a trophy shot.",
 		Inputs: []StackNeed{{Key: "camera_parts", Qty: 2}, {Key: "battery", Qty: 1}},
 		Output: StackNeed{Key: "storm_photo", Qty: 1}, MinLevel: 1,
+	},
+	{
+		ID: "craft_field_journal", Name: "Field Journal", Blurb: "Bind notes into a usable log.",
+		Inputs: []StackNeed{{Key: "scientific_note", Qty: 3}, {Key: "weather_journal", Qty: 1}},
+		Output: StackNeed{Key: "field_journal", Qty: 1}, MinLevel: 1,
+	},
+	{
+		ID: "craft_solar_pack", Name: "Solar Pack", Blurb: "Keep probes topped up.",
+		Inputs: []StackNeed{{Key: "solar_cell", Qty: 2}, {Key: "wiring", Qty: 1}, {Key: "aluminum", Qty: 1}},
+		Output: StackNeed{Key: "solar_pack", Qty: 1}, MinLevel: 2,
+	},
+}
+
+type simTemplate struct {
+	Label     string
+	Blurb     string
+	RewardKey string
+}
+
+// Optional gameplay events — always labeled simulated / not real weather.
+var simEventPool = []simTemplate{
+	{
+		Label: "SIMULATED · Lost Research Convoy",
+		Blurb: "Gameplay only — not real weather. Reach the marker to secure surplus parts.",
+		RewardKey: "blueprint_frag",
+	},
+	{
+		Label: "SIMULATED · Weather Balloon Failure",
+		Blurb: "Gameplay only — not real weather. Recover the payload before it vanishes.",
+		RewardKey: "advanced_sensor",
+	},
+	{
+		Label: "SIMULATED · Drone Swarm Recovery",
+		Blurb: "Gameplay only — not real weather. Sweep the crash grid for solar cells.",
+		RewardKey: "solar_cell",
+	},
+	{
+		Label: "SIMULATED · Sensor Calibration",
+		Blurb: "Gameplay only — not real weather. Place your marker on the calibration ping.",
+		RewardKey: "electronics",
+	},
+	{
+		Label: "SIMULATED · Static Anomaly",
+		Blurb: "Gameplay only — not real weather. Bag rare radio scrap from the glitch.",
+		RewardKey: "radio_parts",
+	},
+	{
+		Label: "SIMULATED · Magnetic Disturbance",
+		Blurb: "Gameplay only — not real weather. Collect disrupted GPS modules.",
+		RewardKey: "gps_module",
 	},
 }
 
@@ -123,6 +185,14 @@ func init() {
 		for i := 0; i < n; i++ {
 			dropWeights = append(dropWeights, d.Key)
 		}
+	}
+	// Bridge world item names into /auth/me loot so Desk shows Storm World packs.
+	loot.MetaLookup = func(key string) (loot.Def, bool) {
+		d, ok := LookupItem(key)
+		if !ok {
+			return loot.Def{}, false
+		}
+		return loot.Def{Key: d.Key, Name: d.Name, Blurb: d.Blurb, Rarity: d.Rarity, XP: d.XP}, true
 	}
 }
 
@@ -170,6 +240,7 @@ type Envelope struct {
 	Players []Player  `json:"players,omitempty"`
 	Drops   []Drop    `json:"drops,omitempty"`
 	DropID  string    `json:"dropId,omitempty"`
+	ItemKey string    `json:"itemKey,omitempty"`
 	Event   *SimEvent `json:"event,omitempty"`
 	Toast   string    `json:"toast,omitempty"`
 	You     *Player   `json:"you,omitempty"`
@@ -193,6 +264,7 @@ type client struct {
 	lat      float64
 	lng      float64
 	lastMove time.Time
+	dirty    bool // moved since last presence tick
 }
 
 // Room is the single shared Phase 1 world instance.
@@ -222,7 +294,7 @@ func NewRoom(st *store.Store, allowedOrigins []string) *Room {
 		clients:    map[*client]struct{}{},
 		drops:      map[string]*Drop{},
 		origins:    origins,
-		broadcast:  make(chan []byte, 32),
+		broadcast:  make(chan []byte, 128),
 		register:   make(chan *client),
 		unregister: make(chan *client),
 	}
@@ -244,9 +316,13 @@ func NewRoom(st *store.Store, allowedOrigins []string) *Room {
 func (r *Room) Run(done <-chan struct{}) {
 	dropTick := time.NewTicker(DropRespawnEvery)
 	eventTick := time.NewTicker(EventEvery)
+	presenceTick := time.NewTicker(PresenceTick)
 	defer dropTick.Stop()
 	defer eventTick.Stop()
-	r.ensureDropsLocked(12)
+	defer presenceTick.Stop()
+	r.mu.Lock()
+	r.ensureDropsLocked(22)
+	r.mu.Unlock()
 
 	for {
 		select {
@@ -260,11 +336,7 @@ func (r *Room) Run(done <-chan struct{}) {
 			r.mu.Unlock()
 			return
 		case c := <-r.register:
-			r.mu.Lock()
-			r.clients[c] = struct{}{}
-			r.mu.Unlock()
-			r.sendSnapshot(c)
-			r.broadcastPresence()
+			r.acceptClient(c)
 		case c := <-r.unregister:
 			r.mu.Lock()
 			if _, ok := r.clients[c]; ok {
@@ -274,15 +346,9 @@ func (r *Room) Run(done <-chan struct{}) {
 			r.mu.Unlock()
 			r.broadcastPresence()
 		case msg := <-r.broadcast:
-			r.mu.Lock()
-			for c := range r.clients {
-				select {
-				case c.send <- msg:
-				default:
-					go func(cl *client) { r.unregister <- cl }(c)
-				}
-			}
-			r.mu.Unlock()
+			r.fanout(msg)
+		case <-presenceTick.C:
+			r.tickPresence()
 		case <-dropTick.C:
 			r.mu.Lock()
 			before := len(r.drops)
@@ -295,6 +361,58 @@ func (r *Room) Run(done <-chan struct{}) {
 		case <-eventTick.C:
 			r.maybeSpawnEvent()
 		}
+	}
+}
+
+// acceptClient replaces any prior socket for the same user (one body in the world).
+func (r *Room) acceptClient(c *client) {
+	r.mu.Lock()
+	for old := range r.clients {
+		if old.userID == c.userID && old != c {
+			delete(r.clients, old)
+			close(old.send)
+			_ = old.conn.Close()
+		}
+	}
+	r.clients[c] = struct{}{}
+	r.mu.Unlock()
+	r.sendSnapshot(c)
+	r.broadcastPresence()
+}
+
+// fanout delivers without kicking slow clients — drop the frame instead (snapshot tick recovers).
+func (r *Room) fanout(msg []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for c := range r.clients {
+		select {
+		case c.send <- msg:
+		default:
+			// Slow consumer: skip this tick rather than disconnect (chat-hub kick pattern is wrong here).
+		}
+	}
+}
+
+func (r *Room) tickPresence() {
+	r.mu.Lock()
+	n := len(r.clients)
+	if n == 0 {
+		r.mu.Unlock()
+		return
+	}
+	dirty := false
+	for c := range r.clients {
+		if c.dirty {
+			dirty = true
+			c.dirty = false
+		}
+	}
+	players := r.playerListLocked()
+	r.mu.Unlock()
+	// With 2+ chasers, always tick so peers keep a live list even if a frame was dropped.
+	// Solo: only publish when someone moved/joined (join already does an immediate broadcast).
+	if n >= 2 || dirty {
+		r.publish(Envelope{Type: "presence", Players: players})
 	}
 }
 
@@ -319,13 +437,14 @@ func (r *Room) ServeWS(w http.ResponseWriter, req *http.Request) {
 	c := &client{
 		room:     r,
 		conn:     conn,
-		send:     make(chan []byte, 16),
+		send:     make(chan []byte, 64),
 		userID:   user.ID,
 		name:     user.ChaserName,
 		veh:      user.EquippedVehicleKey,
 		lat:      47.05,
 		lng:      -68.35,
 		lastMove: time.Now(),
+		dirty:    true,
 	}
 	r.register <- c
 	go c.writePump()
@@ -352,12 +471,17 @@ func (c *client) readPump() {
 			continue
 		}
 		switch msg.Type {
-		case "hello", "move":
+		case "hello":
+			// First join / respawn: accept position (within bounds) so client/server stay aligned.
+			c.snapPosition(msg.Lat, msg.Lng)
+			c.dirty = true
+			c.room.broadcastPresence()
+		case "move":
 			c.handleMove(msg.Lat, msg.Lng)
 		case "pickup":
-			c.room.handlePickup(c, msg.DropID)
+			c.room.handlePickup(c, msg.DropID, msg.Lat, msg.Lng)
 		case "event_place":
-			c.room.handleEventPlace(c, msg.EventID)
+			c.room.handleEventPlace(c, msg.EventID, msg.Lat, msg.Lng)
 		}
 	}
 }
@@ -388,10 +512,17 @@ func (c *client) writePump() {
 	}
 }
 
+func (c *client) snapPosition(lat, lng float64) {
+	c.lat = clamp(lat, Bounds.MinLat, Bounds.MaxLat)
+	c.lng = clamp(lng, Bounds.MinLng, Bounds.MaxLng)
+	c.lastMove = time.Now()
+	c.dirty = true
+}
+
 func (c *client) handleMove(lat, lng float64) {
 	now := time.Now()
 	dt := now.Sub(c.lastMove).Seconds()
-	if dt < 0.05 {
+	if dt < 0.04 {
 		return
 	}
 	if dt > 2 {
@@ -409,18 +540,25 @@ func (c *client) handleMove(lat, lng float64) {
 	c.lat = clamp(lat, Bounds.MinLat, Bounds.MaxLat)
 	c.lng = clamp(lng, Bounds.MinLng, Bounds.MaxLng)
 	c.lastMove = now
-	c.room.broadcastPresence()
+	c.dirty = true
+	// Presence is broadcast on PresenceTick — not per move (avoids WS flood / dropped frames).
 }
 
-func (r *Room) handlePickup(c *client, dropID string) {
+func (r *Room) handlePickup(c *client, dropID string, lat, lng float64) {
 	if c.userID == "" || dropID == "" || r.st == nil {
 		return
 	}
+	// Align server pos with client before the distance check (soft anti-desync).
+	if lat != 0 || lng != 0 {
+		c.syncForAction(lat, lng)
+	}
+
 	r.mu.Lock()
 	d, ok := r.drops[dropID]
 	if !ok {
 		r.mu.Unlock()
-		r.toast(c, "That drop is gone.")
+		// Already claimed (often by *this* client's spam) — stay silent so it
+		// doesn't look like another player stole the drop.
 		return
 	}
 	if math.Hypot(d.Lat-c.lat, d.Lng-c.lng) > PickupRadiusDeg {
@@ -429,10 +567,12 @@ func (r *Room) handlePickup(c *client, dropID string) {
 		return
 	}
 	itemKey := d.ItemKey
+	name := d.Name
 	delete(r.drops, dropID)
 	r.mu.Unlock()
 
-	if !GrantStackOK(r.st, context.Background(), c.userID, itemKey, 1) {
+	if err := GrantStack(r.st, context.Background(), c.userID, itemKey, 1); err != nil {
+		log.Printf("world.pickup grant failed user=%s item=%s: %v", c.userID, itemKey, err)
 		r.mu.Lock()
 		r.drops[dropID] = d // rollback into world
 		r.mu.Unlock()
@@ -441,17 +581,19 @@ func (r *Room) handlePickup(c *client, dropID string) {
 		return
 	}
 	r.publish(Envelope{Type: "drop_gone", DropID: dropID})
-	r.toast(c, "Bagged "+d.Name)
+	r.toastBag(c, "Bagged "+name, dropID, itemKey)
 	r.broadcastDrops()
 }
 
-func (r *Room) handleEventPlace(c *client, eventID string) {
+func (r *Room) handleEventPlace(c *client, eventID string, lat, lng float64) {
+	if lat != 0 || lng != 0 {
+		c.syncForAction(lat, lng)
+	}
 	r.mu.Lock()
 	ev := r.event
 	if ev == nil || !ev.Active || ev.ID != eventID {
 		r.mu.Unlock()
-		r.toast(c, "Event already claimed or expired.")
-		return
+		return // silent — already claimed
 	}
 	if math.Hypot(ev.Lat-c.lat, ev.Lng-c.lng) > PickupRadiusDeg*1.4 {
 		r.mu.Unlock()
@@ -464,9 +606,40 @@ func (r *Room) handleEventPlace(c *client, eventID string) {
 	r.event = ev
 	r.mu.Unlock()
 
-	_ = GrantStack(r.st, context.Background(), c.userID, reward, 1)
-	r.publish(Envelope{Type: "event_done", Event: ev, Toast: c.name + " secured: " + label})
-	r.toast(c, "Event secured — reward bagged.")
+	if err := GrantStack(r.st, context.Background(), c.userID, reward, 1); err != nil {
+		log.Printf("world.event grant failed user=%s item=%s: %v", c.userID, reward, err)
+		r.mu.Lock()
+		if r.event != nil && r.event.ID == eventID {
+			r.event.Active = true
+		}
+		r.mu.Unlock()
+		r.toast(c, "Could not bag event reward.")
+		r.publish(Envelope{Type: "event", Event: r.snapshotEvent()})
+		return
+	}
+	r.publish(Envelope{Type: "event_done", Event: ev, Toast: c.name + " secured: " + label, ItemKey: reward})
+	r.toastBag(c, "Event secured — reward bagged.", eventID, reward)
+}
+
+func (r *Room) snapshotEvent() *SimEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.event
+}
+
+// syncForAction lets the client catch the server up within a soft radius so
+// pickups aren't rejected purely from move-message lag.
+func (c *client) syncForAction(lat, lng float64) {
+	lat = clamp(lat, Bounds.MinLat, Bounds.MaxLat)
+	lng = clamp(lng, Bounds.MinLng, Bounds.MaxLng)
+	dist := math.Hypot(lat-c.lat, lng-c.lng)
+	if dist <= 0.12 {
+		c.lat, c.lng = lat, lng
+		c.lastMove = time.Now()
+		c.dirty = true
+		return
+	}
+	c.handleMove(lat, lng)
 }
 
 func (r *Room) maybeSpawnEvent() {
@@ -475,19 +648,20 @@ func (r *Room) maybeSpawnEvent() {
 		r.mu.Unlock()
 		return
 	}
-	if mrand.Float64() > 0.55 {
+	if mrand.Float64() > 0.72 {
 		r.mu.Unlock()
 		return
 	}
+	tmpl := simEventPool[mrand.Intn(len(simEventPool))]
 	lat, lng := randomPoint()
 	ev := &SimEvent{
 		ID:        newID(),
-		Label:     "SIMULATED · Lost Research Convoy",
-		Blurb:     "Gameplay only — not real weather. Place a probe marker to secure surplus parts.",
+		Label:     tmpl.Label,
+		Blurb:     tmpl.Blurb,
 		Simulated: true,
 		Lat:       lat,
 		Lng:       lng,
-		RewardKey: "blueprint_frag",
+		RewardKey: tmpl.RewardKey,
 		Active:    true,
 	}
 	r.event = ev
@@ -556,7 +730,11 @@ func (r *Room) dropListLocked() []Drop {
 }
 
 func (r *Room) toast(c *client, msg string) {
-	if b, err := json.Marshal(Envelope{Type: "toast", Toast: msg}); err == nil {
+	r.toastBag(c, msg, "", "")
+}
+
+func (r *Room) toastBag(c *client, msg, dropID, itemKey string) {
+	if b, err := json.Marshal(Envelope{Type: "toast", Toast: msg, DropID: dropID, ItemKey: itemKey}); err == nil {
 		select {
 		case c.send <- b:
 		default:

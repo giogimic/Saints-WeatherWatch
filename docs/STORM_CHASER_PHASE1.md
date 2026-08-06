@@ -17,7 +17,7 @@ Cheaters can still spoof position somewhat in Phase 1 (no full anti-teleport). M
 | Feature | Behavior |
 |---------|----------|
 | Expanded map | Larger Maine corridor for Radar Chase / World |
-| Presence | Logged-in players on `/api/world/ws` see other markers |
+| Presence | Logged-in players on `/api/world/ws` see other markers (~10 Hz snapshot tick) |
 | Shared drops | Server respawns field scrap; first valid pickup wins |
 | Simulated events | Rare labeled events; first to place objective marker wins reward |
 | Craft | Server recipe catalog; consume inputs → grant output |
@@ -39,9 +39,30 @@ Cheaters can still spoof position somewhat in Phase 1 (no full anti-teleport). M
 Server → client: `snapshot`, `presence`, `drops`, `drop_gone`, `event`, `event_done`, `toast`  
 Client → server: `hello`, `move`, `pickup`, `event_place`
 
+## Presence (keep it boring)
+
+Follow the usual casual authoritative pattern (not a custom protocol):
+
+1. Clients send `move` when local position changes (rate-limited).
+2. Server is source of truth for positions; clamps speed.
+3. Server broadcasts a **presence snapshot** on a fixed tick (~10 Hz) when 2+ chasers are online — same idea as Gaffer/Gambetta snapshot sync, without full interpolation yet.
+4. Join/leave/hello still push an immediate presence list.
+5. One WebSocket per user (reconnect replaces the old socket).
+6. Slow clients drop a frame instead of being kicked (chat-hub kick pattern is wrong for game ticks).
+
 ## Out of scope for Phase 1
 
-Full MMO economy, deployable persistence networks, vehicle part tree, weather-typed research loops, anti-cheat physics, chat.
+Full MMO economy, deployable persistence networks, vehicle part tree, weather-typed research loops, regional biomes, anti-cheat physics, chat, entity interpolation buffers.
+
+See aspirational scope in [STORM_CHASER_VISION.md](./STORM_CHASER_VISION.md) and ordered later slices in [STORM_CHASER_ROADMAP.md](./STORM_CHASER_ROADMAP.md). **Do not implement those here** until Phase 1 is stable in production.
+
+## Harden notes (post-ship)
+
+- Desk `/auth/me` loot includes Storm World stacks (world → loot MetaLookup bridge)
+- Trade buy/cancel uses status CAS (`open` → `sold`/`cancelled`); craft refunds on grant failure
+- SIM event grant failure reactivates the event
+- Pickup sync snap tightened (~0.12°) so radius checks still matter
+- End run disconnects world WS; results link to Trade & Craft
 
 ## Deploy
 

@@ -93,7 +93,15 @@ Open `http://localhost:4200` in your browser.
 - Saved locations / home-base pins on Map
 - Chaser accounts, cartoon vehicle garage, SPA Dashboard with watched-area radius alerts
 - WebSocket alert pushes + sticky new-warning banner (Phase 4)
-- Radar Chase mini-game + profile loot collectables
+- Radar Chase → **Storm World** Phase 1 (shared presence, drops, SIM events, craft, trade)
+
+## Storm Chaser living world (game layer)
+
+Long-term vision (grain of salt — do not rewrite the ops app to chase it):
+
+- [docs/STORM_CHASER_VISION.md](docs/STORM_CHASER_VISION.md) — full living-world north star + trust boundary  
+- [docs/STORM_CHASER_PHASE1.md](docs/STORM_CHASER_PHASE1.md) — **current** shared-world build contract  
+- [docs/STORM_CHASER_ROADMAP.md](docs/STORM_CHASER_ROADMAP.md) — ordered later slices (camera, biomes, research, deployables)
 
 ## Data Sources (all free, no API keys)
 
@@ -108,6 +116,7 @@ Open `http://localhost:4200` in your browser.
 
 - [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- [docs/STORM_CHASER_VISION.md](docs/STORM_CHASER_VISION.md) · [PHASE1](docs/STORM_CHASER_PHASE1.md) · [ROADMAP](docs/STORM_CHASER_ROADMAP.md)
 - Build notes: [`logs/`](logs/)
 
 ## Database

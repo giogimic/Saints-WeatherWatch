@@ -50,7 +50,7 @@ func NewHub(allowedOrigins []string) *Hub {
 		clients:    make(map[*client]struct{}),
 		register:   make(chan *client),
 		unregister: make(chan *client),
-		broadcast:  make(chan []byte, 16),
+		broadcast:  make(chan []byte, 64),
 		origins:    origins,
 	}
 	h.upgrader = websocket.Upgrader{
@@ -102,14 +102,16 @@ func (h *Hub) Run(ctxDone <-chan struct{}) {
 				select {
 				case c.send <- msg:
 				default:
-					// Slow client — drop and disconnect.
-					go func(cl *client) { h.unregister <- cl }(c)
+					// Drop frame for slow clients — don't disconnect (forces reconnect spam).
 				}
 			}
 			h.mu.RUnlock()
 		case <-ping.C:
 			payload, _ := json.Marshal(Envelope{Type: "ping", GeneratedAt: time.Now().UTC().Format(time.RFC3339)})
-			h.broadcast <- payload
+			select {
+			case h.broadcast <- payload:
+			default:
+			}
 		}
 	}
 }
@@ -156,7 +158,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request, getLive func() n
 	c := &client{
 		hub:  h,
 		conn: conn,
-		send: make(chan []byte, 8),
+		send: make(chan []byte, 32),
 	}
 	h.register <- c
 

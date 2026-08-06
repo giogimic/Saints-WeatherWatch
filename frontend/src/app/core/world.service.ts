@@ -65,10 +65,16 @@ export interface WorldEnvelope {
   players?: WorldPlayer[];
   drops?: WorldDrop[];
   dropId?: string;
+  itemKey?: string;
   event?: WorldEvent;
   toast?: string;
 }
 
+/**
+ * Storm World REST + WebSocket client.
+ * Reconnect mirrors RealtimeService: single timer, backoff, teardown handlers,
+ * pause while the tab is hidden — avoids stacked reconnects that look like leaks.
+ */
 @Injectable({ providedIn: 'root' })
 export class WorldService {
   private readonly http = inject(HttpClient);
@@ -78,10 +84,21 @@ export class WorldService {
   readonly event = signal<WorldEvent | null>(null);
   readonly toast = signal('');
   readonly connected = signal(false);
+  /** Latest successful server bag (for UI). */
+  readonly lastBag = signal<{ seq: number; itemKey: string; dropId?: string } | null>(null);
 
   private socket?: WebSocket;
-  private intentionalClose = false;
+  private intentionalClose = true; // idle until Play explicitly connects
+  private opening = false;
+  private retryMs = 2000;
+  private failCount = 0;
+  private retryTimer?: ReturnType<typeof setTimeout>;
   private toastTimer?: ReturnType<typeof setTimeout>;
+  private lastLat = 47.05;
+  private lastLng = -68.35;
+  private lastMoveSent = 0;
+  private bagSeq = 0;
+  private visibilityBound = false;
 
   getCatalog(): Observable<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number> }> {
     return this.http.get<{ items: WorldItem[]; recipes: WorldRecipe[]; bounds: Record<string, number> }>('/api/world/catalog').pipe(
@@ -124,53 +141,136 @@ export class WorldService {
     );
   }
 
-  connectWorld(): void {
-    this.intentionalClose = false;
-    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
-      return;
+  connectWorld(lat?: number, lng?: number): void {
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      this.lastLat = lat;
+      this.lastLng = lng;
     }
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${window.location.host}/api/world/ws`);
-    this.socket = ws;
-    ws.onopen = () => {
-      this.connected.set(true);
-      this.send({ type: 'hello', lat: 47.05, lng: -68.35 });
-    };
-    ws.onmessage = (ev) => {
-      try {
-        const env = JSON.parse(String(ev.data)) as WorldEnvelope;
-        this.apply(env);
-      } catch { /* ignore */ }
-    };
-    ws.onclose = () => {
-      this.connected.set(false);
-      this.socket = undefined;
-      if (!this.intentionalClose) {
-        setTimeout(() => this.connectWorld(), 4000);
-      }
-    };
-    ws.onerror = () => {
-      try { ws.close(); } catch { /* ignore */ }
-    };
+    this.intentionalClose = false;
+    this.bindVisibility();
+    this.open();
   }
 
   disconnectWorld(): void {
     this.intentionalClose = true;
-    try { this.socket?.close(); } catch { /* ignore */ }
-    this.socket = undefined;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
+    this.opening = false;
+    this.failCount = 0;
+    this.retryMs = 2000;
+    this.teardownSocket();
     this.connected.set(false);
+    this.players.set([]);
+    this.drops.set([]);
+    this.event.set(null);
   }
 
   sendMove(lat: number, lng: number): void {
+    this.lastLat = lat;
+    this.lastLng = lng;
+    const now = Date.now();
+    if (now - this.lastMoveSent < 80) return;
+    this.lastMoveSent = now;
     this.send({ type: 'move', lat, lng });
   }
 
-  sendPickup(dropId: string): void {
-    this.send({ type: 'pickup', dropId });
+  sendPickup(dropId: string, lat: number, lng: number): void {
+    this.lastLat = lat;
+    this.lastLng = lng;
+    this.send({ type: 'pickup', dropId, lat, lng });
   }
 
-  sendEventPlace(eventId: string): void {
-    this.send({ type: 'event_place', eventId });
+  sendEventPlace(eventId: string, lat: number, lng: number): void {
+    this.lastLat = lat;
+    this.lastLng = lng;
+    this.send({ type: 'event_place', eventId, lat, lng });
+  }
+
+  private bindVisibility(): void {
+    if (this.visibilityBound || typeof document === 'undefined') return;
+    this.visibilityBound = true;
+    document.addEventListener('visibilitychange', () => {
+      if (this.intentionalClose) return;
+      if (document.visibilityState === 'hidden') return;
+      this.failCount = Math.min(this.failCount, 3);
+      this.retryMs = 2000;
+      this.open();
+    });
+  }
+
+  private open(): void {
+    if (this.intentionalClose || this.opening) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      this.scheduleReconnect();
+      return;
+    }
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      if (this.socket.readyState === WebSocket.OPEN) {
+        this.send({ type: 'hello', lat: this.lastLat, lng: this.lastLng });
+      }
+      return;
+    }
+
+    this.opening = true;
+    this.teardownSocket();
+
+    try {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${window.location.host}/api/world/ws`);
+      this.socket = ws;
+
+      ws.onopen = () => {
+        this.opening = false;
+        this.connected.set(true);
+        this.failCount = 0;
+        this.retryMs = 2000;
+        this.send({ type: 'hello', lat: this.lastLat, lng: this.lastLng });
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const env = JSON.parse(String(ev.data)) as WorldEnvelope;
+          this.apply(env);
+        } catch { /* ignore */ }
+      };
+      ws.onclose = () => {
+        this.opening = false;
+        this.connected.set(false);
+        if (this.socket === ws) this.socket = undefined;
+        this.failCount += 1;
+        this.scheduleReconnect();
+      };
+      ws.onerror = () => {
+        try { ws.close(); } catch { /* ignore */ }
+      };
+    } catch {
+      this.opening = false;
+      this.failCount += 1;
+      this.scheduleReconnect();
+    }
+  }
+
+  private teardownSocket(): void {
+    if (!this.socket) return;
+    const ws = this.socket;
+    this.socket = undefined;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onclose = null;
+    try {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    } catch { /* ignore */ }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.intentionalClose) return;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    const cap = this.failCount >= 8 ? 120_000 : 45_000;
+    const wait = Math.min(cap, this.retryMs);
+    this.retryMs = Math.min(cap, Math.round(this.retryMs * 1.7));
+    this.retryTimer = setTimeout(() => this.open(), wait);
   }
 
   private send(payload: Record<string, unknown>): void {
@@ -195,8 +295,18 @@ export class WorldService {
     if (env.type === 'event_done') {
       this.event.set(null);
       if (env.toast) this.flash(env.toast);
+      if (env.itemKey) {
+        this.bagSeq += 1;
+        this.lastBag.set({ seq: this.bagSeq, itemKey: env.itemKey, dropId: env.dropId });
+      }
     }
-    if (env.type === 'toast' && env.toast) this.flash(env.toast);
+    if (env.type === 'toast' && env.toast) {
+      this.flash(env.toast);
+      if (env.itemKey && (env.toast.startsWith('Bagged ') || env.toast.startsWith('Event secured'))) {
+        this.bagSeq += 1;
+        this.lastBag.set({ seq: this.bagSeq, itemKey: env.itemKey, dropId: env.dropId });
+      }
+    }
   }
 
   private flash(msg: string): void {

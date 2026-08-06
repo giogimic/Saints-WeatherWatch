@@ -24,6 +24,7 @@ export class OpsStateService {
   private started = false;
   private sub?: Subscription;
   private bannerTimer?: ReturnType<typeof setTimeout>;
+  private accountTimer?: ReturnType<typeof setInterval>;
 
   readonly alerts = signal<WeatherAlert[]>([]);
   readonly alertsGeneratedAt = signal('');
@@ -74,7 +75,7 @@ export class OpsStateService {
     this.weather.getCams().subscribe(list => this.cams.set(list || []));
     const tick = () => this.reloadAccountData();
     tick();
-    setInterval(() => {
+    this.accountTimer = setInterval(() => {
       if (this.auth.isLoggedIn()) this.reloadAccountData();
     }, 90_000);
   }
@@ -113,6 +114,8 @@ export class OpsStateService {
 
   stop(): void {
     this.sub?.unsubscribe();
+    if (this.accountTimer) clearInterval(this.accountTimer);
+    this.accountTimer = undefined;
     this.realtime.disconnect();
     this.dismissBanner();
     this.started = false;

@@ -11,6 +11,7 @@ import {
   inject,
 } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import { AuthService } from '../../core/auth.service';
 import { vehicleSvg } from '../../core/vehicles';
@@ -31,10 +32,10 @@ interface DropMarker {
 const CENTER: [number, number] = [47.05, -68.35];
 /** Expanded Maine / St. John Valley corridor (matches server world.Bounds). */
 const BOUNDS = { minLat: 44.6, maxLat: 47.5, minLng: -71.2, maxLng: -66.9 };
-const RUN_SECONDS = 90;
 const MOVE_SPEED = 0.14;
-const PICKUP_DIST = 0.04;
-const DROP_COUNT = 7;
+const PICKUP_DIST = 0.055;
+const DROP_COUNT = 12;
+const DEFAULT_ZOOM = 10;
 
 const LOOT_META: Record<string, { name: string; rarity: string; weight: number }> = {
   radar_core: { name: 'Radar Core Ping', rarity: 'common', weight: 5 },
@@ -53,20 +54,29 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
   wiring: { name: 'Wiring', rarity: 'common' },
   battery: { name: 'Battery', rarity: 'common' },
   plastic_parts: { name: 'Plastic Parts', rarity: 'common' },
+  copper: { name: 'Copper', rarity: 'common' },
+  aluminum: { name: 'Aluminum', rarity: 'common' },
+  electronics: { name: 'Electronics', rarity: 'common' },
+  scientific_note: { name: 'Scientific Note', rarity: 'common' },
   fuel_can: { name: 'Fuel Can', rarity: 'uncommon' },
   camera_parts: { name: 'Camera Parts', rarity: 'uncommon' },
   gps_module: { name: 'GPS Module', rarity: 'uncommon' },
   radio_parts: { name: 'Radio Parts', rarity: 'uncommon' },
+  solar_cell: { name: 'Solar Cell', rarity: 'uncommon' },
+  spare_tire: { name: 'Spare Tire', rarity: 'uncommon' },
+  weather_journal: { name: 'Weather Journal', rarity: 'uncommon' },
   blueprint_frag: { name: 'Blueprint Fragment', rarity: 'rare' },
   advanced_sensor: { name: 'Advanced Sensor', rarity: 'rare' },
   basic_probe: { name: 'Basic Probe', rarity: 'uncommon' },
   repair_kit: { name: 'Repair Kit', rarity: 'common' },
+  field_journal: { name: 'Field Journal', rarity: 'uncommon' },
+  solar_pack: { name: 'Solar Pack', rarity: 'uncommon' },
 };
 
 @Component({
   selector: 'app-chase-game',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   template: `
     <div
       #shell
@@ -115,7 +125,7 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
             <div>
               <p class="text-sm font-black text-white italic">{{ vehicleLabel }}</p>
               <p class="text-xs text-base-content/55 font-semibold">
-                {{ RUN_SECONDS }}s · full Maine corridor · live radar
+                Open drive · full Maine corridor · live radar
                 @if (auth.isLoggedIn()) {
                   · shared multiplayer world
                 }
@@ -124,8 +134,9 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
           </div>
           <p class="text-sm font-semibold text-base-content/70">
             Stick or <span class="text-white font-black">WASD</span>.
-            Logged-in chasers share the same server drops and events (first bag wins).
-            Guests still get a solo practice run.
+            Zoom with wheel / pinch. Use <span class="text-white font-black">Follow</span> or
+            <span class="text-white font-black">Free</span> cam while driving.
+            Logged-in chasers share server drops and SIM events (first bag wins).
           </p>
           <div class="flex flex-col sm:flex-row gap-2">
             <button
@@ -155,9 +166,11 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
 
           <div class="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-start gap-2 pointer-events-none">
             <div class="pointer-events-none storm-card px-3 py-2 text-xs font-black uppercase tracking-wider">
-              <span class="text-primary">{{ timeLeft }}s</span>
-              <span class="text-base-content/40 mx-2">·</span>
               <span class="text-accent">{{ bagged.length }} bagged</span>
+              @if (worldMode) {
+                <span class="text-base-content/40 mx-2">·</span>
+                <span class="text-primary">{{ onlineLabel() }}</span>
+              }
             </div>
             @if (toast) {
               <div class="storm-card px-3 py-2 text-xs font-black uppercase tracking-wider text-secondary">
@@ -166,7 +179,30 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
             }
             <div class="flex-1"></div>
             @if (phase === 'running') {
-              <div class="pointer-events-auto flex gap-1.5">
+              <div class="pointer-events-auto flex flex-wrap gap-1.5 justify-end">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
+                  [class.btn-primary]="followCam"
+                  (click)="setFollowCam(true)"
+                >
+                  Follow
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
+                  [class.btn-primary]="!followCam"
+                  (click)="setFollowCam(false)"
+                >
+                  Free
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm rounded-xl border border-base-300/80 bg-base-300/50 backdrop-blur-sm font-black uppercase text-[10px] min-h-11"
+                  (click)="centerOnTruck()"
+                >
+                  Center
+                </button>
                 @if (!immersive) {
                   <button
                     type="button"
@@ -186,6 +222,18 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
               </div>
             }
           </div>
+
+          @if (phase === 'running' && activeSimLabel) {
+            <div class="absolute left-3 right-3 bottom-[7.5rem] sm:bottom-4 z-[1000] pointer-events-none flex justify-center">
+              <div class="storm-card px-3 py-2 max-w-md w-full border border-amber-400/60 bg-red-950/80">
+                <p class="text-[9px] font-black uppercase tracking-[0.2em] text-amber-300">Simulated event · not real weather</p>
+                <p class="text-xs font-black text-white leading-snug">{{ activeSimLabel }}</p>
+                @if (activeSimHint) {
+                  <p class="text-[10px] font-semibold text-base-content/70 mt-0.5">{{ activeSimHint }}</p>
+                }
+              </div>
+            </div>
+          }
 
           @if (phase === 'running') {
             <div
@@ -265,6 +313,11 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
           <button type="button" class="btn btn-primary rounded-xl font-black uppercase min-h-12" (click)="startRun(immersive || isMobile())">
             Chase again
           </button>
+          @if (auth.isLoggedIn()) {
+            <a routerLink="/trade" class="btn btn-secondary rounded-xl font-black uppercase min-h-12">
+              Trade & Craft
+            </a>
+          }
           <button type="button" class="btn btn-ghost border border-base-300 rounded-xl font-black uppercase min-h-12" (click)="leaveGame()">
             Exit to Play
           </button>
@@ -279,14 +332,11 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   readonly auth = inject(AuthService);
   private readonly weather = inject(WeatherService);
-  private readonly world = inject(WorldService);
+  readonly world = inject(WorldService);
   private readonly sanitizer = inject(DomSanitizer);
-
-  readonly RUN_SECONDS = RUN_SECONDS;
 
   phase: ChasePhase = 'ready';
   immersive = false;
-  timeLeft = RUN_SECONDS;
   bagged: string[] = [];
   toast = '';
   lastAward: QuizAward | null = null;
@@ -295,6 +345,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   vehicleLabel = 'Starter Chase Car';
   stickKnobX = 0;
   stickKnobY = 0;
+  worldMode = false;
+  followCam = true;
+  activeSimLabel = '';
+  activeSimHint = '';
 
   private map?: L.Map;
   private playerMarker?: L.Marker;
@@ -302,7 +356,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private drops: DropMarker[] = [];
   private lat = CENTER[0];
   private lng = CENTER[1];
-  private timer?: ReturnType<typeof setInterval>;
   private toastTimer?: ReturnType<typeof setTimeout>;
   private startedAt = 0;
 
@@ -317,12 +370,17 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private lastFrame = 0;
 
   private otherMarkers = new Map<string, L.Marker>();
+  /** Last rendered peer state — avoid rebuilding Leaflet icons every tick (DOM churn). */
+  private peerMeta = new Map<string, { lat: number; lng: number; name: string; veh: string }>();
   private worldDropMarkers = new Map<string, L.Marker>();
+  private dropMeta = new Map<string, { lat: number; lng: number; rarity: string }>();
   private eventMarker?: L.Marker;
-  worldMode = false;
   private syncTimer?: ReturnType<typeof setInterval>;
   private pendingPickups = new Map<string, string>();
+  private inflightPickups = new Set<string>();
+  private inflightEvent = false;
   private lastWorldToast = '';
+  private lastBagSeq = 0;
 
   ngAfterViewInit(): void {
     this.refreshVehicle();
@@ -330,8 +388,8 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopLoop();
-    this.clearTimer();
     this.stopWorldSync();
+    this.world.disconnectWorld();
     this.destroyMap();
     this.keys.clear();
     this.teardownImmersive(false);
@@ -403,7 +461,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   startRun(preferFullscreen = false): void {
     this.refreshVehicle();
     this.phase = 'running';
-    this.timeLeft = RUN_SECONDS;
     this.bagged = [];
     this.toast = '';
     this.lastAward = null;
@@ -413,7 +470,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.lat = CENTER[0] + (Math.random() - 0.5) * 0.1;
     this.lng = CENTER[1] + (Math.random() - 0.5) * 0.1;
     this.startedAt = Date.now();
-    this.clearTimer();
     this.stopLoop();
 
     if (preferFullscreen) {
@@ -423,15 +479,22 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.stickRadius = (this.immersive || this.isMobile()) ? 44 : 36;
     this.worldMode = this.auth.isLoggedIn();
     this.pendingPickups.clear();
+    this.inflightPickups.clear();
+    this.inflightEvent = false;
     this.lastWorldToast = '';
+    this.lastBagSeq = 0;
+    this.followCam = true;
+    this.activeSimLabel = '';
+    this.activeSimHint = '';
     if (this.worldMode) {
-      this.world.connectWorld();
+      this.world.connectWorld(this.lat, this.lng);
     }
 
     setTimeout(() => {
       this.ensureMap();
       if (this.worldMode) {
         this.clearDrops();
+        this.world.connectWorld(this.lat, this.lng);
         this.startWorldSync();
       } else {
         this.spawnDrops();
@@ -439,17 +502,12 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       this.placePlayer();
       this.startLoop();
       this.map?.invalidateSize();
-      this.timer = setInterval(() => {
-        this.timeLeft -= 1;
-        if (this.timeLeft <= 0) this.endRun();
-      }, 1000);
     }, 60);
   }
 
   endRun(): void {
     if (this.phase !== 'running') return;
     this.stopLoop();
-    this.clearTimer();
     this.stopWorldSync();
     this.resetStick();
     this.keys.clear();
@@ -458,6 +516,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     // Shared world already granted items server-side — never trust client bag for that path.
     if (this.worldMode) {
       this.savedLoot = this.bagged.length > 0;
+      this.world.disconnectWorld();
       this.world.refreshInventory().subscribe();
       this.auth.refreshMe().subscribe();
       return;
@@ -473,7 +532,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   }
 
   promptSave(): void {
-    this.auth.pendingChase = { items: [...this.bagged], seconds: Math.max(1, RUN_SECONDS - this.timeLeft) };
+    this.auth.pendingChase = {
+      items: [...this.bagged],
+      seconds: Math.max(1, Math.round((Date.now() - this.startedAt) / 1000)),
+    };
     this.auth.openModal('signup');
   }
 
@@ -485,6 +547,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.stickOriginX = rect.left + rect.width / 2;
     this.stickOriginY = rect.top + rect.height / 2;
     this.stickActive = true;
+    this.map?.dragging.disable();
     this.updateStickFromPointer(ev.clientX, ev.clientY);
     ev.preventDefault();
   }
@@ -499,6 +562,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     if (!this.stickActive) return;
     this.stickActive = false;
     this.resetStick();
+    this.applyCameraMode();
     try {
       (ev.currentTarget as HTMLElement).releasePointerCapture(ev.pointerId);
     } catch { /* ignore */ }
@@ -510,6 +574,35 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   rarityOf(key: string): string {
     return LOOT_META[key]?.rarity || WORLD_NAMES[key]?.rarity || 'common';
+  }
+
+  onlineLabel(): string {
+    if (!this.world.connected()) return 'connecting…';
+    const n = this.world.players().length;
+    if (n <= 1) return '1 online (you)';
+    return `${n} online`;
+  }
+
+  setFollowCam(on: boolean): void {
+    this.followCam = on;
+    this.applyCameraMode();
+    if (on) this.centerOnTruck();
+  }
+
+  centerOnTruck(): void {
+    if (!this.map) return;
+    this.map.setView([this.lat, this.lng], Math.max(this.map.getZoom(), DEFAULT_ZOOM), { animate: true });
+  }
+
+  private applyCameraMode(): void {
+    if (!this.map) return;
+    if (this.followCam) {
+      this.map.dragging.disable();
+    } else if (!this.stickActive) {
+      this.map.dragging.enable();
+    }
+    this.map.scrollWheelZoom.enable();
+    this.map.touchZoom.enable();
   }
 
   private teardownImmersive(exitBrowserFs: boolean): void {
@@ -603,7 +696,8 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private startWorldSync(): void {
     this.stopWorldSync();
     this.syncWorldMarkers();
-    this.syncTimer = setInterval(() => this.syncWorldMarkers(), 500);
+    // Match server presence tick (~10 Hz) so peer markers stay live.
+    this.syncTimer = setInterval(() => this.syncWorldMarkers(), 100);
   }
 
   private stopWorldSync(): void {
@@ -611,8 +705,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.syncTimer = undefined;
     for (const m of this.otherMarkers.values()) m.remove();
     this.otherMarkers.clear();
+    this.peerMeta.clear();
     for (const m of this.worldDropMarkers.values()) m.remove();
     this.worldDropMarkers.clear();
+    this.dropMeta.clear();
     this.eventMarker?.remove();
     this.eventMarker = undefined;
   }
@@ -622,70 +718,84 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     const me = this.auth.user()?.id;
     const seen = new Set<string>();
     for (const p of this.world.players()) {
-      if (p.userId === me) continue;
+      if (!p.userId || p.userId === me) continue;
       seen.add(p.userId);
+      const name = p.chaserName || 'Chaser';
+      const veh = p.vehicleKey || 'starter_car';
+      const prev = this.peerMeta.get(p.userId);
       let m = this.otherMarkers.get(p.userId);
-      const icon = L.divIcon({
-        className: 'chase-drop-icon',
-        html: `<div style="padding:2px 6px;border-radius:8px;background:rgba(15,23,42,.85);border:1px solid #38bdf8;color:#e2e8f0;font:700 10px/1.2 sans-serif;">${this.escape(p.chaserName)}</div>`,
-        iconSize: [80, 18],
-        iconAnchor: [40, 9],
-      });
+      const moved = !prev
+        || Math.abs(prev.lat - p.lat) > 1e-6
+        || Math.abs(prev.lng - p.lng) > 1e-6;
+      const restyle = !prev || prev.name !== name || prev.veh !== veh;
+
       if (!m) {
-        m = L.marker([p.lat, p.lng], { icon, interactive: false }).addTo(this.map);
+        const icon = this.peerIcon(name, veh);
+        m = L.marker([p.lat, p.lng], { icon, interactive: false, zIndexOffset: 500 }).addTo(this.map);
         this.otherMarkers.set(p.userId, m);
       } else {
-        m.setLatLng([p.lat, p.lng]);
-        m.setIcon(icon);
+        if (moved) m.setLatLng([p.lat, p.lng]);
+        if (restyle) m.setIcon(this.peerIcon(name, veh));
       }
+      this.peerMeta.set(p.userId, { lat: p.lat, lng: p.lng, name, veh });
     }
     for (const [id, m] of this.otherMarkers) {
       if (!seen.has(id)) {
         m.remove();
         this.otherMarkers.delete(id);
+        this.peerMeta.delete(id);
       }
     }
 
     const dropSeen = new Set<string>();
     for (const d of this.world.drops()) {
       dropSeen.add(d.id);
-      const color = d.rarity === 'rare' ? '#fbbf24' : d.rarity === 'uncommon' ? '#38bdf8' : '#86efac';
+      const prev = this.dropMeta.get(d.id);
       let m = this.worldDropMarkers.get(d.id);
-      const icon = L.divIcon({
-        className: 'chase-drop-icon',
-        html: `<div style="width:16px;height:16px;border-radius:999px;background:${color};border:2px solid #0b1120;box-shadow:0 0 8px ${color};"></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
-      });
+      const moved = !prev
+        || Math.abs(prev.lat - d.lat) > 1e-6
+        || Math.abs(prev.lng - d.lng) > 1e-6;
+      const restyle = !prev || prev.rarity !== d.rarity;
       if (!m) {
+        const icon = this.dropIcon(d.rarity);
         m = L.marker([d.lat, d.lng], { icon, interactive: false }).addTo(this.map);
         this.worldDropMarkers.set(d.id, m);
       } else {
-        m.setLatLng([d.lat, d.lng]);
+        if (moved) m.setLatLng([d.lat, d.lng]);
+        if (restyle) m.setIcon(this.dropIcon(d.rarity));
       }
+      this.dropMeta.set(d.id, { lat: d.lat, lng: d.lng, rarity: d.rarity });
     }
     for (const [id, m] of this.worldDropMarkers) {
       if (!dropSeen.has(id)) {
         m.remove();
         this.worldDropMarkers.delete(id);
+        this.dropMeta.delete(id);
       }
     }
 
     const ev = this.world.event();
     if (ev?.active) {
+      this.activeSimLabel = ev.label || 'SIMULATED EVENT';
+      const dist = Math.hypot(ev.lat - this.lat, ev.lng - this.lng);
+      this.activeSimHint = dist <= PICKUP_DIST * 1.4
+        ? 'In range — stay on the marker to claim'
+        : `Drive to the amber SIM pin · ~${(dist * 69).toFixed(1)} mi`;
       const icon = L.divIcon({
-        className: 'chase-drop-icon',
-        html: `<div style="padding:4px 8px;border-radius:10px;background:#7c3aed;color:#fff;font:900 10px/1.2 sans-serif;border:2px solid #fde68a;">SIM</div>`,
-        iconSize: [48, 22],
-        iconAnchor: [24, 11],
+        className: 'chase-sim-icon',
+        html: `<div class="chase-sim-pin"><span class="chase-sim-badge">SIM</span><span class="chase-sim-sub">NOT REAL WX</span></div>`,
+        iconSize: [72, 36],
+        iconAnchor: [36, 18],
       });
       if (!this.eventMarker) {
-        this.eventMarker = L.marker([ev.lat, ev.lng], { icon, interactive: false }).addTo(this.map);
+        this.eventMarker = L.marker([ev.lat, ev.lng], { icon, interactive: false, zIndexOffset: 550 }).addTo(this.map);
       } else {
         this.eventMarker.setLatLng([ev.lat, ev.lng]);
         this.eventMarker.setIcon(icon);
       }
     } else {
+      this.activeSimLabel = '';
+      this.activeSimHint = '';
       this.eventMarker?.remove();
       this.eventMarker = undefined;
     }
@@ -694,34 +804,66 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     if (t && t !== this.lastWorldToast) {
       this.lastWorldToast = t;
       this.showToast(t);
-      if (t.startsWith('Bagged ')) {
-        for (const [id, key] of this.pendingPickups) {
-          if (!this.world.drops().some(d => d.id === id)) {
-            this.pendingPickups.delete(id);
-            if (this.bagged.length < 12) this.bagged = [...this.bagged, key];
-            break;
-          }
-        }
-      }
     } else if (!t) {
       this.lastWorldToast = '';
     }
+
+    const bag = this.world.lastBag();
+    if (bag && bag.seq !== this.lastBagSeq) {
+      this.lastBagSeq = bag.seq;
+      if (bag.dropId) {
+        this.inflightPickups.delete(bag.dropId);
+        this.pendingPickups.delete(bag.dropId);
+      }
+      if (bag.itemKey && this.bagged.length < 24) {
+        this.bagged = [...this.bagged, bag.itemKey];
+      }
+    }
+  }
+
+  private peerIcon(name: string, veh: string): L.DivIcon {
+    const truck = vehicleSvg(veh);
+    return L.divIcon({
+      className: 'chase-peer-icon',
+      html: `<div class="chase-peer"><div class="chase-peer-truck">${truck}</div><div class="chase-peer-name">${this.escape(name)}</div></div>`,
+      iconSize: [72, 52],
+      iconAnchor: [36, 40],
+    });
+  }
+
+  private dropIcon(rarity: string): L.DivIcon {
+    const color = rarity === 'rare' ? '#fbbf24' : rarity === 'uncommon' ? '#38bdf8' : '#86efac';
+    return L.divIcon({
+      className: 'chase-drop-icon',
+      html: `<div style="width:16px;height:16px;border-radius:999px;background:${color};border:2px solid #0b1120;box-shadow:0 0 8px ${color};"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
   }
 
   private tryWorldPickups(): void {
     for (const d of this.world.drops()) {
-      if (Math.hypot(d.lat - this.lat, d.lng - this.lng) <= PICKUP_DIST) {
-        this.pendingPickups.set(d.id, d.itemKey);
-        this.world.sendPickup(d.id);
-      }
+      if (this.inflightPickups.has(d.id)) continue;
+      if (Math.hypot(d.lat - this.lat, d.lng - this.lng) > PICKUP_DIST) continue;
+      this.inflightPickups.add(d.id);
+      this.pendingPickups.set(d.id, d.itemKey);
+      this.world.sendPickup(d.id, this.lat, this.lng);
+      // Safety: allow retry if server never answers (e.g. too-far then drive closer).
+      setTimeout(() => {
+        if (this.inflightPickups.has(d.id) && this.world.drops().some(x => x.id === d.id)) {
+          this.inflightPickups.delete(d.id);
+        }
+      }, 2000);
     }
   }
 
   private tryEventPlace(): void {
     const ev = this.world.event();
-    if (!ev?.active) return;
+    if (!ev?.active || this.inflightEvent) return;
     if (Math.hypot(ev.lat - this.lat, ev.lng - this.lng) <= PICKUP_DIST * 1.4) {
-      this.world.sendEventPlace(ev.id);
+      this.inflightEvent = true;
+      this.world.sendEventPlace(ev.id, this.lat, this.lng);
+      setTimeout(() => { this.inflightEvent = false; }, 2500);
     }
   }
 
@@ -740,22 +882,22 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     if (!el) return;
     if (this.map) {
       this.map.invalidateSize();
+      this.applyCameraMode();
       return;
     }
-    // Disable map drag during chase so the stick owns touch gestures.
     this.map = L.map(el, {
-      zoomControl: false,
+      zoomControl: true,
       attributionControl: false,
       dragging: false,
-      scrollWheelZoom: false,
+      scrollWheelZoom: true,
       doubleClickZoom: false,
       touchZoom: true,
       boxZoom: false,
       keyboard: false,
-    }).setView(CENTER, 8);
+    }).setView([this.lat, this.lng], DEFAULT_ZOOM);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 12,
+      maxZoom: 14,
     }).addTo(this.map);
 
     this.radarLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi', {
@@ -765,6 +907,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       opacity: 0.75,
     } as L.WMSOptions);
     this.radarLayer.addTo(this.map);
+    this.applyCameraMode();
     setTimeout(() => this.map?.invalidateSize(), 80);
   }
 
@@ -772,8 +915,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.clearDrops();
     for (const m of this.otherMarkers.values()) m.remove();
     this.otherMarkers.clear();
+    this.peerMeta.clear();
     for (const m of this.worldDropMarkers.values()) m.remove();
     this.worldDropMarkers.clear();
+    this.dropMeta.clear();
     this.eventMarker?.remove();
     this.eventMarker = undefined;
     this.playerMarker?.remove();
@@ -797,11 +942,12 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       this.playerMarker.setLatLng([this.lat, this.lng]);
       this.playerMarker.setIcon(icon);
     }
+    if (!this.followCam) return;
     if (pan) {
       this.map.panTo([this.lat, this.lng], { animate: true, duration: 0.15 });
     } else {
       const center = this.map.getCenter();
-      if (Math.hypot(center.lat - this.lat, center.lng - this.lng) > 0.12) {
+      if (Math.hypot(center.lat - this.lat, center.lng - this.lng) > 0.08) {
         this.map.panTo([this.lat, this.lng], { animate: true, duration: 0.25 });
       }
     }
@@ -853,11 +999,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private clearDrops(): void {
     for (const d of this.drops) d.marker.remove();
     this.drops = [];
-  }
-
-  private clearTimer(): void {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = undefined;
   }
 
   private showToast(msg: string): void {
