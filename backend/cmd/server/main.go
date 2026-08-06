@@ -19,6 +19,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/config"
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/store"
+	"github.com/saints-weatherwatch/backend/internal/world"
 	"github.com/saints-weatherwatch/backend/internal/ws"
 )
 
@@ -54,6 +55,9 @@ func main() {
 	hub := ws.NewHub(cfg.AllowedOrigins)
 	go hub.Run(bgCtx.Done())
 
+	room := world.NewRoom(st, cfg.AllowedOrigins)
+	go room.Run(bgCtx.Done())
+
 	nwsCache := nws.NewCache(st)
 	nwsCache.OnUpdate(func(live nws.AlertsResponse, newAlerts []nws.Alert) {
 		if len(newAlerts) > 0 {
@@ -79,6 +83,7 @@ func main() {
 	r.Get("/ws", serveWS)
 	// Also under /api so proxies that only forward /api still work.
 	r.Get("/api/ws", serveWS)
+	r.Get("/api/world/ws", room.ServeWS)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(60 * time.Second))

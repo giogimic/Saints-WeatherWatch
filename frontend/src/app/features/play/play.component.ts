@@ -96,17 +96,35 @@ const CALLSIGN_KEY = 'ww-play-callsign';
           >
             <div class="flex items-start gap-3">
               <div class="min-w-0 flex-1">
-                <p class="text-[10px] font-black uppercase tracking-widest text-accent mb-1">New · Map game</p>
+                <p class="text-[10px] font-black uppercase tracking-widest text-accent mb-1">New · Shared world</p>
                 <h2 class="font-black uppercase italic text-white text-lg leading-tight group-hover:text-accent transition-colors">
-                  Radar Chase
+                  Storm World
                 </h2>
                 <p class="text-xs text-base-content/55 font-semibold mt-1">
-                  Drive your garage truck on live radar. Bag random field drops for your profile.
+                  Drive the Maine corridor on live radar. See other chasers, race for the same drops and simulated events.
                 </p>
               </div>
               <span class="text-base-content/30 text-sm self-center">▶</span>
             </div>
           </button>
+
+          <a
+            routerLink="/trade"
+            class="storm-card w-full text-left p-4 mb-3 hover:border-primary/50 transition-colors group block"
+          >
+            <div class="flex items-start gap-3">
+              <div class="min-w-0 flex-1">
+                <p class="text-[10px] font-black uppercase tracking-widest text-primary mb-1">Craft · Trade</p>
+                <h2 class="font-black uppercase italic text-white text-lg leading-tight group-hover:text-primary transition-colors">
+                  Trade Center
+                </h2>
+                <p class="text-xs text-base-content/55 font-semibold mt-1">
+                  Craft probes and kits from field scrap. List or buy packs — server checks every trade.
+                </p>
+              </div>
+              <span class="text-base-content/30 text-sm self-center">▶</span>
+            </div>
+          </a>
 
           <div class="grid gap-3 sm:grid-cols-2">
             @for (track of tracks; track track.id) {
