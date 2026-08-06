@@ -1,6 +1,7 @@
 # 🌪️ Saints Weather Watch
 
-**Live Site:** [https://wn.saintsgaming.net](https://wn.saintsgaming.net)
+**Live Site:** [https://wn.saintsgaming.net](https://wn.saintsgaming.net)  
+**Publisher:** [Saints Gaming](https://saintsgaming.net)
 
 **Your personal storm-chasing command center** — live tornado tracking, real-time alerts, storm education, and chase logging built for weather enthusiasts.
 
@@ -120,6 +121,7 @@ Long-term vision (grain of salt — do not rewrite the ops app to chase it):
 
 - [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- [docs/LEGAL.md](docs/LEGAL.md) — copyright, disclaimers, data attribution
 - [docs/OPS_EXPANSION_ROADMAP.md](docs/OPS_EXPANSION_ROADMAP.md) — ops expansion A→F **done**
 - [docs/STORM_CHASER_VISION.md](docs/STORM_CHASER_VISION.md) · [PHASE1](docs/STORM_CHASER_PHASE1.md) · [ROADMAP](docs/STORM_CHASER_ROADMAP.md)
 - Build notes index: [`logs/README.md`](logs/README.md)
@@ -134,4 +136,4 @@ SQLite via Prisma — zero setup. To switch to Postgres later:
 
 ## License
 
-Personal project — built for fun and learning. 🌪️
+© 2026 [Saints Gaming](https://saintsgaming.net). All rights reserved. See [`LICENSE`](LICENSE) and [`docs/LEGAL.md`](docs/LEGAL.md).

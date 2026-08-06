@@ -1,0 +1,19 @@
+Copyright (c) 2026 Saints Gaming
+
+All rights reserved.
+
+Saints Weather Watch and related materials in this repository are proprietary
+works of Saints Gaming unless a file expressly states otherwise.
+
+You may not copy, modify, distribute, sublicense, or commercially exploit this
+software or its branding without prior written permission from Saints Gaming.
+
+Official site: https://saintsgaming.net
+
+Weather and hazard data shown by the app come from third-party public sources
+(NWS, NOAA, IEM, USGS, and others) and remain subject to those providers’
+terms. Saints Gaming does not claim ownership of that upstream data.
+
+THIS SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND. See
+docs/LEGAL.md for product disclaimers (including emergency-use limits) and
+attribution notes.

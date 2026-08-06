@@ -6,7 +6,7 @@ import { Component } from '@angular/core';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="min-h-[calc(100vh-4rem)] p-6 storm-bg">
+    <div class="min-h-[calc(100vh-4rem)] p-6">
       <div class="max-w-6xl mx-auto">
         <div class="text-center mb-8">
           <div class="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-base-100/70 ring-1 ring-primary/40 shadow-[0_0_35px_rgba(250,204,21,0.25)]">
