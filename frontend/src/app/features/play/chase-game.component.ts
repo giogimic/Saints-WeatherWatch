@@ -11,6 +11,7 @@ import {
   inject,
 } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import { AuthService } from '../../core/auth.service';
 import { vehicleSvg } from '../../core/vehicles';
@@ -75,7 +76,7 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
 @Component({
   selector: 'app-chase-game',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   template: `
     <div
       #shell
@@ -312,6 +313,11 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
           <button type="button" class="btn btn-primary rounded-xl font-black uppercase min-h-12" (click)="startRun(immersive || isMobile())">
             Chase again
           </button>
+          @if (auth.isLoggedIn()) {
+            <a routerLink="/trade" class="btn btn-secondary rounded-xl font-black uppercase min-h-12">
+              Trade & Craft
+            </a>
+          }
           <button type="button" class="btn btn-ghost border border-base-300 rounded-xl font-black uppercase min-h-12" (click)="leaveGame()">
             Exit to Play
           </button>
@@ -510,6 +516,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     // Shared world already granted items server-side — never trust client bag for that path.
     if (this.worldMode) {
       this.savedLoot = this.bagged.length > 0;
+      this.world.disconnectWorld();
       this.world.refreshInventory().subscribe();
       this.auth.refreshMe().subscribe();
       return;

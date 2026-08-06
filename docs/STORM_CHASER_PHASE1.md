@@ -56,6 +56,14 @@ Full MMO economy, deployable persistence networks, vehicle part tree, weather-ty
 
 See aspirational scope in [STORM_CHASER_VISION.md](./STORM_CHASER_VISION.md) and ordered later slices in [STORM_CHASER_ROADMAP.md](./STORM_CHASER_ROADMAP.md). **Do not implement those here** until Phase 1 is stable in production.
 
+## Harden notes (post-ship)
+
+- Desk `/auth/me` loot includes Storm World stacks (world → loot MetaLookup bridge)
+- Trade buy/cancel uses status CAS (`open` → `sold`/`cancelled`); craft refunds on grant failure
+- SIM event grant failure reactivates the event
+- Pickup sync snap tightened (~0.12°) so radius checks still matter
+- End run disconnects world WS; results link to Trade & Craft
+
 ## Deploy
 
 Prisma `db push` for `TradeListing` (+ any new tables). Rebuild backend + frontend. Ensure nginx upgrades `/api/` WebSockets (already configured).

@@ -12,7 +12,7 @@ See [STORM_CHASER_PHASE1.md](./STORM_CHASER_PHASE1.md).
 - Server-authoritative inventory · craft · trade center
 - Trust labels on SIM content
 
-**Status:** implemented on the Storm World branch; harden with playtests, do not rip out for bigger features.
+**Status:** implemented — continue hardening (inventory on Desk, trade CAS, event rollback, End leaves world). Do not rip out for bigger features.
 
 ## Phase 2 — Camera feel + exploration density
 

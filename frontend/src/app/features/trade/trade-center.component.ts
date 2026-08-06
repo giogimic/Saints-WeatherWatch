@@ -59,9 +59,9 @@ import { TradeListing, WorldItem, WorldRecipe, WorldService } from '../../core/w
                     <div class="text-[10px] font-bold uppercase tracking-wider text-base-content/40 mt-1">
                       Needs
                       @for (in of r.inputs; track in.key) {
-                        <span class="mr-2">{{ in.qty }}× {{ in.key }}</span>
+                        <span class="mr-2">{{ in.qty }}× {{ itemLabel(in.key) }}</span>
                       }
-                      → {{ r.output.qty }}× {{ r.output.key }}
+                      → {{ r.output.qty }}× {{ itemLabel(r.output.key) }}
                     </div>
                   </div>
                   <button type="button" class="btn btn-primary btn-sm rounded-xl font-black uppercase min-h-11" (click)="doCraft(r.id)">
@@ -79,16 +79,24 @@ import { TradeListing, WorldItem, WorldRecipe, WorldService } from '../../core/w
             <h2 class="text-xs font-black uppercase tracking-widest text-accent">Trade center</h2>
             <div class="grid sm:grid-cols-2 gap-2">
               <label class="text-xs font-bold uppercase tracking-wider text-base-content/45">
-                Offer key
-                <input class="input input-sm input-bordered w-full mt-1 font-semibold" [(ngModel)]="offerKey">
+                Offer from packs
+                <select class="select select-sm select-bordered w-full mt-1 font-semibold" [(ngModel)]="offerKey">
+                  @for (item of inventory; track item.key) {
+                    <option [value]="item.key">{{ item.name }} (×{{ item.count }})</option>
+                  }
+                </select>
               </label>
               <label class="text-xs font-bold uppercase tracking-wider text-base-content/45">
                 Offer qty
                 <input type="number" min="1" class="input input-sm input-bordered w-full mt-1 font-semibold" [(ngModel)]="offerQty">
               </label>
               <label class="text-xs font-bold uppercase tracking-wider text-base-content/45">
-                Ask key
-                <input class="input input-sm input-bordered w-full mt-1 font-semibold" [(ngModel)]="askKey">
+                Ask for
+                <select class="select select-sm select-bordered w-full mt-1 font-semibold" [(ngModel)]="askKey">
+                  @for (item of catalogItems; track item.key) {
+                    <option [value]="item.key">{{ item.name }}</option>
+                  }
+                </select>
               </label>
               <label class="text-xs font-bold uppercase tracking-wider text-base-content/45">
                 Ask qty
@@ -106,9 +114,9 @@ import { TradeListing, WorldItem, WorldRecipe, WorldService } from '../../core/w
               @for (t of trades; track t.id) {
                 <li class="flex flex-wrap items-center gap-2 border border-base-300/40 rounded-xl px-3 py-2 text-sm">
                   <span class="font-bold text-white flex-1">
-                    {{ t.offerQty }}× {{ t.offerKey }}
+                    {{ t.offerQty }}× {{ itemLabel(t.offerKey) }}
                     <span class="text-base-content/40">for</span>
-                    {{ t.askQty }}× {{ t.askKey }}
+                    {{ t.askQty }}× {{ itemLabel(t.askKey) }}
                   </span>
                   @if (t.sellerId === auth.user()?.id) {
                     <button type="button" class="btn btn-ghost btn-xs font-black uppercase" (click)="cancel(t.id)">Cancel</button>
@@ -131,25 +139,44 @@ export class TradeCenterComponent implements OnInit {
   private readonly world = inject(WorldService);
 
   inventory: WorldItem[] = [];
+  catalogItems: WorldItem[] = [];
   recipes: WorldRecipe[] = [];
   trades: TradeListing[] = [];
-  offerKey = 'scrap_metal';
-  offerQty = 2;
+  offerKey = '';
+  offerQty = 1;
   askKey = 'battery';
   askQty = 1;
   craftMsg = '';
   craftOk = false;
   tradeMsg = '';
+  private nameByKey = new Map<string, string>();
 
   ngOnInit(): void {
-    this.world.getCatalog().subscribe(c => this.recipes = c.recipes || []);
+    this.world.getCatalog().subscribe(c => {
+      this.recipes = c.recipes || [];
+      this.catalogItems = c.items || [];
+      this.nameByKey.clear();
+      for (const it of this.catalogItems) this.nameByKey.set(it.key, it.name);
+      if (!this.askKey && this.catalogItems.length) this.askKey = this.catalogItems[0].key;
+    });
     this.reload();
   }
 
   reload(): void {
     if (!this.auth.isLoggedIn()) return;
-    this.world.getInventory().subscribe(rows => this.inventory = rows || []);
+    this.world.getInventory().subscribe(rows => {
+      this.inventory = rows || [];
+      for (const it of this.inventory) this.nameByKey.set(it.key, it.name);
+      if (!this.offerKey && this.inventory.length) this.offerKey = this.inventory[0].key;
+      if (this.offerKey && !this.inventory.some(i => i.key === this.offerKey)) {
+        this.offerKey = this.inventory[0]?.key || '';
+      }
+    });
     this.world.getTrades().subscribe(rows => this.trades = rows || []);
+  }
+
+  itemLabel(key: string): string {
+    return this.nameByKey.get(key) || key.replace(/_/g, ' ');
   }
 
   doCraft(id: string): void {

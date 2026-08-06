@@ -186,6 +186,14 @@ func init() {
 			dropWeights = append(dropWeights, d.Key)
 		}
 	}
+	// Bridge world item names into /auth/me loot so Desk shows Storm World packs.
+	loot.MetaLookup = func(key string) (loot.Def, bool) {
+		d, ok := LookupItem(key)
+		if !ok {
+			return loot.Def{}, false
+		}
+		return loot.Def{Key: d.Key, Name: d.Name, Blurb: d.Blurb, Rarity: d.Rarity, XP: d.XP}, true
+	}
 }
 
 func LookupItem(key string) (ItemDef, bool) {
@@ -600,11 +608,23 @@ func (r *Room) handleEventPlace(c *client, eventID string, lat, lng float64) {
 
 	if err := GrantStack(r.st, context.Background(), c.userID, reward, 1); err != nil {
 		log.Printf("world.event grant failed user=%s item=%s: %v", c.userID, reward, err)
+		r.mu.Lock()
+		if r.event != nil && r.event.ID == eventID {
+			r.event.Active = true
+		}
+		r.mu.Unlock()
 		r.toast(c, "Could not bag event reward.")
+		r.publish(Envelope{Type: "event", Event: r.snapshotEvent()})
 		return
 	}
 	r.publish(Envelope{Type: "event_done", Event: ev, Toast: c.name + " secured: " + label, ItemKey: reward})
 	r.toastBag(c, "Event secured — reward bagged.", eventID, reward)
+}
+
+func (r *Room) snapshotEvent() *SimEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.event
 }
 
 // syncForAction lets the client catch the server up within a soft radius so
@@ -613,7 +633,7 @@ func (c *client) syncForAction(lat, lng float64) {
 	lat = clamp(lat, Bounds.MinLat, Bounds.MaxLat)
 	lng = clamp(lng, Bounds.MinLng, Bounds.MaxLng)
 	dist := math.Hypot(lat-c.lat, lng-c.lng)
-	if dist <= 0.55 {
+	if dist <= 0.12 {
 		c.lat, c.lng = lat, lng
 		c.lastMove = time.Now()
 		c.dirty = true

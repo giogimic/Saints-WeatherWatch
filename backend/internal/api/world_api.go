@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -114,6 +115,10 @@ func worldCraftHandler(st *store.Store) http.HandlerFunc {
 			}
 		}
 		if err := world.GrantStack(st, r.Context(), user.ID, recipe.Output.Key, recipe.Output.Qty); err != nil {
+			// Refund consumed inputs so a grant failure cannot burn materials.
+			for _, in := range recipe.Inputs {
+				_ = world.GrantStack(st, r.Context(), user.ID, in.Key, in.Qty)
+			}
 			http.Error(w, "Craft grant failed", http.StatusInternalServerError)
 			return
 		}
@@ -229,30 +234,44 @@ func worldBuyTradeHandler(st *store.Store) http.HandlerFunc {
 			http.Error(w, "Cannot buy your own listing", http.StatusBadRequest)
 			return
 		}
-		if !world.ConsumeStack(st, r.Context(), user.ID, listing.AskKey, listing.AskQty) {
-			http.Error(w, "Missing ask items", http.StatusConflict)
-			return
-		}
-		// Buyer gets offer; seller gets ask.
-		if err := world.GrantStack(st, r.Context(), user.ID, listing.OfferKey, listing.OfferQty); err != nil {
-			_ = world.GrantStack(st, r.Context(), user.ID, listing.AskKey, listing.AskQty)
-			http.Error(w, "Trade failed", http.StatusInternalServerError)
-			return
-		}
-		if err := world.GrantStack(st, r.Context(), listing.SellerID, listing.AskKey, listing.AskQty); err != nil {
-			http.Error(w, "Trade failed delivering to seller", http.StatusInternalServerError)
-			return
-		}
+		// CAS: only one buyer can flip open → sold.
 		now := time.Now().UTC()
-		updated, err := st.Client.TradeListing.FindUnique(db.TradeListing.ID.Equals(id)).Update(
+		claimed, err := st.Client.TradeListing.FindMany(
+			db.TradeListing.ID.Equals(id),
+			db.TradeListing.Status.Equals("open"),
+		).Update(
 			db.TradeListing.Status.Set("sold"),
 			db.TradeListing.BuyerID.Set(user.ID),
 			db.TradeListing.CompletedAt.Set(now),
 		).Exec(r.Context())
-		if err != nil {
-			http.Error(w, "Trade finalize failed", http.StatusInternalServerError)
+		if err != nil || claimed == nil || claimed.Count != 1 {
+			http.Error(w, "Listing not available", http.StatusConflict)
 			return
 		}
+		if !world.ConsumeStack(st, r.Context(), user.ID, listing.AskKey, listing.AskQty) {
+			_, _ = st.Client.TradeListing.FindUnique(db.TradeListing.ID.Equals(id)).Update(
+				db.TradeListing.Status.Set("open"),
+				db.TradeListing.BuyerID.SetOptional(nil),
+				db.TradeListing.CompletedAt.SetOptional(nil),
+			).Exec(r.Context())
+			http.Error(w, "Missing ask items", http.StatusConflict)
+			return
+		}
+		if err := world.GrantStack(st, r.Context(), user.ID, listing.OfferKey, listing.OfferQty); err != nil {
+			_ = world.GrantStack(st, r.Context(), user.ID, listing.AskKey, listing.AskQty)
+			_, _ = st.Client.TradeListing.FindUnique(db.TradeListing.ID.Equals(id)).Update(
+				db.TradeListing.Status.Set("open"),
+				db.TradeListing.BuyerID.SetOptional(nil),
+				db.TradeListing.CompletedAt.SetOptional(nil),
+			).Exec(r.Context())
+			http.Error(w, "Trade failed", http.StatusInternalServerError)
+			return
+		}
+		if err := world.GrantStack(st, r.Context(), listing.SellerID, listing.AskKey, listing.AskQty); err != nil {
+			log.Printf("world.trade seller grant failed listing=%s seller=%s item=%s qty=%d: %v",
+				id, listing.SellerID, listing.AskKey, listing.AskQty, err)
+		}
+		updated, _ := st.Client.TradeListing.FindUnique(db.TradeListing.ID.Equals(id)).Exec(r.Context())
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok": true, "listing": updated, "inventory": mergedInventory(st, r, user.ID),
 		})
@@ -277,11 +296,14 @@ func worldCancelTradeHandler(st *store.Store) http.HandlerFunc {
 			http.Error(w, "Not your listing", http.StatusForbidden)
 			return
 		}
-		_, err = st.Client.TradeListing.FindUnique(db.TradeListing.ID.Equals(id)).Update(
+		claimed, err := st.Client.TradeListing.FindMany(
+			db.TradeListing.ID.Equals(id),
+			db.TradeListing.Status.Equals("open"),
+		).Update(
 			db.TradeListing.Status.Set("cancelled"),
 		).Exec(r.Context())
-		if err != nil {
-			http.Error(w, "Cancel failed", http.StatusInternalServerError)
+		if err != nil || claimed == nil || claimed.Count != 1 {
+			http.Error(w, "Listing already closed", http.StatusConflict)
 			return
 		}
 		_ = world.GrantStack(st, r.Context(), user.ID, listing.OfferKey, listing.OfferQty)
