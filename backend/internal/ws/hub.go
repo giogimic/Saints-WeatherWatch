@@ -102,14 +102,16 @@ func (h *Hub) Run(ctxDone <-chan struct{}) {
 				select {
 				case c.send <- msg:
 				default:
-					// Slow client — drop and disconnect.
-					go func(cl *client) { h.unregister <- cl }(c)
+					// Drop frame for slow clients — don't disconnect (forces reconnect spam).
 				}
 			}
 			h.mu.RUnlock()
 		case <-ping.C:
 			payload, _ := json.Marshal(Envelope{Type: "ping", GeneratedAt: time.Now().UTC().Format(time.RFC3339)})
-			h.broadcast <- payload
+			select {
+			case h.broadcast <- payload:
+			default:
+			}
 		}
 	}
 }

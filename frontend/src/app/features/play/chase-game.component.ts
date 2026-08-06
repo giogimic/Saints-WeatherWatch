@@ -315,7 +315,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private lastFrame = 0;
 
   private otherMarkers = new Map<string, L.Marker>();
+  /** Last rendered peer state — avoid rebuilding Leaflet icons every tick (DOM churn). */
+  private peerMeta = new Map<string, { lat: number; lng: number; name: string; veh: string }>();
   private worldDropMarkers = new Map<string, L.Marker>();
+  private dropMeta = new Map<string, { lat: number; lng: number; rarity: string }>();
   private eventMarker?: L.Marker;
   private syncTimer?: ReturnType<typeof setInterval>;
   private pendingPickups = new Map<string, string>();
@@ -331,6 +334,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.stopLoop();
     this.stopWorldSync();
+    this.world.disconnectWorld();
     this.destroyMap();
     this.keys.clear();
     this.teardownImmersive(false);
@@ -618,8 +622,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.syncTimer = undefined;
     for (const m of this.otherMarkers.values()) m.remove();
     this.otherMarkers.clear();
+    this.peerMeta.clear();
     for (const m of this.worldDropMarkers.values()) m.remove();
     this.worldDropMarkers.clear();
+    this.dropMeta.clear();
     this.eventMarker?.remove();
     this.eventMarker = undefined;
   }
@@ -631,52 +637,57 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     for (const p of this.world.players()) {
       if (!p.userId || p.userId === me) continue;
       seen.add(p.userId);
+      const name = p.chaserName || 'Chaser';
+      const veh = p.vehicleKey || 'starter_car';
+      const prev = this.peerMeta.get(p.userId);
       let m = this.otherMarkers.get(p.userId);
-      const name = this.escape(p.chaserName || 'Chaser');
-      const truck = vehicleSvg(p.vehicleKey || 'starter_car');
-      const icon = L.divIcon({
-        className: 'chase-peer-icon',
-        html: `<div class="chase-peer"><div class="chase-peer-truck">${truck}</div><div class="chase-peer-name">${name}</div></div>`,
-        iconSize: [72, 52],
-        iconAnchor: [36, 40],
-      });
+      const moved = !prev
+        || Math.abs(prev.lat - p.lat) > 1e-6
+        || Math.abs(prev.lng - p.lng) > 1e-6;
+      const restyle = !prev || prev.name !== name || prev.veh !== veh;
+
       if (!m) {
+        const icon = this.peerIcon(name, veh);
         m = L.marker([p.lat, p.lng], { icon, interactive: false, zIndexOffset: 500 }).addTo(this.map);
         this.otherMarkers.set(p.userId, m);
       } else {
-        m.setLatLng([p.lat, p.lng]);
-        m.setIcon(icon);
+        if (moved) m.setLatLng([p.lat, p.lng]);
+        if (restyle) m.setIcon(this.peerIcon(name, veh));
       }
+      this.peerMeta.set(p.userId, { lat: p.lat, lng: p.lng, name, veh });
     }
     for (const [id, m] of this.otherMarkers) {
       if (!seen.has(id)) {
         m.remove();
         this.otherMarkers.delete(id);
+        this.peerMeta.delete(id);
       }
     }
 
     const dropSeen = new Set<string>();
     for (const d of this.world.drops()) {
       dropSeen.add(d.id);
-      const color = d.rarity === 'rare' ? '#fbbf24' : d.rarity === 'uncommon' ? '#38bdf8' : '#86efac';
+      const prev = this.dropMeta.get(d.id);
       let m = this.worldDropMarkers.get(d.id);
-      const icon = L.divIcon({
-        className: 'chase-drop-icon',
-        html: `<div style="width:16px;height:16px;border-radius:999px;background:${color};border:2px solid #0b1120;box-shadow:0 0 8px ${color};"></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
-      });
+      const moved = !prev
+        || Math.abs(prev.lat - d.lat) > 1e-6
+        || Math.abs(prev.lng - d.lng) > 1e-6;
+      const restyle = !prev || prev.rarity !== d.rarity;
       if (!m) {
+        const icon = this.dropIcon(d.rarity);
         m = L.marker([d.lat, d.lng], { icon, interactive: false }).addTo(this.map);
         this.worldDropMarkers.set(d.id, m);
       } else {
-        m.setLatLng([d.lat, d.lng]);
+        if (moved) m.setLatLng([d.lat, d.lng]);
+        if (restyle) m.setIcon(this.dropIcon(d.rarity));
       }
+      this.dropMeta.set(d.id, { lat: d.lat, lng: d.lng, rarity: d.rarity });
     }
     for (const [id, m] of this.worldDropMarkers) {
       if (!dropSeen.has(id)) {
         m.remove();
         this.worldDropMarkers.delete(id);
+        this.dropMeta.delete(id);
       }
     }
 
@@ -692,7 +703,6 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
         this.eventMarker = L.marker([ev.lat, ev.lng], { icon, interactive: false }).addTo(this.map);
       } else {
         this.eventMarker.setLatLng([ev.lat, ev.lng]);
-        this.eventMarker.setIcon(icon);
       }
     } else {
       this.eventMarker?.remove();
@@ -718,6 +728,26 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
         this.bagged = [...this.bagged, bag.itemKey];
       }
     }
+  }
+
+  private peerIcon(name: string, veh: string): L.DivIcon {
+    const truck = vehicleSvg(veh);
+    return L.divIcon({
+      className: 'chase-peer-icon',
+      html: `<div class="chase-peer"><div class="chase-peer-truck">${truck}</div><div class="chase-peer-name">${this.escape(name)}</div></div>`,
+      iconSize: [72, 52],
+      iconAnchor: [36, 40],
+    });
+  }
+
+  private dropIcon(rarity: string): L.DivIcon {
+    const color = rarity === 'rare' ? '#fbbf24' : rarity === 'uncommon' ? '#38bdf8' : '#86efac';
+    return L.divIcon({
+      className: 'chase-drop-icon',
+      html: `<div style="width:16px;height:16px;border-radius:999px;background:${color};border:2px solid #0b1120;box-shadow:0 0 8px ${color};"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
   }
 
   private tryWorldPickups(): void {
