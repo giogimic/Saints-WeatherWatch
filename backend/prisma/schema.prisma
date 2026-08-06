@@ -27,6 +27,7 @@ model User {
   quizAttempts         QuizAttempt[]
   vehicles             UserVehicle[]
   collectibles         UserCollectible[]
+  tradeListings        TradeListing[] @relation("SellerListings")
   favoriteCameras      FavoriteCamera[]
   watchedAreas         WatchedArea[]
   savedLocations       SavedLocation[]
@@ -78,7 +79,7 @@ model UserVehicle {
   @@index([userId])
 }
 
-/// Field loot from Radar Chase mini-game (profile collectables).
+/// Field loot / crafting materials (profile inventory stacks).
 model UserCollectible {
   id        String   @id @default(cuid())
   userId    String
@@ -91,6 +92,26 @@ model UserCollectible {
 
   @@unique([userId, itemKey])
   @@index([userId])
+}
+
+/// Barter listings for the Trade Center (server-authoritative).
+model TradeListing {
+  id           String   @id @default(cuid())
+  sellerId     String
+  offerKey     String
+  offerQty     Int
+  askKey       String
+  askQty       Int
+  status       String   @default("open") // open | sold | cancelled
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  buyerId      String?
+  completedAt  DateTime?
+
+  seller User @relation("SellerListings", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([sellerId])
 }
 
 model FavoriteCamera {

@@ -52,6 +52,12 @@ export const routes: Routes = [
     title: 'Dashboard — Saints Weather Watch',
   },
   {
+    path: 'trade',
+    loadComponent: () =>
+      import('./features/trade/trade-center.component').then((m) => m.TradeCenterComponent),
+    title: 'Trade & Craft — Saints Weather Watch',
+  },
+  {
     path: 'archive',
     loadComponent: () =>
       import('./features/archive/archive.component').then((m) => m.ArchiveComponent),

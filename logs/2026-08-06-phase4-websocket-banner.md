@@ -18,4 +18,10 @@ Status: **implemented** (was previously skipped on the roadmap)
 - Nav LIVE badge reflects WS connected vs SYNC fallback
 
 ## Deploy note
-Reverse proxy must allow WebSocket upgrade on `/ws` (Caddy/`reverse_proxy` does by default).
+Reverse proxy / frontend nginx must allow WebSocket upgrade on `/ws` (and/or `/api/ws`).
+Docker frontend `nginx.conf` proxies both to the Go hub.
+
+## 2026-08-06 follow-up
+- Live site was failing `wss://…/ws` because frontend nginx only proxied `/api/`
+- Fixed nginx WS proxy; client tries `/api/ws` then `/ws`; reconnect backoff capped to avoid console spam
+- `contentscript.js` MaxListeners / ObjectMultiplex warnings are browser-extension noise (e.g. wallet), not app leaks

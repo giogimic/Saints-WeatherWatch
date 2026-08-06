@@ -65,6 +65,9 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Get("/chase/loot", myLootHandler(st))
 		r.Post("/chase/runs", createChaseRunHandler(st))
 
+		// Storm World — craft / trade / inventory
+		mountWorldRoutes(r, st)
+
 		// Dashboard (login required handlers enforce auth)
 		r.Get("/favorites", getFavoritesHandler(st))
 		r.Post("/favorites", addFavoriteHandler(st))

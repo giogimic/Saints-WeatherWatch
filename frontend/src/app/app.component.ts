@@ -42,6 +42,7 @@ export class AppComponent implements OnInit {
     { path: '', label: 'Home', icon: '🏠' },
     { path: 'learn', label: 'Learn', icon: '📚' },
     { path: 'play', label: 'Play', icon: '🎮' },
+    { path: 'trade', label: 'Trade', icon: '🔁' },
     { path: 'dashboard', label: 'Desk', icon: '🎛️' },
     { path: 'account', label: 'Account', icon: '👤' },
   ];

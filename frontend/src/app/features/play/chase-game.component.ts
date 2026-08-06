@@ -15,6 +15,7 @@ import * as L from 'leaflet';
 import { AuthService } from '../../core/auth.service';
 import { vehicleSvg } from '../../core/vehicles';
 import { QuizAward, WeatherService } from '../../core/weather.service';
+import { WorldService } from '../../core/world.service';
 
 type ChasePhase = 'ready' | 'running' | 'done';
 
@@ -28,10 +29,11 @@ interface DropMarker {
 }
 
 const CENTER: [number, number] = [47.05, -68.35];
-const BOUNDS = { minLat: 46.55, maxLat: 47.55, minLng: -69.15, maxLng: -67.55 };
-const RUN_SECONDS = 60;
-const MOVE_SPEED = 0.11;
-const PICKUP_DIST = 0.035;
+/** Expanded Maine / St. John Valley corridor (matches server world.Bounds). */
+const BOUNDS = { minLat: 44.6, maxLat: 47.5, minLng: -71.2, maxLng: -66.9 };
+const RUN_SECONDS = 90;
+const MOVE_SPEED = 0.14;
+const PICKUP_DIST = 0.04;
 const DROP_COUNT = 7;
 
 const LOOT_META: Record<string, { name: string; rarity: string; weight: number }> = {
@@ -43,6 +45,22 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
   lightning_chip: { name: 'Lightning Chip', rarity: 'uncommon', weight: 3 },
   mesocyclone_coin: { name: 'Mesocyclone Coin', rarity: 'rare', weight: 1 },
   chase_medal: { name: 'Chase Medal', rarity: 'rare', weight: 1 },
+};
+
+/** Shared-world materials / gear names (server catalog). */
+const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
+  scrap_metal: { name: 'Scrap Metal', rarity: 'common' },
+  wiring: { name: 'Wiring', rarity: 'common' },
+  battery: { name: 'Battery', rarity: 'common' },
+  plastic_parts: { name: 'Plastic Parts', rarity: 'common' },
+  fuel_can: { name: 'Fuel Can', rarity: 'uncommon' },
+  camera_parts: { name: 'Camera Parts', rarity: 'uncommon' },
+  gps_module: { name: 'GPS Module', rarity: 'uncommon' },
+  radio_parts: { name: 'Radio Parts', rarity: 'uncommon' },
+  blueprint_frag: { name: 'Blueprint Fragment', rarity: 'rare' },
+  advanced_sensor: { name: 'Advanced Sensor', rarity: 'rare' },
+  basic_probe: { name: 'Basic Probe', rarity: 'uncommon' },
+  repair_kit: { name: 'Repair Kit', rarity: 'common' },
 };
 
 @Component({
@@ -64,10 +82,10 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
           ← Exit
         </button>
         <div class="min-w-0 flex-1">
-          <h2 class="font-black uppercase italic text-white text-lg leading-tight">Radar Chase</h2>
+          <h2 class="font-black uppercase italic text-white text-lg leading-tight">Storm World</h2>
           @if (!immersive) {
             <p class="text-xs text-base-content/55 font-semibold hidden sm:block">
-              Drive your truck. Grab glowing drops. Save loot to your profile.
+              Shared map · same drops · simulated events · craft & trade after.
             </p>
           }
         </div>
@@ -97,13 +115,17 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
             <div>
               <p class="text-sm font-black text-white italic">{{ vehicleLabel }}</p>
               <p class="text-xs text-base-content/55 font-semibold">
-                {{ RUN_SECONDS }}s · northern Maine radar · random field drops
+                {{ RUN_SECONDS }}s · full Maine corridor · live radar
+                @if (auth.isLoggedIn()) {
+                  · shared multiplayer world
+                }
               </p>
             </div>
           </div>
           <p class="text-sm font-semibold text-base-content/70">
-            Stick or <span class="text-white font-black">WASD</span> / arrows.
-            Fullscreen works on phone and PC. Get close to a drop to auto-bag it.
+            Stick or <span class="text-white font-black">WASD</span>.
+            Logged-in chasers share the same server drops and events (first bag wins).
+            Guests still get a solo practice run.
           </p>
           <div class="flex flex-col sm:flex-row gap-2">
             <button
@@ -227,7 +249,9 @@ const LOOT_META: Record<string, { name: string; rarity: string; weight: number }
           </p>
         }
         @if (savedLoot) {
-          <p class="text-xs font-bold text-success uppercase tracking-wider">Loot saved to your profile</p>
+          <p class="text-xs font-bold text-success uppercase tracking-wider">
+            {{ worldMode ? 'Saved to your packs (server)' : 'Loot saved to your profile' }}
+          </p>
         } @else if (!auth.isLoggedIn() && bagged.length) {
           <button
             type="button"
@@ -255,6 +279,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   readonly auth = inject(AuthService);
   private readonly weather = inject(WeatherService);
+  private readonly world = inject(WorldService);
   private readonly sanitizer = inject(DomSanitizer);
 
   readonly RUN_SECONDS = RUN_SECONDS;
@@ -291,6 +316,14 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private rafId = 0;
   private lastFrame = 0;
 
+  private otherMarkers = new Map<string, L.Marker>();
+  private worldDropMarkers = new Map<string, L.Marker>();
+  private eventMarker?: L.Marker;
+  worldMode = false;
+  private syncTimer?: ReturnType<typeof setInterval>;
+  private pendingPickups = new Map<string, string>();
+  private lastWorldToast = '';
+
   ngAfterViewInit(): void {
     this.refreshVehicle();
   }
@@ -298,6 +331,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.stopLoop();
     this.clearTimer();
+    this.stopWorldSync();
     this.destroyMap();
     this.keys.clear();
     this.teardownImmersive(false);
@@ -342,6 +376,8 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   leaveGame(): void {
     if (this.phase === 'running') this.endRun();
+    this.stopWorldSync();
+    this.world.disconnectWorld();
     this.teardownImmersive(true);
     this.exit.emit();
   }
@@ -385,10 +421,21 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     }
 
     this.stickRadius = (this.immersive || this.isMobile()) ? 44 : 36;
+    this.worldMode = this.auth.isLoggedIn();
+    this.pendingPickups.clear();
+    this.lastWorldToast = '';
+    if (this.worldMode) {
+      this.world.connectWorld();
+    }
 
     setTimeout(() => {
       this.ensureMap();
-      this.spawnDrops();
+      if (this.worldMode) {
+        this.clearDrops();
+        this.startWorldSync();
+      } else {
+        this.spawnDrops();
+      }
       this.placePlayer();
       this.startLoop();
       this.map?.invalidateSize();
@@ -403,10 +450,18 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     if (this.phase !== 'running') return;
     this.stopLoop();
     this.clearTimer();
+    this.stopWorldSync();
     this.resetStick();
     this.keys.clear();
     this.phase = 'done';
     const seconds = Math.max(1, Math.round((Date.now() - this.startedAt) / 1000));
+    // Shared world already granted items server-side — never trust client bag for that path.
+    if (this.worldMode) {
+      this.savedLoot = this.bagged.length > 0;
+      this.world.refreshInventory().subscribe();
+      this.auth.refreshMe().subscribe();
+      return;
+    }
     if (this.auth.isLoggedIn() && this.bagged.length) {
       this.weather.saveChaseRun({ items: [...this.bagged], seconds }).subscribe(res => {
         if (!res) return;
@@ -450,11 +505,11 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   }
 
   itemName(key: string): string {
-    return LOOT_META[key]?.name || key;
+    return LOOT_META[key]?.name || WORLD_NAMES[key]?.name || key.replace(/_/g, ' ');
   }
 
   rarityOf(key: string): string {
-    return LOOT_META[key]?.rarity || 'common';
+    return LOOT_META[key]?.rarity || WORLD_NAMES[key]?.rarity || 'common';
   }
 
   private teardownImmersive(exitBrowserFs: boolean): void {
@@ -536,7 +591,142 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.lng = this.clamp(this.lng + dx * step, BOUNDS.minLng, BOUNDS.maxLng);
     this.lat = this.clamp(this.lat + dy * step, BOUNDS.minLat, BOUNDS.maxLat);
     this.placePlayer(false);
-    this.checkPickups();
+    if (this.worldMode) {
+      this.world.sendMove(this.lat, this.lng);
+      this.tryWorldPickups();
+      this.tryEventPlace();
+    } else {
+      this.checkPickups();
+    }
+  }
+
+  private startWorldSync(): void {
+    this.stopWorldSync();
+    this.syncWorldMarkers();
+    this.syncTimer = setInterval(() => this.syncWorldMarkers(), 500);
+  }
+
+  private stopWorldSync(): void {
+    if (this.syncTimer) clearInterval(this.syncTimer);
+    this.syncTimer = undefined;
+    for (const m of this.otherMarkers.values()) m.remove();
+    this.otherMarkers.clear();
+    for (const m of this.worldDropMarkers.values()) m.remove();
+    this.worldDropMarkers.clear();
+    this.eventMarker?.remove();
+    this.eventMarker = undefined;
+  }
+
+  private syncWorldMarkers(): void {
+    if (!this.map || !this.worldMode) return;
+    const me = this.auth.user()?.id;
+    const seen = new Set<string>();
+    for (const p of this.world.players()) {
+      if (p.userId === me) continue;
+      seen.add(p.userId);
+      let m = this.otherMarkers.get(p.userId);
+      const icon = L.divIcon({
+        className: 'chase-drop-icon',
+        html: `<div style="padding:2px 6px;border-radius:8px;background:rgba(15,23,42,.85);border:1px solid #38bdf8;color:#e2e8f0;font:700 10px/1.2 sans-serif;">${this.escape(p.chaserName)}</div>`,
+        iconSize: [80, 18],
+        iconAnchor: [40, 9],
+      });
+      if (!m) {
+        m = L.marker([p.lat, p.lng], { icon, interactive: false }).addTo(this.map);
+        this.otherMarkers.set(p.userId, m);
+      } else {
+        m.setLatLng([p.lat, p.lng]);
+        m.setIcon(icon);
+      }
+    }
+    for (const [id, m] of this.otherMarkers) {
+      if (!seen.has(id)) {
+        m.remove();
+        this.otherMarkers.delete(id);
+      }
+    }
+
+    const dropSeen = new Set<string>();
+    for (const d of this.world.drops()) {
+      dropSeen.add(d.id);
+      const color = d.rarity === 'rare' ? '#fbbf24' : d.rarity === 'uncommon' ? '#38bdf8' : '#86efac';
+      let m = this.worldDropMarkers.get(d.id);
+      const icon = L.divIcon({
+        className: 'chase-drop-icon',
+        html: `<div style="width:16px;height:16px;border-radius:999px;background:${color};border:2px solid #0b1120;box-shadow:0 0 8px ${color};"></div>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+      if (!m) {
+        m = L.marker([d.lat, d.lng], { icon, interactive: false }).addTo(this.map);
+        this.worldDropMarkers.set(d.id, m);
+      } else {
+        m.setLatLng([d.lat, d.lng]);
+      }
+    }
+    for (const [id, m] of this.worldDropMarkers) {
+      if (!dropSeen.has(id)) {
+        m.remove();
+        this.worldDropMarkers.delete(id);
+      }
+    }
+
+    const ev = this.world.event();
+    if (ev?.active) {
+      const icon = L.divIcon({
+        className: 'chase-drop-icon',
+        html: `<div style="padding:4px 8px;border-radius:10px;background:#7c3aed;color:#fff;font:900 10px/1.2 sans-serif;border:2px solid #fde68a;">SIM</div>`,
+        iconSize: [48, 22],
+        iconAnchor: [24, 11],
+      });
+      if (!this.eventMarker) {
+        this.eventMarker = L.marker([ev.lat, ev.lng], { icon, interactive: false }).addTo(this.map);
+      } else {
+        this.eventMarker.setLatLng([ev.lat, ev.lng]);
+        this.eventMarker.setIcon(icon);
+      }
+    } else {
+      this.eventMarker?.remove();
+      this.eventMarker = undefined;
+    }
+
+    const t = this.world.toast();
+    if (t && t !== this.lastWorldToast) {
+      this.lastWorldToast = t;
+      this.showToast(t);
+      if (t.startsWith('Bagged ')) {
+        for (const [id, key] of this.pendingPickups) {
+          if (!this.world.drops().some(d => d.id === id)) {
+            this.pendingPickups.delete(id);
+            if (this.bagged.length < 12) this.bagged = [...this.bagged, key];
+            break;
+          }
+        }
+      }
+    } else if (!t) {
+      this.lastWorldToast = '';
+    }
+  }
+
+  private tryWorldPickups(): void {
+    for (const d of this.world.drops()) {
+      if (Math.hypot(d.lat - this.lat, d.lng - this.lng) <= PICKUP_DIST) {
+        this.pendingPickups.set(d.id, d.itemKey);
+        this.world.sendPickup(d.id);
+      }
+    }
+  }
+
+  private tryEventPlace(): void {
+    const ev = this.world.event();
+    if (!ev?.active) return;
+    if (Math.hypot(ev.lat - this.lat, ev.lng - this.lng) <= PICKUP_DIST * 1.4) {
+      this.world.sendEventPlace(ev.id);
+    }
+  }
+
+  private escape(s: string): string {
+    return (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] || c));
   }
 
   private refreshVehicle(): void {
@@ -580,6 +770,12 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   private destroyMap(): void {
     this.clearDrops();
+    for (const m of this.otherMarkers.values()) m.remove();
+    this.otherMarkers.clear();
+    for (const m of this.worldDropMarkers.values()) m.remove();
+    this.worldDropMarkers.clear();
+    this.eventMarker?.remove();
+    this.eventMarker = undefined;
     this.playerMarker?.remove();
     this.playerMarker = undefined;
     this.map?.remove();
