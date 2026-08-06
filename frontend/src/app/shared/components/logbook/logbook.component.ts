@@ -9,14 +9,15 @@ import { Observable, Subscription, interval, startWith, switchMap, map } from 'r
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
-    <!-- Floating Action Button -->
-    <div class="fixed bottom-20 right-6 md:bottom-8 z-[100]">
+    <!-- Floating Action Button — bottom-right; scales down on mobile so Bag/Market (left) + Log fit -->
+    <div class="fixed z-[100] bottom-[5.75rem] right-2 sm:right-3 md:bottom-8 md:right-6">
       <button 
-        class="btn btn-circle btn-primary btn-lg border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:scale-110 hover:-translate-y-2 transition-all duration-300 flex items-center justify-center bg-primary"
+        class="btn btn-circle btn-primary border-4 border-base-300 shadow-[4px_4px_0_0_rgba(69,44,99,1)] hover:scale-105 hover:-translate-y-1 transition-all duration-300 flex items-center justify-center bg-primary
+               w-12 h-12 min-h-12 sm:w-14 sm:h-14 sm:min-h-14 md:w-16 md:h-16 md:min-h-16 md:btn-lg"
         (click)="openLogbook()"
         title="Open Logbook"
       >
-        <span class="text-3xl drop-shadow-md">📖</span>
+        <span class="text-xl sm:text-2xl md:text-3xl drop-shadow-md">📖</span>
       </button>
     </div>
 
