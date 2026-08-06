@@ -61,7 +61,7 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'cams' | 'areas' | 'map';
                   <h2 class="text-xs font-black uppercase tracking-widest text-primary">Profile</h2>
                   @if (auth.user(); as u) {
                     <div class="flex items-center gap-3">
-                      <div class="w-16 h-12" [innerHTML]="svg(u.equippedVehicleKey)"></div>
+                      <div class="w-12 h-8 shrink-0" [innerHTML]="svg(u.equippedVehicleKey)"></div>
                       <div>
                         <div class="text-xl font-black text-white italic">{{ u.chaserName }}</div>
                         <div class="text-[10px] uppercase tracking-wider text-base-content/45 font-bold">
@@ -96,12 +96,12 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'cams' | 'areas' | 'map';
                     @for (v of catalog; track v.key) {
                       <button
                         type="button"
-                        class="rounded-xl border p-3 text-left min-h-24 transition-colors"
+                        class="rounded-xl border p-2.5 text-left min-h-20 transition-colors"
                         [ngClass]="owned(v.key) ? 'border-primary/50 bg-primary/5' : 'border-base-300 opacity-60'"
                         [disabled]="!owned(v.key)"
                         (click)="equip(v.key)"
                       >
-                        <div class="w-full h-10 mb-2" [innerHTML]="svg(v.key)"></div>
+                        <div class="w-full max-w-[7.5rem] h-7 mb-1.5 mx-auto" [innerHTML]="svg(v.key)"></div>
                         <div class="font-black text-white text-sm">{{ v.name }}</div>
                         <div class="text-[10px] text-base-content/50 font-semibold">
                           {{ owned(v.key) ? (equipped(v.key) ? 'Equipped' : 'Tap to equip') : v.unlockHint }}
