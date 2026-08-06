@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewInit, Component, OnDestroy, inject } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
@@ -55,108 +55,152 @@ const STORAGE_KEY = 'ww-map-view';
         <section class="relative flex-1 min-h-[55vh] md:min-h-[640px] md:rounded-2xl overflow-hidden border-0 md:border md:border-base-300">
           <div id="maine-map" class="absolute inset-0 z-0"></div>
 
-          <!-- Top search (compact) -->
-          <div class="absolute top-3 left-3 right-3 md:right-auto md:w-80 z-[1000]">
-            <div class="storm-card p-2 flex gap-2 items-center">
-              <input
-                type="text"
-                placeholder="Search town…"
-                class="input input-sm input-ghost w-full font-semibold focus:outline-none"
-                [(ngModel)]="searchQuery"
-                (keyup.enter)="performSearch()"
-              >
+          <!-- Discrete search (collapsed by default) -->
+          <div class="absolute top-3 left-3 z-[1000] max-w-[min(16rem,70vw)]">
+            @if (!searchOpen) {
               <button
                 type="button"
-                class="btn btn-primary btn-sm rounded-lg font-black uppercase shrink-0 min-h-10"
-                (click)="performSearch()"
-                [disabled]="isSearching"
+                class="btn btn-ghost btn-sm min-h-9 h-9 w-9 p-0 rounded-xl border border-base-content/15 bg-base-300/55 backdrop-blur-sm text-base-content/70 hover:bg-base-300/80"
+                (click)="openSearch()"
+                aria-label="Search town"
+                title="Search town"
               >
-                @if (isSearching) {
-                  <span class="loading loading-spinner loading-xs"></span>
-                } @else {
-                  Go
-                }
+                <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="10.5" cy="10.5" r="6.5"/>
+                  <path d="M16 16l4.5 4.5" stroke-linecap="round"/>
+                </svg>
               </button>
-            </div>
+            } @else {
+              <div class="flex gap-1 items-center rounded-xl border border-base-content/15 bg-base-300/70 backdrop-blur-md px-1.5 py-1 shadow-sm">
+                <input
+                  #searchInput
+                  type="text"
+                  placeholder="Town…"
+                  class="input input-xs input-ghost w-full min-w-0 font-semibold focus:outline-none bg-transparent h-8 px-2"
+                  [(ngModel)]="searchQuery"
+                  (keyup.enter)="performSearch()"
+                  (keyup.escape)="closeSearch()"
+                >
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs min-h-8 h-8 px-2 rounded-lg font-black uppercase text-[10px] shrink-0"
+                  (click)="performSearch()"
+                  [disabled]="isSearching"
+                >
+                  @if (isSearching) {
+                    <span class="loading loading-spinner loading-xs"></span>
+                  } @else {
+                    Go
+                  }
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs min-h-8 h-8 w-8 p-0 rounded-lg shrink-0 opacity-60"
+                  (click)="closeSearch()"
+                  aria-label="Close search"
+                >✕</button>
+              </div>
+            }
             @if (searchError) {
-              <p class="mt-1 text-error text-xs font-bold px-1">{{ searchError }}</p>
+              <p class="mt-1 text-error text-[10px] font-bold px-1">{{ searchError }}</p>
             }
           </div>
 
-          <!-- Radar status + loop HUD -->
+          <!-- Discrete radar desk (bottom-right) -->
           @if (layers.radar) {
-            <div class="absolute top-16 left-3 right-3 md:right-auto md:w-[22rem] z-[1000]">
-              <div class="storm-card p-2.5 space-y-2">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="min-w-0">
-                    <div class="text-[10px] font-black uppercase tracking-widest text-sky-300">Radar desk</div>
-                    <div class="text-xs font-black text-white truncate">{{ radarSiteLabel }}</div>
-                    <div class="text-[10px] text-base-content/50 font-semibold tabular-nums">{{ radarAgeLabel }}</div>
-                  </div>
-                  <div class="flex gap-1 shrink-0">
-                    @for (p of radarProductChoices; track p.id) {
-                      <button
-                        type="button"
-                        class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-9"
-                        [ngClass]="radarProduct === p.id ? 'btn-primary' : 'btn-ghost border border-base-300'"
-                        (click)="setRadarProduct(p.id)"
-                        [title]="p.label"
-                      >{{ p.short }}</button>
-                    }
-                  </div>
-                </div>
-                <div class="flex items-center gap-1.5">
+            <div class="absolute bottom-16 md:bottom-4 right-3 z-[1000] w-[min(14.5rem,calc(100%-1.5rem))]">
+              <div class="rounded-xl border border-base-content/12 bg-base-300/60 backdrop-blur-md shadow-sm overflow-hidden">
+                @if (!radarDeskOpen) {
                   <button
                     type="button"
-                    class="btn btn-xs rounded-lg font-black uppercase min-h-9"
-                    [ngClass]="radarLooping ? 'btn-accent' : 'btn-ghost border border-base-300'"
-                    (click)="toggleRadarLoop()"
-                    [disabled]="!canLoop"
-                  >{{ radarLooping ? 'Pause' : 'Loop' }}</button>
-                  <input
-                    type="range"
-                    class="range range-xs range-primary flex-1"
-                    min="0"
-                    [max]="Math.max(radarFrames.length - 1, 0)"
-                    [(ngModel)]="radarFrameIndex"
-                    (ngModelChange)="onRadarFrameScrub()"
-                    [disabled]="radarFrames.length < 2"
+                    class="w-full text-left px-2.5 py-2 min-h-10 flex items-center gap-2 hover:bg-white/5 transition-colors"
+                    (click)="radarDeskOpen = true"
+                    title="Expand radar desk"
                   >
-                  <span class="text-[10px] font-bold tabular-nums text-base-content/55 w-14 text-right">{{ radarFrameLabel }}</span>
-                </div>
-                @if (outagePairNote) {
-                  <p class="text-[10px] text-amber-200/80 font-semibold leading-snug">{{ outagePairNote }}</p>
+                    <span class="text-[9px] font-black uppercase tracking-widest text-sky-300/80 shrink-0">Radar</span>
+                    <span class="text-[10px] font-bold text-white/85 truncate flex-1">{{ radarSiteLabel }}</span>
+                    <span class="text-[9px] font-semibold tabular-nums text-base-content/45 shrink-0">{{ radarAgeLabel }}</span>
+                  </button>
+                } @else {
+                  <div class="p-2 space-y-1.5">
+                    <div class="flex items-start justify-between gap-1.5">
+                      <div class="min-w-0">
+                        <div class="text-[9px] font-black uppercase tracking-widest text-sky-300/80">Radar</div>
+                        <div class="text-[11px] font-bold text-white/90 truncate leading-tight">{{ radarSiteLabel }}</div>
+                        <div class="text-[9px] text-base-content/45 font-semibold tabular-nums">{{ radarAgeLabel }}</div>
+                      </div>
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-xs min-h-7 h-7 w-7 p-0 rounded-lg opacity-60 shrink-0"
+                        (click)="radarDeskOpen = false"
+                        aria-label="Collapse radar desk"
+                      >✕</button>
+                    </div>
+                    <div class="flex gap-0.5 flex-wrap">
+                      @for (p of radarProductChoices; track p.id) {
+                        <button
+                          type="button"
+                          class="btn btn-xs rounded-md font-black uppercase tracking-wider min-h-7 h-7 px-1.5 text-[9px]"
+                          [ngClass]="radarProduct === p.id ? 'btn-primary' : 'btn-ghost border border-base-content/15'"
+                          (click)="setRadarProduct(p.id)"
+                          [title]="p.label"
+                        >{{ p.short }}</button>
+                      }
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <button
+                        type="button"
+                        class="btn btn-xs rounded-md font-black uppercase min-h-7 h-7 px-1.5 text-[9px]"
+                        [ngClass]="radarLooping ? 'btn-accent' : 'btn-ghost border border-base-content/15'"
+                        (click)="toggleRadarLoop()"
+                        [disabled]="!canLoop"
+                      >{{ radarLooping ? 'Pause' : 'Loop' }}</button>
+                      <input
+                        type="range"
+                        class="range range-xs range-primary flex-1 h-3"
+                        min="0"
+                        [max]="Math.max(radarFrames.length - 1, 0)"
+                        [(ngModel)]="radarFrameIndex"
+                        (ngModelChange)="onRadarFrameScrub()"
+                        [disabled]="radarFrames.length < 2"
+                      >
+                      <span class="text-[9px] font-bold tabular-nums text-base-content/45 w-10 text-right">{{ radarFrameLabel }}</span>
+                    </div>
+                    @if (outagePairNote) {
+                      <p class="text-[9px] text-amber-200/70 font-semibold leading-snug line-clamp-2">{{ outagePairNote }}</p>
+                    }
+                  </div>
                 }
               </div>
             </div>
           }
 
-          <!-- Desktop layer chips -->
-          <div class="hidden md:flex absolute bottom-4 left-4 right-4 z-[1000] flex-wrap gap-1.5 pointer-events-none">
-            <div class="pointer-events-auto storm-card p-2 flex flex-wrap gap-1.5 max-w-full">
+          <!-- Desktop layer chips (left; leave room for radar desk) -->
+          <div class="hidden md:flex absolute bottom-4 left-4 z-[1000] flex-wrap gap-1.5 pointer-events-none max-w-[calc(100%-16rem)]">
+            <div class="pointer-events-auto rounded-xl border border-base-content/12 bg-base-300/60 backdrop-blur-md p-1.5 flex flex-wrap gap-1 max-w-full">
               <button
                 type="button"
-                class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-9"
-                [ngClass]="ops.impactMode() ? 'btn-warning' : 'btn-ghost border border-base-300'"
+                class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8"
+                [ngClass]="ops.impactMode() ? 'btn-warning' : 'btn-ghost border border-base-content/15'"
                 (click)="toggleImpactMode()"
                 title="Focus warnings, outages, flood, cams"
               >Impact</button>
               @for (chip of layerChips; track chip.key) {
                 <button
                   type="button"
-                  class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-9"
-                  [ngClass]="layers[chip.key] ? 'btn-primary' : 'btn-ghost border border-base-300'"
+                  class="btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8"
+                  [ngClass]="layers[chip.key] ? 'btn-primary' : 'btn-ghost border border-base-content/15'"
                   (click)="toggleLayer(chip.key)"
                 >
                   {{ chip.label }}
                 </button>
               }
-              <div class="w-px bg-base-300 mx-1 self-stretch"></div>
+              <div class="w-px bg-base-content/15 mx-0.5 self-stretch"></div>
               @for (b of baseChips; track b.key) {
                 <button
                   type="button"
-                  class="btn btn-xs rounded-lg font-bold uppercase tracking-wider min-h-9"
-                  [ngClass]="activeBase === b.key ? 'btn-secondary' : 'btn-ghost border border-base-300'"
+                  class="btn btn-xs rounded-lg font-bold uppercase tracking-wider min-h-8 h-8"
+                  [ngClass]="activeBase === b.key ? 'btn-secondary' : 'btn-ghost border border-base-content/15'"
                   (click)="setBase(b.key)"
                 >
                   {{ b.label }}
@@ -393,8 +437,11 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private radarProducts: RadarProductDef[] = [];
 
   searchQuery = '';
+  searchOpen = false;
+  radarDeskOpen = false;
   isSearching = false;
   searchError = '';
+  @ViewChild('searchInput') searchInput?: ElementRef<HTMLInputElement>;
   sheetOpen = false;
   selectedLabel: string | null = null;
   activeBase: BaseKey = 'dark';
@@ -652,6 +699,16 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  openSearch(): void {
+    this.searchOpen = true;
+    setTimeout(() => this.searchInput?.nativeElement?.focus(), 40);
+  }
+
+  closeSearch(): void {
+    this.searchOpen = false;
+    this.searchError = '';
+  }
+
   async performSearch(): Promise<void> {
     if (!this.searchQuery.trim()) return;
     this.isSearching = true;
@@ -666,6 +723,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         const lon = parseFloat(data[0].lon);
         this.updateSearchMarker(lat, lon, data[0].display_name.split(',').slice(0, 3).join(','));
         this.map?.flyTo([lat, lon], 10, { duration: 0.9 });
+        this.closeSearch();
       } else {
         this.searchError = 'Location not found.';
       }
