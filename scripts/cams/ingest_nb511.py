@@ -101,7 +101,7 @@ def run():
     for cam in ATLANTIC_CAMERAS:
         dist_km = round(haversine(CENTER_LAT, CENTER_LNG, cam['lat'], cam['lng']), 1)
         cam['km'] = dist_km
-        cam['stream_type'] = "iframe"
+        cam['stream_type'] = "image"
         cameras.append(cam)
         
     print(f"[Ingest Atlantic] Successfully processed {len(cameras)} Atlantic Canada cameras.")

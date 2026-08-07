@@ -46,7 +46,7 @@
       "region": "New Brunswick Corridor",
       "attribution": "\u00a9 NB 511",
       "km": 36.4,
-      "stream_type": "iframe"
+      "stream_type": "image"
     },
     {
       "id": "nb-grand-falls-rt2",
@@ -59,7 +59,7 @@
       "region": "New Brunswick Corridor",
       "attribution": "\u00a9 NB 511",
       "km": 46.4,
-      "stream_type": "iframe"
+      "stream_type": "image"
     },
     {
       "id": "faa-weathercams-12215",
@@ -113,7 +113,7 @@
       "region": "New Brunswick Corridor",
       "attribution": "\u00a9 NB 511",
       "km": 115.8,
-      "stream_type": "iframe"
+      "stream_type": "image"
     },
     {
       "id": "qc-riviere-du-loup",
@@ -166,7 +166,7 @@
       "region": "New Brunswick Corridor",
       "attribution": "\u00a9 NB 511",
       "km": 179.6,
-      "stream_type": "iframe"
+      "stream_type": "image"
     },
     {
       "id": "qc-carleton-sur-mer",
@@ -260,7 +260,7 @@
       "region": "Prince Edward Island Corridor",
       "attribution": "\u00a9 PEI 511",
       "km": 365.9,
-      "stream_type": "iframe"
+      "stream_type": "image"
     },
     {
       "id": "faa-weathercams-12108",
@@ -315,7 +315,7 @@
       "region": "Nova Scotia Coastal Corridor",
       "attribution": "\u00a9 NS 511",
       "km": 456.1,
-      "stream_type": "iframe"
+      "stream_type": "image"
     },
     {
       "id": "nl-st-johns-harbor",
@@ -328,7 +328,7 @@
       "region": "Newfoundland & Labrador",
       "attribution": "\u00a9 NL 511",
       "km": 1178.7,
-      "stream_type": "iframe"
+      "stream_type": "image"
     }
   ]
 }
