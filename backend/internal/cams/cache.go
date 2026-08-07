@@ -212,7 +212,7 @@ func (c *Cache) loadFallback() []CameraConfig {
 			Group:           "cams",
 			Category:        cam.Category,
 			Attribution:     orDefault(cam.Attribution, "© Public webcam"),
-			SourceURL:       "https://opencctv.org/cameras",
+			SourceURL:       orDefault(cam.Source, cam.FeedURL),
 			URL:             cam.FeedURL,
 			Lat:             cam.Lat,
 			Lng:             cam.Lng,

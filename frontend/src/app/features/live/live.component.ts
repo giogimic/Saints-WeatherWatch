@@ -406,6 +406,15 @@ export interface CameraFeed {
                       >
                         {{ isFavorite(camera.id) ? '★ Favorited' : '☆ Favorite' }}
                       </button>
+                      <a
+                        class="btn btn-xs rounded-lg font-black uppercase text-[10px] min-h-10 btn-ghost border border-base-300"
+                        [href]="camera.sourceUrl || camera.imageUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        (click)="$event.stopPropagation()"
+                      >
+                        View Source
+                      </a>
                     }
                   </div>
                 </div>
