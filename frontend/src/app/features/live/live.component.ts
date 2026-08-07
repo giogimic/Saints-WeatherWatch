@@ -612,11 +612,19 @@ export class LiveComponent implements OnInit, OnDestroy {
       this.loading = false;
       if (list.length) {
         this.loadError = '';
-        this.cameras = list.map(c => ({
-          ...c,
-          type: c.type || 'image',
-          group: c.group || 'cams',
-        }));
+        this.cameras = list.map(c => {
+          const type = c.type === 'iframe' || c.streamType === 'iframe' ? 'iframe' : (c.type || 'image');
+          const group = c.group || 'cams';
+          const cam = {
+            ...c,
+            type,
+            group,
+          };
+          if (type === 'iframe' && cam.embedUrl) {
+            cam.safeEmbedUrl = this.sanitizer.bypassSecurityTrustResourceUrl(cam.embedUrl);
+          }
+          return cam;
+        });
         const requested = this.route.snapshot.queryParamMap.get('cam');
         if (requested) {
           this.openRequestedCam(requested);

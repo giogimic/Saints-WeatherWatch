@@ -45,9 +45,10 @@ type CameraMeta struct {
 	Region         string   `json:"region"`
 	Description    string   `json:"description"`
 	Status         string   `json:"status"`
-	Type           string   `json:"type"` // image
+	Type           string   `json:"type"` // image | iframe
 	Group          string   `json:"group"` // cams | satellite | radar
 	ImageURL       string   `json:"imageUrl"`
+	EmbedURL       string   `json:"embedUrl,omitempty"`
 	Attribution    string   `json:"attribution"`
 	SourceURL      string   `json:"sourceUrl,omitempty"`
 	Lat            float64  `json:"lat,omitempty"`
@@ -572,15 +573,25 @@ func (c *Cache) ListMetaWithAlerts(alerts []AlertRef) []CameraMeta {
 			}
 		}
 
+		camType := "image"
+		if cfg.StreamType == "iframe" {
+			camType = "iframe"
+		}
+		var embedURL string
+		if camType == "iframe" {
+			embedURL = cfg.URL
+		}
+
 		meta := CameraMeta{
 			ID:                cfg.ID,
 			Title:             cfg.Title,
 			Region:            cfg.Region,
 			Description:       cfg.Description,
 			Status:            status,
-			Type:              "image",
+			Type:              camType,
 			Group:             cfg.Group,
 			ImageURL:          "/api/cams/" + cfg.ID,
+			EmbedURL:          embedURL,
 			Attribution:       cfg.Attribution,
 			SourceURL:         cfg.SourceURL,
 			Lat:               cfg.Lat,

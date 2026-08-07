@@ -102,6 +102,17 @@ func (c *Cache) discoverFromOpenCCTV() {
 			refresh = 2 * time.Minute
 		}
 		id := strings.ReplaceAll(cam.ID, "/", "-")
+		
+		streamType := "image"
+		lowerURL := strings.ToLower(cam.FeedURL)
+		if strings.HasPrefix(lowerURL, faaScheme) {
+			streamType = "burst"
+		} else if strings.HasSuffix(lowerURL, ".m3u8") {
+			streamType = "hls"
+		} else if strings.HasSuffix(lowerURL, ".mjpg") || strings.HasSuffix(lowerURL, ".mjpeg") {
+			streamType = "mjpeg"
+		}
+
 		cfg := CameraConfig{
 			ID:              id,
 			Title:           cam.Name,
@@ -116,6 +127,7 @@ func (c *Cache) discoverFromOpenCCTV() {
 			Lng:             cam.Lng,
 			Km:              r.km,
 			RefreshInterval: refresh,
+			StreamType:      streamType,
 		}
 		if strings.HasPrefix(cam.FeedURL, faaScheme) {
 			c.noteFAACamera(strings.TrimPrefix(cam.FeedURL, faaScheme))
