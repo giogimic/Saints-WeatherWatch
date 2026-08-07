@@ -49,7 +49,7 @@ func (c *Cache) discoverFromOpenCCTV() {
 				}
 				seen[cam.ID] = cam
 			}
-			time.Sleep(40 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 		}
 	}
 
@@ -143,25 +143,23 @@ func (c *Cache) discoverFromOpenCCTV() {
 		return
 	}
 
-	// Preserve FKOC if discovery didn't include it and it was in fallback.
-	for _, existing := range c.snapshotConfigs() {
-		if existing.ID == "fkoc-stadium" {
-			found := false
-			for _, p := range picked {
-				if p.ID == "fkoc-stadium" || p.URL == existing.URL {
-					found = true
-					break
-				}
+	// Preserve all fallback cameras if discovery didn't include them.
+	for _, existing := range c.loadFallback() {
+		found := false
+		for _, p := range picked {
+			if p.ID == existing.ID || p.URL == existing.URL {
+				found = true
+				break
 			}
-			if !found {
-				picked = append(picked, existing)
-				sort.Slice(picked, func(i, j int) bool { return picked[i].Km < picked[j].Km })
-				if len(picked) > c.maxCams {
-					picked = picked[:c.maxCams]
-				}
-			}
-			break
 		}
+		if !found {
+			picked = append(picked, existing)
+		}
+	}
+	
+	sort.Slice(picked, func(i, j int) bool { return picked[i].Km < picked[j].Km })
+	if len(picked) > c.maxCams {
+		picked = picked[:c.maxCams]
 	}
 
 	imagery := staticImagery()
