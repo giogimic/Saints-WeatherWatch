@@ -30,24 +30,55 @@ var ZoneCatalog = []ZoneInfo{
 	{ID: ZoneFarm, Name: "Farm", Blurb: "Aroostook farm country — fuel, tires, roadside scrap."},
 }
 
-// Approximate Maine corridor land cover (Phase 3 — match-ish, not satellite).
+// Approximate Maine corridor land cover (Phase 3 — finer GIS polygons).
 // Priority: city pockets → coast strip → farm belt → forest default.
 func ZoneAt(lat, lng float64) ZoneKind {
 	if inCity(lat, lng) {
 		return ZoneCity
 	}
-	// Downeast / eastern coastal fringe within corridor bounds.
-	if lng >= -67.45 && lat <= 45.85 {
+	if coastPolygon.Contains(lat, lng) {
 		return ZoneCoast
 	}
-	if lng >= -67.15 {
-		return ZoneCoast
-	}
-	// Aroostook potato / farm belt (exclude far western highlands).
-	if lat >= 46.15 && lat <= 47.15 && lng >= -68.85 && lng <= -67.55 {
+	if farmPolygon.Contains(lat, lng) {
 		return ZoneFarm
 	}
 	return ZoneForest
+}
+
+type Point struct {
+	Lat float64
+	Lng float64
+}
+
+type Polygon []Point
+
+// Contains uses the Ray-Casting algorithm to check if (lat, lng) is inside the polygon.
+func (p Polygon) Contains(lat, lng float64) bool {
+	inside := false
+	j := len(p) - 1
+	for i := 0; i < len(p); i++ {
+		pi := p[i]
+		pj := p[j]
+		if ((pi.Lng > lng) != (pj.Lng > lng)) &&
+			(lat < (pj.Lat-pi.Lat)*(lng-pi.Lng)/(pj.Lng-pi.Lng)+pi.Lat) {
+			inside = !inside
+		}
+		j = i
+	}
+	return inside
+}
+
+// Downeast / eastern coastal fringe within corridor bounds.
+var coastPolygon = Polygon{
+	{45.2, -66.9}, {44.8, -66.9}, {44.4, -67.8}, {44.2, -68.2},
+	{44.8, -68.4}, {45.2, -67.5}, {45.5, -67.1}, {45.8, -67.1},
+	{45.8, -67.5}, {45.2, -67.8},
+}
+
+// Aroostook potato / farm belt (exclude far western highlands).
+var farmPolygon = Polygon{
+	{47.2, -68.3}, {46.8, -67.7}, {46.2, -67.7}, {46.0, -68.0},
+	{46.2, -68.5}, {46.8, -68.5},
 }
 
 func inCity(lat, lng float64) bool {

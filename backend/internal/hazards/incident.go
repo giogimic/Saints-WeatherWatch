@@ -53,6 +53,7 @@ const (
 )
 
 type nwpsGaugeRef struct {
-	LID   string
-	Label string // optional override
+	LID    string
+	USGSID string
+	Label  string // optional override
 }

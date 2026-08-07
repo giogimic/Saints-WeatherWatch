@@ -28,8 +28,8 @@ const (
 var regionCenter = LatLng{Lat: 47.05, Lng: -68.35}
 
 const (
-	maxKM          = 200.0
-	maxPageCams    = 16
+	maxKM          = 2500.0
+	maxPageCams    = 500
 	defaultRefresh = 60 * time.Second
 )
 
@@ -62,6 +62,14 @@ type CameraMeta struct {
 	CorridorLabel  string   `json:"corridorLabel,omitempty"`
 	NearAlertIDs   []string `json:"nearAlertIds,omitempty"`
 	NearAlertCount int      `json:"nearAlertCount,omitempty"`
+	StreamType        string   `json:"streamType,omitempty"` // image | burst | mjpeg | hls
+	BurstURLs         []string `json:"burstUrls,omitempty"`
+	SupportsEmbedding bool     `json:"supportsEmbedding"`
+	AuthRequired      bool     `json:"authRequired"`
+	WeatherTags       []string `json:"weatherTags,omitempty"`
+	FailoverCamID     string   `json:"failoverCamId,omitempty"`
+	FailoverCamTitle  string   `json:"failoverCamTitle,omitempty"`
+	ProvinceState     string   `json:"provinceState,omitempty"`
 }
 
 type CameraConfig struct {
@@ -78,6 +86,11 @@ type CameraConfig struct {
 	Lng             float64
 	Km              float64
 	RefreshInterval time.Duration
+	StreamType      string // image | burst | mjpeg | hls
+	SupportsEmbedding bool
+	AuthRequired      bool
+	WeatherTags       []string
+	ProvinceState     string
 }
 
 type CachedImage struct {
@@ -109,6 +122,7 @@ type fallbackFile struct {
 		Category      string  `json:"category"`
 		Source        string  `json:"source"`
 		FeedURL       string  `json:"feed_url"`
+		StreamType    string  `json:"stream_type"`
 		UpdateRateMS  int     `json:"update_rate_ms"`
 		Region        string  `json:"region"`
 		Attribution   string  `json:"attribution"`
@@ -121,8 +135,8 @@ type Cache struct {
 	images   map[string]CachedImage
 	runtime  map[string]*camRuntime
 	client   *http.Client
-	faaURLs  map[string]string // cameraId -> current image URI
-	faaSites map[int]struct{}  // nearby FAA siteIds to refresh
+	faaURLs  map[string][]string // cameraId -> current image URIs (burst)
+	faaSites map[int]struct{}    // nearby FAA siteIds to refresh
 	center   LatLng
 	maxKM    float64
 	maxCams  int
@@ -135,7 +149,7 @@ func NewCache() *Cache {
 	c := &Cache{
 		images:   make(map[string]CachedImage),
 		runtime:  make(map[string]*camRuntime),
-		faaURLs:  make(map[string]string),
+		faaURLs:  make(map[string][]string),
 		faaSites: make(map[int]struct{}),
 		pollers:  make(map[string]struct{}),
 		client:   &http.Client{Timeout: 20 * time.Second},
@@ -176,6 +190,19 @@ func (c *Cache) loadFallback() []CameraConfig {
 		if refresh > 5*time.Minute {
 			refresh = 2 * time.Minute
 		}
+		streamType := cam.StreamType
+		if streamType == "" {
+			streamType = "image"
+			lowerURL := strings.ToLower(cam.FeedURL)
+			if strings.HasPrefix(lowerURL, faaScheme) {
+				streamType = "burst"
+			} else if strings.HasSuffix(lowerURL, ".m3u8") {
+				streamType = "hls"
+			} else if strings.HasSuffix(lowerURL, ".mjpg") || strings.HasSuffix(lowerURL, ".mjpeg") {
+				streamType = "mjpeg"
+			}
+		}
+
 		out = append(out, CameraConfig{
 			ID:              cam.ID,
 			Title:           cam.Name,
@@ -190,6 +217,7 @@ func (c *Cache) loadFallback() []CameraConfig {
 			Lng:             cam.Lng,
 			Km:              cam.Km,
 			RefreshInterval: refresh,
+			StreamType:      streamType,
 		})
 		if strings.HasPrefix(cam.FeedURL, faaScheme) {
 			c.noteFAACamera(strings.TrimPrefix(cam.FeedURL, faaScheme))
@@ -211,6 +239,7 @@ func staticImagery() []CameraConfig {
 			SourceURL:       "https://www.star.nesdis.noaa.gov/GOES/",
 			URL:             "https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/ne/GEOCOLOR/latest.jpg",
 			RefreshInterval: 5 * time.Minute,
+			StreamType:      "image",
 		},
 		{
 			ID:              "goes-east-ir",
@@ -223,6 +252,7 @@ func staticImagery() []CameraConfig {
 			SourceURL:       "https://www.star.nesdis.noaa.gov/GOES/",
 			URL:             "https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/ne/13/latest.jpg",
 			RefreshInterval: 5 * time.Minute,
+			StreamType:      "image",
 		},
 		{
 			ID:              "noaa-radar-ne",
@@ -235,6 +265,7 @@ func staticImagery() []CameraConfig {
 			SourceURL:       "https://radar.weather.gov/",
 			URL:             "https://radar.weather.gov/ridge/standard/NORTHEAST_0.gif",
 			RefreshInterval: 3 * time.Minute,
+			StreamType:      "image",
 		},
 	}
 }
@@ -320,6 +351,17 @@ func (c *Cache) snapshotConfigs() []CameraConfig {
 	return out
 }
 
+func (c *Cache) FetchLatest(id string) (CachedImage, error) {
+	c.mu.RLock()
+	img, ok := c.images[id]
+	if ok && len(img.Data) > 0 {
+		c.mu.RUnlock()
+		return img, nil
+	}
+	c.mu.RUnlock()
+	return CachedImage{}, fmt.Errorf("image not found for %s", id)
+}
+
 func (c *Cache) configByID(id string) (CameraConfig, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -336,20 +378,20 @@ func (c *Cache) fetch(cfg CameraConfig) {
 	if strings.HasPrefix(url, faaScheme) {
 		camID := strings.TrimPrefix(url, faaScheme)
 		c.mu.RLock()
-		resolved, ok := c.faaURLs[camID]
+		uris, ok := c.faaURLs[camID]
 		c.mu.RUnlock()
-		if !ok || resolved == "" {
+		if !ok || len(uris) == 0 {
 			c.refreshFAA()
 			c.mu.RLock()
-			resolved, ok = c.faaURLs[camID]
+			uris, ok = c.faaURLs[camID]
 			c.mu.RUnlock()
-			if !ok || resolved == "" {
+			if !ok || len(uris) == 0 {
 				log.Printf("[Cams] FAA camera %s not resolved yet", camID)
 				c.noteFetchFail(cfg.ID, "faa unresolved")
 				return
 			}
 		}
-		url = resolved
+		url = uris[0]
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -455,20 +497,37 @@ func (c *Cache) ListMeta() []CameraMeta {
 func (c *Cache) ListMetaWithAlerts(alerts []AlertRef) []CameraMeta {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	now := time.Now()
+
 	out := make([]CameraMeta, 0, len(c.configs))
 	for _, cfg := range c.configs {
-		img, hasImg := c.images[cfg.ID]
-		fails := 0
-		if rt := c.runtime[cfg.ID]; rt != nil {
-			fails = rt.ConsecutiveFails
+		img := c.images[cfg.ID]
+		hasImg := len(img.Data) > 0
+		rt := c.runtime[cfg.ID]
+		health := HealthPending
+		if hasImg {
+			health = HealthOK
+			if time.Since(img.LastUpdated) > 3*cfg.RefreshInterval {
+				health = HealthStale
+			}
+			if img.BlackFrame {
+				health = HealthBlack
+			}
 		}
-		black := hasImg && img.BlackFrame
-		health, ageSec := classifyHealth(cfg.Group, hasImg, img.LastUpdated, black, fails, now)
-		status := "LIVE"
+		if rt != nil && rt.ConsecutiveFails > 2 {
+			health = HealthError
+		}
+
+		// Calculate age in seconds for cache-busting hints
+		ageSec := int(time.Since(img.LastUpdated).Seconds())
+		if ageSec < 0 {
+			ageSec = 0
+		}
+		black := img.BlackFrame
+
+		status := "OK"
 		switch health {
 		case HealthPending:
-			status = "PENDING"
+			status = "WAIT"
 		case HealthBlack:
 			status = "BLACK"
 		case HealthStale:
@@ -477,27 +536,95 @@ func (c *Cache) ListMetaWithAlerts(alerts []AlertRef) []CameraMeta {
 			status = "ERROR"
 		}
 		corrID, corrLabel := AssignCorridor(cfg.Lat, cfg.Lng)
-		meta := CameraMeta{
-			ID:            cfg.ID,
-			Title:         cfg.Title,
-			Region:        cfg.Region,
-			Description:   cfg.Description,
-			Status:        status,
-			Type:          "image",
-			Group:         cfg.Group,
-			ImageURL:      "/api/cams/" + cfg.ID,
-			Attribution:   cfg.Attribution,
-			SourceURL:     cfg.SourceURL,
-			Lat:           cfg.Lat,
-			Lng:           cfg.Lng,
-			Km:            cfg.Km,
-			Category:      cfg.Category,
-			Health:        health,
-			AgeSec:        ageSec,
-			BlackFrame:    black,
-			CorridorID:    corrID,
-			CorridorLabel: corrLabel,
+		
+		var burstURLs []string
+		if cfg.StreamType == "burst" && strings.HasPrefix(cfg.URL, faaScheme) {
+			camID := strings.TrimPrefix(cfg.URL, faaScheme)
+			if uris, ok := c.faaURLs[camID]; ok && len(uris) > 0 {
+				burstURLs = uris
+				// If we have burst URLs, then it's effectively "OK" and has an image
+				if health == HealthPending {
+					health = HealthOK
+					status = "OK"
+				}
+			}
 		}
+
+		tags := cfg.WeatherTags
+		if len(tags) == 0 {
+			tags = []string{cfg.Category, "visibility", "regional-surveillance"}
+		}
+
+		provState := cfg.ProvinceState
+		if provState == "" {
+			if strings.Contains(cfg.Region, "Maine") {
+				provState = "ME"
+			} else if strings.Contains(cfg.Region, "Québec") || strings.Contains(cfg.Region, "Quebec") {
+				provState = "QC"
+			} else if strings.Contains(cfg.Region, "Brunswick") {
+				provState = "NB"
+			} else if strings.Contains(cfg.Region, "Nova Scotia") {
+				provState = "NS"
+			} else if strings.Contains(cfg.Region, "Island") {
+				provState = "PE"
+			} else if strings.Contains(cfg.Region, "Newfoundland") {
+				provState = "NL"
+			}
+		}
+
+		meta := CameraMeta{
+			ID:                cfg.ID,
+			Title:             cfg.Title,
+			Region:            cfg.Region,
+			Description:       cfg.Description,
+			Status:            status,
+			Type:              "image",
+			Group:             cfg.Group,
+			ImageURL:          "/api/cams/" + cfg.ID,
+			Attribution:       cfg.Attribution,
+			SourceURL:         cfg.SourceURL,
+			Lat:               cfg.Lat,
+			Lng:               cfg.Lng,
+			Km:                cfg.Km,
+			Category:          cfg.Category,
+			Health:            health,
+			AgeSec:            ageSec,
+			BlackFrame:        black,
+			CorridorID:        corrID,
+			CorridorLabel:     corrLabel,
+			StreamType:        cfg.StreamType,
+			BurstURLs:         burstURLs,
+			SupportsEmbedding: true,
+			AuthRequired:      false,
+			WeatherTags:       tags,
+			ProvinceState:     provState,
+		}
+
+		// Automatic Failover: if primary camera is unhealthy (Error or Black), find nearest working camera
+		if health == HealthError || health == HealthBlack {
+			var bestDist = 999999.0
+			var bestID = ""
+			var bestTitle = ""
+			for _, other := range c.configs {
+				if other.ID == cfg.ID {
+					continue
+				}
+				otherImg := c.images[other.ID]
+				if len(otherImg.Data) > 0 && !otherImg.BlackFrame {
+					dist := haversineKM(LatLng{Lat: cfg.Lat, Lng: cfg.Lng}, LatLng{Lat: other.Lat, Lng: other.Lng})
+					if dist < bestDist {
+						bestDist = dist
+						bestID = other.ID
+						bestTitle = other.Title
+					}
+				}
+			}
+			if bestID != "" {
+				meta.FailoverCamID = bestID
+				meta.FailoverCamTitle = fmt.Sprintf("%s (%.1f km away)", bestTitle, bestDist)
+			}
+		}
+
 		if hasImg {
 			meta.LastUpdated = img.LastUpdated.UTC().Format(time.RFC3339)
 		}

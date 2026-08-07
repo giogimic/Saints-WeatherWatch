@@ -315,6 +315,14 @@ export interface CameraFeedDto {
   corridorLabel?: string;
   nearAlertIds?: string[];
   nearAlertCount?: number;
+  streamType?: string; // image | burst | mjpeg | hls
+  burstUrls?: string[];
+  supportsEmbedding?: boolean;
+  authRequired?: boolean;
+  weatherTags?: string[];
+  failoverCamId?: string;
+  failoverCamTitle?: string;
+  provinceState?: string;
 }
 
 @Injectable({
@@ -588,6 +596,12 @@ export class WeatherService {
       deskScore?: DeskScore;
     }>(`/api/watched-areas/${id}/expand`).pipe(
       catchError(() => of({ area: null as any, alerts: [], count: 0 })),
+    );
+  }
+
+  getHealth(): Observable<{ status: string; time?: string } | null> {
+    return this.http.get<{ status: string; time?: string }>('/api/health').pipe(
+      catchError(() => of(null)),
     );
   }
 

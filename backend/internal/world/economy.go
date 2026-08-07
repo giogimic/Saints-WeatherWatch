@@ -46,6 +46,9 @@ var itemValues = map[string]int{
 	"lightning_chip":  22,
 	"mesocyclone_coin": 60,
 	"chase_medal":     60,
+	// Phase 5 — deployable gear
+	"solar_probe":      85,
+	"weather_station":  200,
 }
 
 // VendorStock is what the Storm Market NPC sells (infinite stock).

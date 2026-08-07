@@ -65,6 +65,18 @@ export const routes: Routes = [
     title: 'Archive — Saints Weather Watch',
   },
   {
+    path: 'data-sources',
+    loadComponent: () =>
+      import('./features/data-sources/data-sources.component').then((m) => m.DataSourcesComponent),
+    title: 'Data Sources — Saints Weather Watch',
+  },
+  {
+    path: 'status',
+    loadComponent: () =>
+      import('./features/status/status.component').then((m) => m.StatusComponent),
+    title: 'System Status — Saints Weather Watch',
+  },
+  {
     path: 'legal',
     loadComponent: () =>
       import('./features/legal/legal.component').then((m) => m.LegalComponent),

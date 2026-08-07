@@ -16,6 +16,39 @@ export interface WorldItem {
   price?: number;
 }
 
+export interface DeployableView {
+  id: string;
+  userId: string;
+  kind: string;
+  kindName: string;
+  label: string;
+  lat: number;
+  lng: number;
+  health: number;
+  fuel: number;
+  public: boolean;
+  yieldKey: string;
+  yieldStored: number;
+  placedAt: string;
+  expiresAt: string;
+}
+
+export interface DeployKind {
+  key: string;
+  name: string;
+  blurb: string;
+  lifetimeH: number;
+  fuelDrainPH: number;
+  healthDecayPH: number;
+  yieldKey: string;
+  yieldPerTick: number;
+  bonusKey?: string;
+  bonusTick?: number;
+  consumeItems: { key: string; qty: number }[];
+  minLevel: number;
+  value: number;
+}
+
 export interface WorldRecipe {
   id: string;
   name: string;
@@ -94,6 +127,8 @@ export interface WorldEnvelope {
   chat?: WorldChatLine;
   chats?: WorldChatLine[];
   research?: WorldResearchStatus;
+  deployables?: DeployableView[];
+  deployable?: DeployableView;
 }
 
 export interface WorldResearchStatus {
@@ -150,6 +185,8 @@ export class WorldService {
   readonly lastBag = signal<{ seq: number; itemKey: string; dropId?: string } | null>(null);
   /** Phase 4 — weather-linked research HUD. */
   readonly research = signal<WorldResearchStatus | null>(null);
+  readonly deployables = signal<DeployableView[]>([]);
+
 
   private socket?: WebSocket;
   private intentionalClose = true; // idle until Play explicitly connects
@@ -251,6 +288,55 @@ export class WorldService {
     );
   }
 
+  getMyDeployables(): Observable<DeployableView[]> {
+    return this.http.get<DeployableView[]>('/api/world/deployables').pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  getNearbyDeployables(lat: number, lng: number, radius = 2.5): Observable<DeployableView[]> {
+    return this.http.get<DeployableView[]>(`/api/world/deployables/nearby?lat=${lat}&lng=${lng}&radius=${radius}`).pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  getDeployKinds(): Observable<DeployKind[]> {
+    return this.http.get<DeployKind[]>('/api/world/deployables/kinds').pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  placeDeployable(body: { kind: string; label: string; lat: number; lng: number; public: boolean }): Observable<DeployableView | null> {
+    return this.http.post<DeployableView>('/api/world/deployables', body).pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  collectDeployable(id: string): Observable<{ ok: boolean; deployable: DeployableView; collectedQty: number; inventory: WorldItem[] } | null> {
+    return this.http.post<{ ok: boolean; deployable: DeployableView; collectedQty: number; inventory: WorldItem[] }>(`/api/world/deployables/${id}/collect`, {}).pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  refuelDeployable(id: string): Observable<DeployableView | null> {
+    return this.http.post<DeployableView>(`/api/world/deployables/${id}/refuel`, {}).pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  repairDeployable(id: string): Observable<DeployableView | null> {
+    return this.http.post<DeployableView>(`/api/world/deployables/${id}/repair`, {}).pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  removeDeployable(id: string): Observable<boolean> {
+    return this.http.delete<{ ok: boolean }>(`/api/world/deployables/${id}`).pipe(
+      map(() => true),
+      catchError(() => of(false))
+    );
+  }
+
   cancelTrade(id: string): Observable<boolean> {
     return this.http.delete(`/api/world/trades/${id}`, { observe: 'response' }).pipe(
       map(res => res.status >= 200 && res.status < 300),
@@ -295,6 +381,7 @@ export class WorldService {
     this.lobbyName.set('');
     this.socketLobby = '';
     this.research.set(null);
+    this.deployables.set([]);
   }
 
   sendMove(lat: number, lng: number): void {
@@ -322,6 +409,26 @@ export class WorldService {
     const t = text.trim();
     if (!t) return;
     this.send({ type: 'chat', text: t.slice(0, 140) });
+  }
+
+  sendDeployPlace(kind: string, label: string, lat: number, lng: number, isPublic: boolean): void {
+    this.send({ type: 'deploy_place', kind, label, lat, lng, public: isPublic });
+  }
+
+  sendDeployCollect(deployableId: string): void {
+    this.send({ type: 'deploy_collect', deployableId });
+  }
+
+  sendDeployRefuel(deployableId: string): void {
+    this.send({ type: 'deploy_refuel', deployableId });
+  }
+
+  sendDeployRepair(deployableId: string): void {
+    this.send({ type: 'deploy_repair', deployableId });
+  }
+
+  sendDeployRemove(deployableId: string): void {
+    this.send({ type: 'deploy_remove', deployableId });
   }
 
   private bindVisibility(): void {
@@ -466,6 +573,22 @@ export class WorldService {
         this.bagSeq += 1;
         this.lastBag.set({ seq: this.bagSeq, itemKey: env.itemKey, dropId: env.dropId });
       }
+    }
+    if (env.type === 'snapshot' && env.deployables) {
+      this.deployables.set(env.deployables);
+    }
+    if (env.type === 'deploy_placed' && env.deployable) {
+      const placed = env.deployable;
+      this.deployables.update(list => {
+        if (list.some(x => x.id === placed.id)) return list;
+        return [...list, placed];
+      });
+    }
+    if (env.type === 'deploy_removed') {
+      // Re-fetch nearby deployables since removed event does not send deleted ID in Phase 1-5 envelope directly
+      this.getNearbyDeployables(this.lastLat, this.lastLng).subscribe(list => {
+        this.deployables.set(list);
+      });
     }
   }
 

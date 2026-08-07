@@ -34,6 +34,7 @@ model User {
   watchedAreas         WatchedArea[]
   savedLocations       SavedLocation[]
   dashboardPreference  DashboardPreference?
+  deployables          Deployable[]
 
   @@index([createdAt])
   @@index([level])
@@ -135,6 +136,31 @@ model TradeListing {
 
   @@index([status, createdAt])
   @@index([sellerId])
+}
+
+/// Phase 5 — player-placed world entities (probes, stations).
+/// Power / upkeep / collect-later loop. Co-op: public flag lets others collect.
+model Deployable {
+  id          String   @id @default(cuid())
+  userId      String
+  kind        String   // basic_probe | solar_probe | weather_station
+  label       String   @default("")
+  lat         Float
+  lng         Float
+  health      Int      @default(100)  // 0–100, decays over time
+  fuel        Int      @default(100)  // 0–100, drains each tick
+  public      Boolean  @default(false) // co-op: others can collect
+  yieldKey    String   @default("research_sample")
+  yieldStored Int      @default(0)     // accumulated yield ready to collect
+  lastCollect DateTime @default(now())
+  placedAt    DateTime @default(now())
+  expiresAt   DateTime // decay deadline
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([lat, lng])
+  @@index([expiresAt])
 }
 
 model FavoriteCamera {

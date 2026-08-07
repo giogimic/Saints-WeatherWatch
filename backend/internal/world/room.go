@@ -21,6 +21,7 @@ import (
 	"github.com/saints-weatherwatch/backend/internal/loot"
 	"github.com/saints-weatherwatch/backend/internal/nws"
 	"github.com/saints-weatherwatch/backend/internal/progress"
+	"github.com/saints-weatherwatch/backend/internal/radar"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 )
@@ -96,6 +97,9 @@ var ItemCatalog = []ItemDef{
 	{Key: "solar_pack", Name: "Solar Pack", Blurb: "Top-up juice for sensors.", Rarity: "uncommon", Kind: "gear", XP: 0},
 	{Key: "storm_photo", Name: "Storm Photo", Blurb: "Shelf cloud snapshot.", Rarity: "uncommon", Kind: "trophy", XP: 10},
 	{Key: "radar_core", Name: "Radar Core Ping", Blurb: "A bright blob on the scope.", Rarity: "common", Kind: "trophy", XP: 5},
+	// Phase 5 — deployable gear
+	{Key: "solar_probe", Name: "Solar Probe", Blurb: "Self-powered field sensor.", Rarity: "rare", Kind: "gear", XP: 0},
+	{Key: "weather_station", Name: "Weather Station", Blurb: "Full deployable station.", Rarity: "rare", Kind: "gear", XP: 0},
 }
 
 var Recipes = []Recipe{
@@ -128,6 +132,17 @@ var Recipes = []Recipe{
 		ID: "craft_solar_pack", Name: "Solar Pack", Blurb: "Keep probes topped up.",
 		Inputs: []StackNeed{{Key: "solar_cell", Qty: 2}, {Key: "wiring", Qty: 1}, {Key: "aluminum", Qty: 1}},
 		Output: StackNeed{Key: "solar_pack", Qty: 1}, MinLevel: 2,
+	},
+	// Phase 5 — deployable crafting
+	{
+		ID: "craft_solar_probe", Name: "Solar Probe", Blurb: "Craft a self-powered field sensor.",
+		Inputs: []StackNeed{{Key: "basic_probe", Qty: 1}, {Key: "solar_pack", Qty: 1}},
+		Output: StackNeed{Key: "solar_probe", Qty: 1}, MinLevel: 3,
+	},
+	{
+		ID: "craft_weather_station", Name: "Weather Station", Blurb: "Craft a full deployable station.",
+		Inputs: []StackNeed{{Key: "basic_probe", Qty: 2}, {Key: "solar_pack", Qty: 1}, {Key: "advanced_sensor", Qty: 1}},
+		Output: StackNeed{Key: "weather_station", Qty: 1}, MinLevel: 5,
 	},
 }
 
@@ -265,6 +280,9 @@ type Envelope struct {
 	Chat      *ChatLine        `json:"chat,omitempty"`
 	Chats     []ChatLine       `json:"chats,omitempty"`
 	Research  *ResearchStatus  `json:"research,omitempty"`
+	// Phase 5 — deployables
+	Deployables []DeployableView `json:"deployables,omitempty"`
+	Deployable  *DeployableView  `json:"deployable,omitempty"`
 }
 
 type ChatLine struct {
@@ -282,6 +300,11 @@ type clientMsg struct {
 	DropID  string  `json:"dropId"`
 	EventID string  `json:"eventId"`
 	Text    string  `json:"text"`
+	// Phase 5 — deployable actions
+	DeployableID string `json:"deployableId"`
+	Kind         string `json:"kind"`
+	Label        string `json:"label"`
+	Public       bool   `json:"public"`
 }
 
 type client struct {
@@ -314,6 +337,7 @@ type Room struct {
 	maxPlayers int
 	st         *store.Store
 	nws        *nws.Cache
+	radar      *radar.Cache
 	mu         sync.Mutex
 	running    bool
 	clients    map[*client]struct{}
@@ -423,10 +447,12 @@ func (r *Room) Run(done <-chan struct{}) {
 	eventTick := time.NewTicker(EventEvery)
 	presenceTick := time.NewTicker(PresenceTick)
 	researchTick := time.NewTicker(ResearchTickEvery)
+	deployableTick := time.NewTicker(DeployTickEvery)
 	defer dropTick.Stop()
 	defer eventTick.Stop()
 	defer presenceTick.Stop()
 	defer researchTick.Stop()
+	defer deployableTick.Stop()
 	r.mu.Lock()
 	r.ensureDropsLocked(22)
 	r.mu.Unlock()
@@ -469,6 +495,10 @@ func (r *Room) Run(done <-chan struct{}) {
 			r.maybeSpawnEvent()
 		case <-researchTick.C:
 			r.tickResearch()
+		case <-deployableTick.C:
+			if r.st != nil {
+				TickDeployables(r.st, context.Background(), r.nws)
+			}
 		}
 	}
 }
@@ -630,6 +660,17 @@ func (c *client) readPump() {
 			c.room.handleEventPlace(c, msg.EventID, msg.Lat, msg.Lng)
 		case "chat":
 			c.room.handleChat(c, msg.Text)
+		// Phase 5 — deployable WS actions
+		case "deploy_place":
+			c.room.handleDeployPlace(c, msg.Kind, msg.Label, msg.Lat, msg.Lng, msg.Public)
+		case "deploy_collect":
+			c.room.handleDeployCollect(c, msg.DeployableID)
+		case "deploy_refuel":
+			c.room.handleDeployRefuel(c, msg.DeployableID)
+		case "deploy_repair":
+			c.room.handleDeployRepair(c, msg.DeployableID)
+		case "deploy_remove":
+			c.room.handleDeployRemove(c, msg.DeployableID)
 		}
 	}
 }
@@ -925,9 +966,15 @@ func (r *Room) sendSnapshot(c *client) {
 	chats := append([]ChatLine(nil), r.chatLog...)
 	you := Player{UserID: c.userID, ChaserName: c.name, VehicleKey: c.veh, Lat: c.lat, Lng: c.lng, UpdatedAt: time.Now().Unix()}
 	r.mu.Unlock()
+	// Phase 5: include nearby deployables in the snapshot
+	var deployables []DeployableView
+	if r.st != nil {
+		deployables = ListNearbyDeployables(r.st, context.Background(), c.lat, c.lng, 2.0)
+	}
 	env := Envelope{
 		Type: "snapshot", Players: players, Drops: drops, Event: ev, You: &you,
 		LobbyID: r.id, LobbyName: r.name, Chats: chats,
+		Deployables: deployables,
 	}
 	if players == nil {
 		env.Players = []Player{}
@@ -1108,6 +1155,73 @@ func StackCount(st *store.Store, ctx context.Context, userID, key string) int {
 		return 0
 	}
 	return row.Count
+}
+
+// ── Phase 5 — deploy WS handlers ────────────────────────────────────────────
+
+func (r *Room) handleDeployPlace(c *client, kind, label string, lat, lng float64, public bool) {
+	if c.userID == "" || r.st == nil || kind == "" {
+		return
+	}
+	v, err := PlaceDeployable(r.st, context.Background(), c.userID, kind, label, lat, lng, public)
+	if err != nil {
+		r.toast(c, "Deploy failed: "+err.Error())
+		return
+	}
+	r.toast(c, "Deployed "+v.KindName+"!")
+	r.publish(Envelope{Type: "deploy_placed", Deployable: v, Players: []Player{}})
+}
+
+func (r *Room) handleDeployCollect(c *client, deployableID string) {
+	if c.userID == "" || r.st == nil || deployableID == "" {
+		return
+	}
+	v, qty, err := CollectDeployable(r.st, context.Background(), c.userID, deployableID)
+	if err != nil {
+		r.toast(c, "Collect failed: "+err.Error())
+		return
+	}
+	if qty > 0 {
+		r.toast(c, "Collected "+string(rune('0'+qty))+" "+v.YieldKey+"!")
+	} else {
+		r.toast(c, "Nothing to collect yet.")
+	}
+}
+
+func (r *Room) handleDeployRefuel(c *client, deployableID string) {
+	if c.userID == "" || r.st == nil || deployableID == "" {
+		return
+	}
+	v, err := RefuelDeployable(r.st, context.Background(), c.userID, deployableID)
+	if err != nil {
+		r.toast(c, "Refuel failed: "+err.Error())
+		return
+	}
+	r.toast(c, v.KindName+" refueled!")
+}
+
+func (r *Room) handleDeployRepair(c *client, deployableID string) {
+	if c.userID == "" || r.st == nil || deployableID == "" {
+		return
+	}
+	v, err := RepairDeployable(r.st, context.Background(), c.userID, deployableID)
+	if err != nil {
+		r.toast(c, "Repair failed: "+err.Error())
+		return
+	}
+	r.toast(c, v.KindName+" repaired!")
+}
+
+func (r *Room) handleDeployRemove(c *client, deployableID string) {
+	if c.userID == "" || r.st == nil || deployableID == "" {
+		return
+	}
+	if err := RemoveDeployable(r.st, context.Background(), c.userID, deployableID); err != nil {
+		r.toast(c, "Remove failed: "+err.Error())
+		return
+	}
+	r.toast(c, "Deployable recovered + salvaged.")
+	r.publish(Envelope{Type: "deploy_removed", Players: []Player{}})
 }
 
 var errUnknownItem = errString("unknown item")

@@ -133,23 +133,35 @@ import { TradeListing, ResearchLogEntry, WorldItem, WorldRecipe, WorldService } 
             </ul>
           </article>
 
-          <article class="storm-card p-4 space-y-3">
+          <article class="storm-card p-4 space-y-3 flex flex-col">
             <h2 class="text-xs font-black uppercase tracking-widest text-sky-300">Research log</h2>
             <p class="text-[10px] text-base-content/50 font-semibold leading-relaxed">
               {{ researchNote || 'SIM grants from time-on-station near live NWS cells. Official severity is never changed.' }}
             </p>
-            <ul class="space-y-2 max-h-72 overflow-y-auto">
-              @for (row of researchLog; track row.id) {
-                <li class="border border-base-300/40 rounded-xl px-3 py-2 text-sm">
-                  <div class="font-black text-white text-xs uppercase tracking-wider">
-                    {{ row.severity || 'Alert' }}
-                    <span class="text-base-content/40 font-bold normal-case">· {{ row.createdAt | date:'short' }}</span>
+            <div class="flex gap-2 mb-2">
+              <input type="text" [(ngModel)]="searchQuery" placeholder="Search area or headline..." class="input input-sm input-bordered w-full text-xs" />
+              <select [(ngModel)]="severityFilter" class="select select-sm select-bordered text-xs">
+                <option value="">All Severities</option>
+                <option value="Extreme">Extreme</option>
+                <option value="Severe">Severe</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Minor">Minor</option>
+              </select>
+            </div>
+            <ul class="space-y-2 max-h-[22rem] overflow-y-auto">
+              @for (row of filteredResearchLog(); track row.id) {
+                <li class="border border-base-300/40 bg-base-300/20 rounded-xl px-3 py-2 text-sm">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="badge badge-sm uppercase font-black tracking-wider text-[9px]" [ngClass]="severityBadge(row.severity)">
+                      {{ row.severity || 'Alert' }}
+                    </span>
+                    <span class="text-base-content/40 font-bold text-xs">· {{ row.createdAt | date:'short' }}</span>
                   </div>
-                  <div class="font-semibold text-white/90 truncate">{{ row.headline }}</div>
-                  <div class="text-[10px] text-base-content/45 font-bold truncate">{{ row.area }} · +{{ row.qty }} {{ itemLabel(row.itemKey) }}</div>
+                  <div class="font-semibold text-white/90 truncate text-xs">{{ row.headline }}</div>
+                  <div class="text-[10px] text-base-content/50 font-bold truncate mt-0.5">{{ row.area }} · +{{ row.qty }} {{ itemLabel(row.itemKey) }}</div>
                 </li>
               } @empty {
-                <li class="text-xs text-base-content/50 font-semibold">No samples yet — hold near an active alert in Storm World.</li>
+                <li class="text-xs text-base-content/50 font-semibold">No samples match your filters or none collected yet.</li>
               }
             </ul>
           </article>
@@ -168,6 +180,28 @@ export class TradeCenterComponent implements OnInit {
   trades: TradeListing[] = [];
   researchLog: ResearchLogEntry[] = [];
   researchNote = '';
+  searchQuery = '';
+  severityFilter = '';
+
+  filteredResearchLog(): ResearchLogEntry[] {
+    return this.researchLog.filter(r => {
+      if (this.severityFilter && r.severity !== this.severityFilter) return false;
+      if (this.searchQuery) {
+        const q = this.searchQuery.toLowerCase();
+        if (!r.headline.toLowerCase().includes(q) && !r.area.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  severityBadge(sev: string): string {
+    const s = sev?.toLowerCase() || '';
+    if (s === 'extreme') return 'badge-error text-white';
+    if (s === 'severe') return 'badge-warning text-yellow-950';
+    if (s === 'moderate') return 'badge-info text-blue-950';
+    if (s === 'minor') return 'badge-success text-green-950';
+    return 'badge-ghost';
+  }
   offerKey = '';
   offerQty = 1;
   askKey = 'battery';

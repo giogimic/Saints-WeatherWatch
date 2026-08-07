@@ -61,7 +61,8 @@ func main() {
 	worldHub := world.NewHub(st, cfg.AllowedOrigins)
 
 	nwsCache := nws.NewCache(st)
-	worldHub.AttachAlerts(nwsCache)
+	radarCache := radar.NewCache(cfg.UserAgent)
+	worldHub.AttachAlerts(nwsCache, radarCache)
 	go worldHub.Run(bgCtx.Done())
 
 	nwsCache.OnUpdate(func(live nws.AlertsResponse, newAlerts []nws.Alert) {
@@ -84,7 +85,7 @@ func main() {
 	outageCache := outages.NewCache(cfg.UserAgent, st)
 	outageCache.Start(bgCtx, 5*time.Minute)
 
-	radarCache := radar.NewCache(cfg.UserAgent)
+	// radarCache already initialized above
 
 	hazardCache := hazards.NewCache(cfg.UserAgent)
 	hazardCache.Start(bgCtx, 10*time.Minute)

@@ -1,0 +1,150 @@
+<div class="max-w-5xl mx-auto px-4 py-8 pb-32 space-y-6">
+  <!-- Top Banner -->
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-base-300 pb-4">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="text-3xl">📡</span>
+        <h1 class="text-3xl md:text-4xl font-black text-white italic uppercase tracking-wider">System Status & Data Feeds</h1>
+      </div>
+      <p class="text-xs text-base-content/60 font-semibold">
+        Real-time operational health, connection status, and ingestion freshness for Saints Weather Watch.
+      </p>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="badge badge-success gap-2 p-3 font-black text-xs uppercase shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+        Data Sources Online: {{ onlineCount }} / {{ totalCount }}
+      </div>
+
+      <button 
+        type="button" 
+        class="btn btn-sm btn-outline btn-primary font-black uppercase text-xs rounded-xl gap-2"
+        [class.loading]="checking"
+        (click)="refreshStatus()"
+      >
+        <span>🔄</span> Refresh Status
+      </button>
+    </div>
+  </div>
+
+  <!-- Overall Status Card -->
+  <div class="storm-card p-6 border-l-4" [ngClass]="ops.wsConnected() && serverHealth ? 'border-l-success' : 'border-l-warning'">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div class="relative">
+          <span class="w-5 h-5 rounded-full inline-block" [ngClass]="ops.wsConnected() && serverHealth ? 'bg-success' : 'bg-warning'"></span>
+          <span class="w-5 h-5 rounded-full inline-block absolute inset-0 animate-ping opacity-75" [ngClass]="ops.wsConnected() && serverHealth ? 'bg-success' : 'bg-warning'"></span>
+        </div>
+        <div>
+          <h2 class="text-xl font-black text-white uppercase tracking-wide">
+            {{ ops.wsConnected() && serverHealth ? 'All Core Telemetry Networks Operational' : 'Partial / Fallback Connectivity' }}
+          </h2>
+          <p class="text-xs text-base-content/70 mt-0.5">
+            {{ ops.wsConnected() ? 'Direct WebSocket push active' : 'HTTP polling fallback active' }}
+            <span *ngIf="serverLatency != null">· Gateway Latency {{ serverLatency }}ms</span>
+            · Last sync: {{ lastCheckTime }}
+          </p>
+        </div>
+      </div>
+
+      <a routerLink="/data-sources" class="btn btn-xs btn-ghost border border-base-300 font-bold uppercase text-[10px]">
+        View Data Sources & Limits →
+      </a>
+    </div>
+  </div>
+
+  <!-- Regional Ingestion Coverage Highlight -->
+  <div class="storm-card p-5 bg-base-200/50 border border-primary/20 space-y-3">
+    <h3 class="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
+      <span>📍</span> Regional Situational Awareness Focus: Northern Maine (Wallagrass & Aroostook), Québec & Atlantic Canada
+    </h3>
+    <div class="grid gap-3 text-xs sm:grid-cols-3">
+      <div class="bg-base-300/40 p-3 rounded-xl border border-base-300">
+        <div class="font-bold text-white mb-1">Wallagrass & Aroostook Outages</div>
+        <p class="text-base-content/60 text-[11px] leading-relaxed">
+          Hybrid ODIN ingestion + CMP Direct ArcGIS + direct Versant Power & EMEC outage link integration.
+        </p>
+      </div>
+      <div class="bg-base-300/40 p-3 rounded-xl border border-base-300">
+        <div class="font-bold text-white mb-1">Québec & Atlantic Canada Alerts</div>
+        <p class="text-base-content/60 text-[11px] leading-relaxed">
+          Environment Canada Atom/RSS feeds active for QC, NB, NS, PE, and NL with English & French alert parsing.
+        </p>
+      </div>
+      <div class="bg-base-300/40 p-3 rounded-xl border border-base-300">
+        <div class="font-bold text-white mb-1">Transnational Radar & Cams</div>
+        <p class="text-base-content/60 text-[11px] leading-relaxed">
+          IEM RIDGE (CBW Caribou) + MSC GeoMet Canada composite radar + FAA, NB 511 & MaineDOT traffic cams.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feed Matrix -->
+  <div class="space-y-3">
+    <div class="flex items-center justify-between">
+      <h3 class="text-sm font-black uppercase tracking-widest text-base-content/70">Subsystem Telemetry Matrix</h3>
+      <span class="text-[11px] font-semibold text-base-content/50">Click any channel to inspect sub-provider channels</span>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+      <div 
+        *ngFor="let feed of feeds" 
+        class="storm-card p-4 flex flex-col justify-between border-l-4 transition-all cursor-pointer hover:border-primary/50"
+        [ngClass]="{
+          'border-l-success': feed.status === 'operational',
+          'border-l-warning': feed.status === 'degraded',
+          'border-l-error': feed.status === 'error',
+          'border-l-info': feed.status === 'checking'
+        }"
+        (click)="toggleExpand(feed.id)"
+      >
+        <div>
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div class="flex items-center gap-2">
+              <h4 class="font-black text-white text-sm tracking-wide">{{ feed.name }}</h4>
+              <span class="text-xs text-base-content/40">{{ expandedFeedId === feed.id ? '▲' : '▼' }}</span>
+            </div>
+            <span 
+              class="badge badge-xs font-black uppercase tracking-wider py-1.5 px-2"
+              [ngClass]="{
+                'badge-success text-black': feed.status === 'operational',
+                'badge-warning text-black': feed.status === 'degraded',
+                'badge-error text-white': feed.status === 'error',
+                'badge-info text-black': feed.status === 'checking'
+              }"
+            >
+              {{ feed.status }}
+            </span>
+          </div>
+
+          <p class="text-xs text-base-content/80 font-medium mb-3">
+            {{ feed.note }}
+          </p>
+
+          <!-- Expandable Sub-provider Details -->
+          <div *ngIf="expandedFeedId === feed.id" class="mt-3 pt-3 border-t border-base-300/60 space-y-2 bg-base-300/20 p-3 rounded-lg">
+            <div class="text-[11px] font-black uppercase tracking-wider text-accent mb-2">Sub-Provider Channels & Health Check</div>
+            <div *ngFor="let sub of feed.subItems" class="flex items-center justify-between text-xs py-1 border-b border-base-300/30 last:border-0">
+              <span class="text-base-content/80 font-semibold">{{ sub.label }}</span>
+              <span class="badge badge-xs font-bold" [ngClass]="sub.ok ? 'badge-success text-black' : 'badge-warning text-black'">
+                {{ sub.ok ? '🟢 Healthy' : '🟡 Checking' }}
+              </span>
+            </div>
+            <div class="text-[10px] text-base-content/50 pt-1">
+              Provider Engine: {{ feed.provider }}
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-base-300/40 flex items-center justify-between text-[10px] font-semibold text-base-content/50">
+          <span class="truncate max-w-[65%]">Source: {{ feed.source }}</span>
+          <span *ngIf="feed.latencyMs != null" class="tabular-nums font-bold text-accent">{{ feed.latencyMs }}ms</span>
+          <span *ngIf="feed.nextScanSec" class="tabular-nums text-sky-400 font-bold">Next Scan ~{{ feed.nextScanSec }}s</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

@@ -1,0 +1,52 @@
+<div class="max-w-4xl mx-auto px-4 py-8 pb-32">
+  <h1 class="text-3xl md:text-4xl font-black text-white italic uppercase tracking-wider mb-6">Data Sources & Limitations</h1>
+
+  <div class="space-y-6">
+    <section class="storm-card p-6 border-l-4 border-l-primary">
+      <h2 class="text-xl font-black text-primary uppercase mb-3">Power Outages</h2>
+      <p class="text-base-content/80 leading-relaxed mb-4">
+        The power outage data displayed on this platform is sourced from the <strong>U.S. Department of Energy's Outage Data Initiative Nationwide (ODIN)</strong>. 
+        Because this data is aggregated at the federal level, there can be a delay of <strong>15 to 60 minutes</strong> between when an outage occurs and when it appears on our maps.
+      </p>
+      
+      <div class="bg-base-200/50 p-4 rounded-xl border border-base-300">
+        <h3 class="text-sm font-black uppercase tracking-widest text-secondary mb-2">For The Most Accurate Live Data</h3>
+        <p class="text-sm text-base-content/70 mb-3">
+          We do not directly scrape local utility websites to ensure platform stability during severe weather events. For immediate, real-time outage status, please check your local provider directly:
+        </p>
+        <ul class="space-y-2">
+          <li>
+            <a href="https://outagemap.cmpco.com/cmp/" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline btn-accent font-bold">
+              Central Maine Power (CMP) Outage Map
+            </a>
+          </li>
+          <li>
+            <a href="https://www.versantpower.com/outages-and-restoration/outage-map/" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline btn-accent font-bold">
+              Versant Power Outage Map
+            </a>
+          </li>
+          <li>
+            <a href="https://poweroutage.us/" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline btn-accent font-bold">
+              PowerOutage.us (National Aggregator)
+            </a>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="storm-card p-6 border-l-4 border-l-secondary">
+      <h2 class="text-xl font-black text-secondary uppercase mb-3">Weather Alerts</h2>
+      <p class="text-base-content/80 leading-relaxed">
+        Severe weather alerts, watches, and warnings are pulled directly from the <strong>National Weather Service (NWS) API</strong>. These are typically near real-time, but network congestion during major events can occasionally delay updates by a few minutes. Always keep a NOAA Weather Radio on hand during severe weather.
+      </p>
+    </section>
+
+    <section class="storm-card p-6 border-l-4 border-l-accent">
+      <h2 class="text-xl font-black text-accent uppercase mb-3">Live Cameras</h2>
+      <p class="text-base-content/80 leading-relaxed">
+        Camera feeds are sourced from a combination of public APIs, including <strong>FAA WeatherCams</strong> and <strong>OpenCCTV</strong>. 
+        Some cameras may experience dropped frames, stale imagery, or go entirely offline during severe weather due to local power loss or damaged networking equipment at the camera site.
+      </p>
+    </section>
+  </div>
+</div>

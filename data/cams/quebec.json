@@ -1,0 +1,80 @@
+[
+  {
+    "id": "qc-degelis-185",
+    "name": "Route 185 - D\u00e9g\u00e9lis (QC-ME Border)",
+    "lat": 47.548,
+    "lng": -68.647,
+    "category": "border",
+    "feed_url": "https://www.quebec511.info/images/cameras/bas-saint-laurent/185_degelis.jpg",
+    "update_rate_ms": 120000,
+    "region": "Bas-Saint-Laurent (Qu\u00e9bec)",
+    "attribution": "\u00a9 Qu\u00e9bec 511",
+    "km": 59.7,
+    "stream_type": "image"
+  },
+  {
+    "id": "qc-riviere-du-loup",
+    "name": "Autoroute 20 - Rivi\u00e8re-du-Loup",
+    "lat": 47.831,
+    "lng": -69.536,
+    "category": "traffic",
+    "feed_url": "https://www.quebec511.info/images/cameras/bas-saint-laurent/a20_riviere_du_loup.jpg",
+    "update_rate_ms": 120000,
+    "region": "Bas-Saint-Laurent (Qu\u00e9bec)",
+    "attribution": "\u00a9 Qu\u00e9bec 511",
+    "km": 124.5,
+    "stream_type": "image"
+  },
+  {
+    "id": "qc-rimouski-132",
+    "name": "Route 132 - Rimouski Harbor",
+    "lat": 48.448,
+    "lng": -68.524,
+    "category": "marine",
+    "feed_url": "https://www.quebec511.info/images/cameras/bas-saint-laurent/132_rimouski.jpg",
+    "update_rate_ms": 120000,
+    "region": "Bas-Saint-Laurent (Qu\u00e9bec)",
+    "attribution": "\u00a9 Qu\u00e9bec 511",
+    "km": 156.0,
+    "stream_type": "image"
+  },
+  {
+    "id": "qc-matane-ferry",
+    "name": "Matane Ferry Terminal & St. Lawrence",
+    "lat": 48.845,
+    "lng": -67.531,
+    "category": "marine",
+    "feed_url": "https://www.quebec511.info/images/cameras/gaspesie/matane_traverse.jpg",
+    "update_rate_ms": 120000,
+    "region": "Gasp\u00e9sie (Qu\u00e9bec)",
+    "attribution": "\u00a9 Qu\u00e9bec 511",
+    "km": 208.7,
+    "stream_type": "image"
+  },
+  {
+    "id": "qc-carleton-sur-mer",
+    "name": "Route 132 - Carleton-sur-Mer (Chaleur Bay)",
+    "lat": 48.106,
+    "lng": -66.128,
+    "category": "marine",
+    "feed_url": "https://www.quebec511.info/images/cameras/gaspesie/132_carleton.jpg",
+    "update_rate_ms": 120000,
+    "region": "Gasp\u00e9sie (Qu\u00e9bec)",
+    "attribution": "\u00a9 Qu\u00e9bec 511",
+    "km": 203.9,
+    "stream_type": "image"
+  },
+  {
+    "id": "qc-levis-ferry",
+    "name": "L\u00e9vis - Qu\u00e9bec City Ferry Crossing",
+    "lat": 46.814,
+    "lng": -71.187,
+    "category": "border",
+    "feed_url": "https://www.quebec511.info/images/cameras/quebec/levis_traverse.jpg",
+    "update_rate_ms": 120000,
+    "region": "Qu\u00e9bec City Region",
+    "attribution": "\u00a9 Qu\u00e9bec 511",
+    "km": 217.0,
+    "stream_type": "image"
+  }
+]

@@ -46,3 +46,11 @@ type AlertsResponse struct {
 	Stale         bool   `json:"stale,omitempty"`
 	LastError     string `json:"lastError,omitempty"`
 }
+
+// AlertCentroid extracts lat/lng from optional centroid pointers.
+func AlertCentroid(a Alert) (lat, lng float64, ok bool) {
+	if a.CentroidLat != nil && a.CentroidLon != nil {
+		return *a.CentroidLat, *a.CentroidLon, true
+	}
+	return 0, 0, false
+}

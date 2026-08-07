@@ -253,6 +253,13 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
                   >
                     Find
                   </button>
+                  <button
+                    type="button"
+                    class="btn btn-accent btn-sm rounded-xl font-black uppercase text-[10px] min-h-11"
+                    (click)="placeBasicProbe()"
+                  >
+                    Deploy Probe
+                  </button>
                 }
                 @if (!immersive) {
                   <button
@@ -476,6 +483,10 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   private inflightEvent = false;
   private lastWorldToast = '';
   private lastBagSeq = 0;
+  // Phase 5 — deployable markers
+  private deployableMarkers = new Map<string, L.Marker>();
+  private deployableMeta = new Map<string, { lat: number; lng: number; kind: string; health: number; fuel: number; label: string }>();
+
 
   ngAfterViewInit(): void {
     this.refreshVehicle();
@@ -556,6 +567,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.stopWorldSync();
     this.world.disconnectWorld();
     this.teardownImmersive(true);
+    delete (window as any).__chaseGameInstance;
     this.exit.emit();
   }
 
@@ -617,6 +629,8 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.activeSimHint = '';
     this.world.connectWorld(this.lat, this.lng, this.selectedLobby);
 
+    (window as any).__chaseGameInstance = this;
+
     setTimeout(() => {
       this.ensureMap();
       this.clearDrops();
@@ -635,6 +649,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.resetStick();
     this.keys.clear();
     this.phase = 'done';
+    delete (window as any).__chaseGameInstance;
     // Shared world already granted items server-side — never trust client bag.
     this.savedLoot = this.bagged.length > 0;
     this.world.disconnectWorld();
@@ -894,6 +909,9 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.dropMeta.clear();
     this.eventMarker?.remove();
     this.eventMarker = undefined;
+    for (const m of this.deployableMarkers.values()) m.remove();
+    this.deployableMarkers.clear();
+    this.deployableMeta.clear();
   }
 
   private syncWorldMarkers(): void {
@@ -979,6 +997,44 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       }
     }
 
+    // Phase 5: render deployables
+    const deploySeen = new Set<string>();
+    for (const d of this.world.deployables()) {
+      deploySeen.add(d.id);
+      const prev = this.deployableMeta.get(d.id);
+      let m = this.deployableMarkers.get(d.id);
+      const moved = !prev
+        || Math.abs(prev.lat - d.lat) > 1e-6
+        || Math.abs(prev.lng - d.lng) > 1e-6;
+      const restyle = !prev
+        || prev.kind !== d.kind
+        || prev.health !== d.health
+        || prev.fuel !== d.fuel
+        || prev.label !== d.label;
+
+      if (!m) {
+        const icon = this.deployableIcon(d.kind, d.label, d.health, d.fuel);
+        m = L.marker([d.lat, d.lng], { icon }).addTo(this.map);
+        // Bind popup for actions: collect, refuel, repair, remove
+        m.bindPopup(this.createDeployablePopupHtml(d));
+        this.deployableMarkers.set(d.id, m);
+      } else {
+        if (moved) m.setLatLng([d.lat, d.lng]);
+        if (restyle) {
+          m.setIcon(this.deployableIcon(d.kind, d.label, d.health, d.fuel));
+          m.setPopupContent(this.createDeployablePopupHtml(d));
+        }
+      }
+      this.deployableMeta.set(d.id, { lat: d.lat, lng: d.lng, kind: d.kind, health: d.health, fuel: d.fuel, label: d.label });
+    }
+    for (const [id, m] of this.deployableMarkers) {
+      if (!deploySeen.has(id)) {
+        m.remove();
+        this.deployableMarkers.delete(id);
+        this.deployableMeta.delete(id);
+      }
+    }
+
     const ev = this.world.event();
     if (ev?.active) {
       this.activeSimLabel = ev.label || 'SIMULATED EVENT';
@@ -1043,6 +1099,70 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
       html: `<div style="width:16px;height:16px;border-radius:999px;background:${color};border:2px solid #0b1120;box-shadow:0 0 8px ${color};"></div>`,
       iconSize: [16, 16],
       iconAnchor: [8, 8],
+    });
+  }
+
+  private deployableIcon(kind: string, label: string, health: number, fuel: number): L.DivIcon {
+    const color = health < 25 || fuel < 25 ? '#ef4444' : '#60a5fa';
+    const glyph = kind === 'weather_station' ? '📡' : '📟';
+    return L.divIcon({
+      className: 'chase-deployable-icon',
+      html: `<div style="display:flex;flex-direction:column;align-items:center;">
+        <div style="font-size:20px;filter:drop-shadow(0 0 4px ${color});">${glyph}</div>
+        <div style="font-size:8px;font-weight:900;color:#fff;background:rgba(11,17,32,0.85);padding:1px 3px;border-radius:4px;border:1px solid ${color};white-space:nowrap;margin-top:2px;">
+          ${label} (${health}%)
+        </div>
+      </div>`,
+      iconSize: [64, 48],
+      iconAnchor: [32, 24]
+    });
+  }
+
+  private createDeployablePopupHtml(d: any): string {
+    const isOwner = d.userId === this.auth.user()?.id;
+    const actions = isOwner 
+      ? `<div style="display:flex;gap:4px;margin-top:6px;">
+          <button onclick="window.__chaseGameInstance.handleDeployAction('collect','${d.id}')" style="background:#22c55e;color:#fff;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;">Collect</button>
+          <button onclick="window.__chaseGameInstance.handleDeployAction('refuel','${d.id}')" style="background:#eab308;color:#000;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;">Refuel</button>
+          <button onclick="window.__chaseGameInstance.handleDeployAction('repair','${d.id}')" style="background:#3b82f6;color:#fff;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;">Repair</button>
+          <button onclick="window.__chaseGameInstance.handleDeployAction('remove','${d.id}')" style="background:#ef4444;color:#fff;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;">Salvage</button>
+         </div>`
+      : d.public 
+        ? `<div style="margin-top:6px;">
+            <button onclick="window.__chaseGameInstance.handleDeployAction('collect','${d.id}')" style="background:#22c55e;color:#fff;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;width:100%;">Collect Yield</button>
+           </div>`
+        : `<div style="font-size:10px;color:#8592a6;margin-top:4px;">Private deployable</div>`;
+
+    return `<div style="color:#fff;font-family:sans-serif;font-size:11px;min-width:140px;">
+      <b style="color:#60a5fa;text-transform:uppercase;font-size:10px;">${d.kindName}</b>
+      <div>Health: ${d.health}% | Fuel: ${d.fuel}%</div>
+      <div style="color:#a1b0cb;font-size:9px;margin-top:2px;">Yield Stored: ${d.yieldStored}</div>
+      ${actions}
+    </div>`;
+  }
+
+  handleDeployAction(action: string, id: string): void {
+    if (action === 'collect') {
+      this.world.sendDeployCollect(id);
+    } else if (action === 'refuel') {
+      this.world.sendDeployRefuel(id);
+    } else if (action === 'repair') {
+      this.world.sendDeployRepair(id);
+    } else if (action === 'remove') {
+      this.world.sendDeployRemove(id);
+    }
+    this.map?.closePopup();
+  }
+
+  placeBasicProbe(): void {
+    // Check if player has basic_probe item in inventory before sending
+    this.world.getInventory().subscribe(res => {
+      const probe = res.items.find(x => x.key === 'basic_probe');
+      if (probe && probe.count && probe.count > 0) {
+        this.world.sendDeployPlace('basic_probe', 'Probe Grid', this.lat, this.lng, true);
+      } else {
+        this.showToast('Craft a Basic Probe at the Trade Center first!');
+      }
     });
   }
 
@@ -1128,6 +1248,9 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.eventMarker = undefined;
     this.playerMarker?.remove();
     this.playerMarker = undefined;
+    for (const m of this.deployableMarkers.values()) m.remove();
+    this.deployableMarkers.clear();
+    this.deployableMeta.clear();
     this.map?.remove();
     this.map = undefined;
   }

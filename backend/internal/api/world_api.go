@@ -31,6 +31,15 @@ func mountWorldRoutes(r chi.Router, st *store.Store, hub *world.Hub) {
 	r.Post("/world/trades", worldCreateTradeHandler(st))
 	r.Post("/world/trades/{id}/buy", worldBuyTradeHandler(st))
 	r.Delete("/world/trades/{id}", worldCancelTradeHandler(st))
+	// Phase 5 — deployables
+	r.Get("/world/deployables", worldMyDeployablesHandler(st))
+	r.Get("/world/deployables/nearby", worldNearbyDeployablesHandler(st))
+	r.Get("/world/deployables/kinds", worldDeployKindsHandler())
+	r.Post("/world/deployables", worldPlaceDeployableHandler(st))
+	r.Post("/world/deployables/{id}/collect", worldCollectDeployableHandler(st))
+	r.Post("/world/deployables/{id}/refuel", worldRefuelDeployableHandler(st))
+	r.Post("/world/deployables/{id}/repair", worldRepairDeployableHandler(st))
+	r.Delete("/world/deployables/{id}", worldRemoveDeployableHandler(st))
 }
 
 func worldLobbiesHandler(hub *world.Hub) http.HandlerFunc {
@@ -500,3 +509,152 @@ func worldCancelTradeHandler(st *store.Store) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+// ── Phase 5 — Deployable REST handlers ──────────────────────────────────────
+
+func worldMyDeployablesHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		list := world.ListMyDeployables(st, r.Context(), user.ID)
+		if list == nil {
+			list = []world.DeployableView{}
+		}
+		_ = json.NewEncoder(w).Encode(list)
+	}
+}
+
+func worldNearbyDeployablesHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Default to main St. John valley center or extract params
+		lat, lng, radius := 45.8, -68.5, 2.5
+		list := world.ListNearbyDeployables(st, r.Context(), lat, lng, radius)
+		if list == nil {
+			list = []world.DeployableView{}
+		}
+		_ = json.NewEncoder(w).Encode(list)
+	}
+}
+
+func worldDeployKindsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(world.DeployKinds)
+	}
+}
+
+type placeDeployableReq struct {
+	Kind   string  `json:"kind"`
+	Label  string  `json:"label"`
+	Lat    float64 `json:"lat"`
+	Lng    float64 `json:"lng"`
+	Public bool    `json:"public"`
+}
+
+func worldPlaceDeployableHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		if ok, retry := world.AllowCraft(user.ID); !ok { // reuse craft rate limiter
+			world.WriteSlowDown(w, retry)
+			return
+		}
+		var req placeDeployableReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Kind == "" {
+			http.Error(w, "Invalid input", http.StatusBadRequest)
+			return
+		}
+		v, err := world.PlaceDeployable(st, r.Context(), user.ID, req.Kind, req.Label, req.Lat, req.Lng, req.Public)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(v)
+	}
+}
+
+func worldCollectDeployableHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		id := chi.URLParam(r, "id")
+		v, qty, err := world.CollectDeployable(st, r.Context(), user.ID, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"deployable": v,
+			"collectedQty": qty,
+			"inventory": mergedInventory(st, r, user.ID),
+		})
+	}
+}
+
+func worldRefuelDeployableHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		id := chi.URLParam(r, "id")
+		v, err := world.RefuelDeployable(st, r.Context(), user.ID, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(v)
+	}
+}
+
+func worldRepairDeployableHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		id := chi.URLParam(r, "id")
+		v, err := world.RepairDeployable(st, r.Context(), user.ID, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(v)
+	}
+}
+
+func worldRemoveDeployableHandler(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := auth.UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Login required", http.StatusUnauthorized)
+			return
+		}
+		id := chi.URLParam(r, "id")
+		if err := world.RemoveDeployable(st, r.Context(), user.ID, id); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}
+}
+

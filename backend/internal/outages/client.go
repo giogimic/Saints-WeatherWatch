@@ -114,8 +114,13 @@ func (c *Client) FetchSnapshot() (Snapshot, error) {
 		Source:      "ODIN (ORNL) public API",
 		SourceNote:  "County/state outage estimates from utilities that report to ODIN. Not a substitute for your utility’s map. Maine CMP/Versant may not report to ODIN yet.",
 		UtilityLinks: []UtilityLink{
-			{Name: "Versant Power outage map", URL: "https://www.versantpower.com/outages-restoration/live-outage-map/current-outage-alerts", Blurb: "Northern & eastern Maine"},
-			{Name: "CMP outages", URL: "https://www.cmpco.com/outages", Blurb: "Central & southern Maine"},
+			{Name: "Versant Power Live Outage Center", URL: "https://www.versantpower.com/outages-and-restoration/outage-map/", Blurb: "Northern & Eastern Maine (Aroostook, Wallagrass, Fort Kent, Bangor)"},
+			{Name: "Eastern Maine Electric Co-op (EMEC)", URL: "https://www.emec.com/outages", Blurb: "Rural Aroostook & St. John Valley Co-op"},
+			{Name: "Central Maine Power (CMP) Direct", URL: "https://outagemap.cmpco.com/cmp/", Blurb: "Central & Southern Maine (ArcGIS Hybrid Ingest)"},
+			{Name: "Hydro-Québec Info-pannes", URL: "https://infopannes.solutions.hydroquebec.com/info-pannes", Blurb: "Québec Regional Live Outage Map"},
+			{Name: "NB Power Live Outages", URL: "https://www.nbpower.com/Open/Outages.aspx", Blurb: "New Brunswick Grid Status"},
+			{Name: "Nova Scotia Power Outage Center", URL: "https://outagemap.nspower.ca/", Blurb: "Nova Scotia Coastal & Inland Outages"},
+			{Name: "Maritime Electric PEI", URL: "https://www.maritimeelectric.com/outages/", Blurb: "Prince Edward Island Grid Operations"},
 		},
 	}
 

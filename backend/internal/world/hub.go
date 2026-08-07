@@ -8,6 +8,7 @@ import (
 
 	"github.com/saints-weatherwatch/backend/internal/auth"
 	"github.com/saints-weatherwatch/backend/internal/nws"
+	"github.com/saints-weatherwatch/backend/internal/radar"
 	"github.com/saints-weatherwatch/backend/internal/store"
 )
 
@@ -38,6 +39,7 @@ var DefaultLobbies = []LobbyDef{
 type Hub struct {
 	st      *store.Store
 	nws     *nws.Cache
+	radar   *radar.Cache
 	origins []string
 	defs    []LobbyDef
 	mu      sync.Mutex
@@ -54,16 +56,18 @@ func NewHub(st *store.Store, allowedOrigins []string) *Hub {
 	}
 }
 
-// AttachAlerts wires the live NWS cache for Phase 4 research ticks (read-only).
-func (h *Hub) AttachAlerts(cache *nws.Cache) {
+// AttachAlerts wires the live NWS cache and Radar cache for Phase 4 research ticks (read-only).
+func (h *Hub) AttachAlerts(nwsCache *nws.Cache, radarCache *radar.Cache) {
 	if h == nil {
 		return
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.nws = cache
+	h.nws = nwsCache
+	h.radar = radarCache
 	for _, r := range h.rooms {
-		r.nws = cache
+		r.nws = nwsCache
+		r.radar = radarCache
 	}
 }
 
@@ -103,6 +107,7 @@ func (h *Hub) ensureRoomLocked(id string) *Room {
 	r.name = def.Name
 	r.maxPlayers = def.MaxPlayers
 	r.nws = h.nws
+	r.radar = h.radar
 	h.rooms[id] = r
 	return r
 }

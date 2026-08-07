@@ -19,15 +19,15 @@ func (c *Cache) noteFAACamera(cameraID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, ok := c.faaURLs[cameraID]; !ok {
-		c.faaURLs[cameraID] = ""
+		c.faaURLs[cameraID] = nil
 	}
 }
 
 func (c *Cache) refreshFAA() {
 	c.mu.RLock()
 	needed := make([]string, 0, len(c.faaURLs))
-	for id, uri := range c.faaURLs {
-		if uri == "" {
+	for id, uris := range c.faaURLs {
+		if len(uris) == 0 {
 			needed = append(needed, id)
 		}
 	}
@@ -77,8 +77,8 @@ func (c *Cache) refreshFAA() {
 			continue
 		}
 		c.mu.Lock()
-		for camID, uri := range cams {
-			c.faaURLs[camID] = uri
+		for camID, uris := range cams {
+			c.faaURLs[camID] = uris
 			resolved++
 		}
 		c.faaSites[h.id] = struct{}{}
@@ -146,7 +146,7 @@ func (c *Cache) fetchFAASites() ([]faaSite, error) {
 	return parsed.Payload, nil
 }
 
-func (c *Cache) fetchFAASummary(siteID int) (map[string]string, error) {
+func (c *Cache) fetchFAASummary(siteID int) (map[string][]string, error) {
 	url := fmt.Sprintf(faaSummaryURL, siteID)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -183,15 +183,20 @@ func (c *Cache) fetchFAASummary(siteID int) (map[string]string, error) {
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, err
 	}
-	out := map[string]string{}
+	out := map[string][]string{}
 	for _, cam := range parsed.Payload.Site.Cameras {
 		id := stringifyID(cam.CameraID)
 		if id == "" || len(cam.CurrentImages) == 0 {
 			continue
 		}
-		uri := cam.CurrentImages[0].ImageURI
-		if uri != "" {
-			out[id] = uri
+		var uris []string
+		for _, img := range cam.CurrentImages {
+			if img.ImageURI != "" {
+				uris = append(uris, img.ImageURI)
+			}
+		}
+		if len(uris) > 0 {
+			out[id] = uris
 		}
 	}
 	return out, nil

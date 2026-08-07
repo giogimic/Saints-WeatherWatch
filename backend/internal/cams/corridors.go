@@ -11,10 +11,14 @@ type Corridor struct {
 
 // Corridors covers the northern Maine / St. John Valley ops focus.
 var Corridors = []Corridor{
-	{ID: "st-john", Label: "St. John Valley", Lat: 47.25, Lon: -68.55, RadiusKM: 55},
-	{ID: "caribou", Label: "Caribou / Aroostook", Lat: 46.86, Lon: -68.01, RadiusKM: 50},
-	{ID: "i95-north", Label: "I-95 North", Lat: 46.15, Lon: -67.85, RadiusKM: 65},
-	{ID: "nb-border", Label: "NB border / Route 2", Lat: 47.0, Lon: -67.65, RadiusKM: 55},
+	{ID: "st-john", Label: "St. John Valley (Maine)", Lat: 47.25, Lon: -68.55, RadiusKM: 55},
+	{ID: "caribou", Label: "Caribou / Aroostook (Maine)", Lat: 46.86, Lon: -68.01, RadiusKM: 50},
+	{ID: "i95-north", Label: "I-95 North (Maine)", Lat: 46.15, Lon: -67.85, RadiusKM: 65},
+	{ID: "quebec-border", Label: "Québec Border & Bas-Saint-Laurent", Lat: 47.6, Lon: -68.9, RadiusKM: 120},
+	{ID: "nb-route2", Label: "New Brunswick Corridor", Lat: 46.9, Lon: -66.6, RadiusKM: 220},
+	{ID: "nova-scotia", Label: "Nova Scotia Coastal Corridor", Lat: 44.6, Lon: -63.6, RadiusKM: 300},
+	{ID: "pei", Label: "Prince Edward Island Corridor", Lat: 46.2, Lon: -63.7, RadiusKM: 150},
+	{ID: "newfoundland", Label: "Newfoundland & Labrador", Lat: 47.5, Lon: -52.7, RadiusKM: 500},
 }
 
 const outerCorridorID = "outer"

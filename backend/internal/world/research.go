@@ -3,12 +3,14 @@ package world
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/saints-weatherwatch/backend/internal/geo"
 	"github.com/saints-weatherwatch/backend/internal/nws"
+	"github.com/saints-weatherwatch/backend/internal/radar"
 	"github.com/saints-weatherwatch/backend/internal/store"
 	db "github.com/saints-weatherwatch/backend/internal/store/gen"
 )
@@ -134,20 +136,31 @@ func (r *Room) evaluateResearch(c *client, alerts []nws.Alert) {
 		return
 	}
 
-	if err := GrantStack(r.st, context.Background(), c.userID, ResearchItemKey, 1); err != nil {
+	bonus := 0
+	noteBonus := ""
+	if r.radar != nil {
+		st, err := r.radar.Status(radar.DefaultFocus.Lat, radar.DefaultFocus.Lon)
+		if err == nil && st != nil && st.LatestScan != nil && st.LatestScan.AgeSec < 300 {
+			bonus = 1
+			noteBonus = " · Fresh Radar Bonus!"
+		}
+	}
+
+	qty := 1 + bonus
+	if err := GrantStack(r.st, context.Background(), c.userID, ResearchItemKey, qty); err != nil {
 		log.Printf("world.research grant failed user=%s: %v", c.userID, err)
 		status.Note = "Research grant failed — try again shortly."
 		r.sendResearch(c, status)
 		return
 	}
 	r.awardPickupXP(c.userID, ResearchItemKey)
-	_ = appendResearchLog(r.st, context.Background(), c, match)
+	_ = appendResearchLog(r.st, context.Background(), c, match, qty)
 
 	c.lastResearchAt = now
 	c.lastResearchAlert = match.ID
 	c.stationSince = now
 
-	status.Note = "Sample logged · +1 research sample (SIM loot · real alert context)"
+	status.Note = fmt.Sprintf("Sample logged · +%d research sample (SIM loot · real alert context)%s", qty, noteBonus)
 	r.sendResearch(c, status)
 	r.toast(c, "RESEARCH · sampled nearby alert cell")
 }
@@ -203,7 +216,7 @@ func (r *Room) sendResearch(c *client, st ResearchStatus) {
 	}
 }
 
-func appendResearchLog(st *store.Store, ctx context.Context, c *client, a *nws.Alert) error {
+func appendResearchLog(st *store.Store, ctx context.Context, c *client, a *nws.Alert, qty int) error {
 	if st == nil || c == nil || a == nil {
 		return nil
 	}
@@ -216,7 +229,7 @@ func appendResearchLog(st *store.Store, ctx context.Context, c *client, a *nws.A
 		db.ResearchLogEntry.Lat.Set(c.lat),
 		db.ResearchLogEntry.Lng.Set(c.lng),
 		db.ResearchLogEntry.User.Link(db.User.ID.Equals(c.userID)),
-		db.ResearchLogEntry.Qty.Set(1),
+		db.ResearchLogEntry.Qty.Set(qty),
 	).Exec(ctx)
 	if err != nil {
 		log.Printf("world.research log failed user=%s: %v", c.userID, err)

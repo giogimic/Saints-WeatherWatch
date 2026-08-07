@@ -86,13 +86,6 @@ func (c *Cache) discoverFromOpenCCTV() {
 		isAv := cat == "aviation" || cat == "airport"
 		if isAv {
 			site := strings.ToLower(strings.Split(cam.Name, "(")[0])
-			site = strings.TrimSpace(site)
-			if _, ok := aviationSites[site]; ok {
-				continue
-			}
-			if aviationCount >= 4 {
-				continue
-			}
 			aviationSites[site] = struct{}{}
 			aviationCount++
 		}

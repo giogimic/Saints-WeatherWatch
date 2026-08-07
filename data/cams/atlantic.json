@@ -1,0 +1,93 @@
+[
+  {
+    "id": "nb-edmundston-rt2",
+    "name": "Route 2 - Edmundston (QC-NB Border)",
+    "lat": 47.377,
+    "lng": -68.326,
+    "category": "border",
+    "feed_url": "https://511.gnb.ca/map/Cctv/2-edmundston",
+    "update_rate_ms": 60000,
+    "region": "New Brunswick Corridor",
+    "attribution": "\u00a9 NB 511",
+    "km": 36.4,
+    "stream_type": "iframe"
+  },
+  {
+    "id": "nb-grand-falls-rt2",
+    "name": "Route 2 - Grand Falls Gorge",
+    "lat": 47.048,
+    "lng": -67.738,
+    "category": "traffic",
+    "feed_url": "https://511.gnb.ca/map/Cctv/2-grand-falls",
+    "update_rate_ms": 60000,
+    "region": "New Brunswick Corridor",
+    "attribution": "\u00a9 NB 511",
+    "km": 46.4,
+    "stream_type": "iframe"
+  },
+  {
+    "id": "nb-woodstock-rt2",
+    "name": "Route 2 - Woodstock (Houlton ME Border)",
+    "lat": 46.152,
+    "lng": -67.583,
+    "category": "border",
+    "feed_url": "https://511.gnb.ca/map/Cctv/2-woodstock",
+    "update_rate_ms": 60000,
+    "region": "New Brunswick Corridor",
+    "attribution": "\u00a9 NB 511",
+    "km": 115.8,
+    "stream_type": "iframe"
+  },
+  {
+    "id": "nb-fredericton-bridge",
+    "name": "Princess Margaret Bridge - Fredericton",
+    "lat": 45.957,
+    "lng": -66.623,
+    "category": "traffic",
+    "feed_url": "https://511.gnb.ca/map/Cctv/fredericton-bridge",
+    "update_rate_ms": 60000,
+    "region": "New Brunswick Corridor",
+    "attribution": "\u00a9 NB 511",
+    "km": 179.6,
+    "stream_type": "iframe"
+  },
+  {
+    "id": "ns-halifax-harbor",
+    "name": "Halifax Harbor & Coastal Marine",
+    "lat": 44.648,
+    "lng": -63.575,
+    "category": "marine",
+    "feed_url": "https://511.novascotia.ca/map/Cctv/halifax-harbor",
+    "update_rate_ms": 60000,
+    "region": "Nova Scotia Coastal Corridor",
+    "attribution": "\u00a9 NS 511",
+    "km": 456.1,
+    "stream_type": "iframe"
+  },
+  {
+    "id": "pei-confederation-bridge",
+    "name": "Confederation Bridge (Borden-Carleton)",
+    "lat": 46.25,
+    "lng": -63.7,
+    "category": "border",
+    "feed_url": "https://511.pei.ca/map/Cctv/confederation-bridge",
+    "update_rate_ms": 60000,
+    "region": "Prince Edward Island Corridor",
+    "attribution": "\u00a9 PEI 511",
+    "km": 365.9,
+    "stream_type": "iframe"
+  },
+  {
+    "id": "nl-st-johns-harbor",
+    "name": "St. John's Harbor & Signal Hill",
+    "lat": 47.562,
+    "lng": -52.709,
+    "category": "marine",
+    "feed_url": "https://511.gov.nl.ca/map/Cctv/st-johns-harbor",
+    "update_rate_ms": 60000,
+    "region": "Newfoundland & Labrador",
+    "attribution": "\u00a9 NL 511",
+    "km": 1178.7,
+    "stream_type": "iframe"
+  }
+]

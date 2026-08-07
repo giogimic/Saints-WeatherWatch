@@ -76,3 +76,21 @@ func TestGeoJSONKinds(t *testing.T) {
 		t.Fatal("bad correlate")
 	}
 }
+
+func TestUSGSWaterDataIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("live network")
+	}
+	c := NewClient("SaintsWeatherWatch-test/1.0")
+	inc, err := c.fetchOneUSGSGauge(nwpsGaugeRef{LID: "FTKM1", USGSID: "01010500", Label: "St. John River at Fort Kent"})
+	if err != nil {
+		t.Fatalf("fetchOneUSGSGauge failed: %v", err)
+	}
+	if inc == nil {
+		t.Fatal("expected incident result")
+	}
+	if usgsUrl, ok := inc.Meta["usgsUrl"].(string); !ok || usgsUrl == "" {
+		t.Fatalf("expected usgsUrl in meta, got %v", inc.Meta["usgsUrl"])
+	}
+	t.Logf("USGS Gauge fetched: headline=%s url=%s", inc.Headline, inc.SourceURL)
+}

@@ -107,19 +107,19 @@ const STORAGE_KEY = 'ww-map-view';
           </div>
 
           <!-- Left edge: layer toggles (desktop) — no bottom bar -->
-          <div class="hidden md:flex absolute top-1/2 -translate-y-1/2 left-2 z-[1000] flex-col gap-1 pointer-events-none max-h-[70%] overflow-y-auto pr-0.5">
+          <div class="hidden md:flex absolute top-1/2 -translate-y-1/2 left-2 z-[1000] flex-col gap-1.5 pointer-events-none max-h-[70%] overflow-y-auto pr-0.5">
             <button
               type="button"
-              class="pointer-events-auto btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8 w-[3.25rem] px-0 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
-              [ngClass]="ops.impactMode() ? 'btn-warning border-warning' : 'btn-ghost'"
+              class="pointer-events-auto btn btn-sm rounded-xl font-black uppercase tracking-wider min-h-10 h-10 w-[3.5rem] px-0 text-[9px] border-b-[3px] backdrop-blur-md shadow-lg transition-all active:scale-95 active:border-b hover:-translate-y-0.5"
+              [ngClass]="ops.impactMode() ? 'bg-warning text-warning-content border-orange-600 shadow-[0_0_12px_rgba(251,191,36,0.4)]' : 'bg-base-300/70 border-base-content/10 text-base-content/70 hover:bg-base-300/90'"
               (click)="toggleImpactMode()"
               title="Focus warnings, outages, flood, cams"
             >Imp</button>
             @for (chip of layerChips; track chip.key) {
               <button
                 type="button"
-                class="pointer-events-auto btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8 w-[3.25rem] px-0 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
-                [ngClass]="layers[chip.key] ? 'btn-primary' : 'btn-ghost'"
+                class="pointer-events-auto btn btn-sm rounded-xl font-black uppercase tracking-wider min-h-10 h-10 w-[3.5rem] px-0 text-[9px] border-b-[3px] backdrop-blur-md shadow-lg transition-all active:scale-95 active:border-b hover:-translate-y-0.5"
+                [ngClass]="layers[chip.key] ? 'bg-primary text-primary-content border-blue-800 shadow-[0_0_12px_rgba(56,189,248,0.4)]' : 'bg-base-300/70 border-base-content/10 text-base-content/70 hover:bg-base-300/90'"
                 (click)="toggleLayer(chip.key)"
                 [title]="chip.label"
               >{{ chip.short || chip.label }}</button>
@@ -127,84 +127,82 @@ const STORAGE_KEY = 'ww-map-view';
           </div>
 
           <!-- Top-right edge: base map -->
-          <div class="hidden md:flex absolute top-3 right-3 z-[1000] flex-col gap-1 pointer-events-none">
+          <div class="hidden md:flex absolute top-3 right-3 z-[1000] flex-col gap-1.5 pointer-events-none">
             @for (b of baseChips; track b.key) {
               <button
                 type="button"
-                class="pointer-events-auto btn btn-xs rounded-lg font-bold uppercase tracking-wider min-h-8 h-8 px-2 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
-                [ngClass]="activeBase === b.key ? 'btn-secondary' : 'btn-ghost'"
+                class="pointer-events-auto btn btn-sm rounded-xl font-black uppercase tracking-wider min-h-10 h-10 px-3 text-[9px] border-b-[3px] backdrop-blur-md shadow-lg transition-all active:scale-95 active:border-b hover:-translate-y-0.5"
+                [ngClass]="activeBase === b.key ? 'bg-secondary text-secondary-content border-purple-800 shadow-[0_0_12px_rgba(192,132,252,0.4)]' : 'bg-base-300/70 border-base-content/10 text-base-content/70 hover:bg-base-300/90'"
                 (click)="setBase(b.key)"
                 [title]="b.label"
               >{{ b.short || b.label }}</button>
             }
           </div>
 
-          <!-- Right edge: discrete radar product buttons (when radar layer on) -->
-          @if (layers.radar) {
-            <div class="hidden md:flex absolute top-1/2 -translate-y-1/2 right-3 z-[1000] flex-col gap-1 items-end pointer-events-none">
-              <div class="pointer-events-none text-[8px] font-black uppercase tracking-widest text-sky-300/75 bg-base-300/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md border border-base-content/10 max-w-[4.5rem] truncate" [title]="radarSiteLabel + ' · ' + radarAgeLabel">
-                {{ radarSiteLabel }}
-              </div>
-              @for (p of radarProductChoices; track p.id) {
-                <button
-                  type="button"
-                  class="pointer-events-auto btn btn-xs rounded-lg font-black uppercase tracking-wider min-h-8 h-8 w-11 px-0 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
-                  [ngClass]="radarProduct === p.id ? 'btn-primary' : 'btn-ghost'"
-                  (click)="setRadarProduct(p.id)"
-                  [title]="p.label"
-                >{{ p.short }}</button>
-              }
+          <!-- Bottom Radar Timeline & Control Bar (when radar layer on) -->
+          <div
+            class="absolute bottom-16 md:bottom-4 left-2 right-2 md:left-1/2 md:-translate-x-1/2 md:w-auto z-[1000] flex flex-col items-center gap-1 transition-all duration-300 ease-out transform"
+            [class.translate-y-8]="!layers.radar"
+            [class.opacity-0]="!layers.radar"
+            [class.pointer-events-none]="!layers.radar"
+            [class.translate-y-0]="layers.radar"
+            [class.opacity-100]="layers.radar"
+          >
+            <div class="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-2xl border-2 border-b-[4px] border-base-content/15 bg-base-300/90 backdrop-blur-md p-2 shadow-2xl max-w-full">
+              
+              <!-- Play / Pause Button -->
               <button
                 type="button"
-                class="pointer-events-auto btn btn-xs rounded-lg font-black uppercase min-h-8 h-8 w-11 px-0 text-[9px] border border-base-content/15 bg-base-300/55 backdrop-blur-sm shadow-sm"
-                [ngClass]="radarLooping ? 'btn-accent' : 'btn-ghost'"
+                class="btn btn-sm rounded-xl font-black uppercase min-h-10 h-10 px-3.5 text-xs border-b-[3px] transition-all active:scale-95 active:border-b hover:-translate-y-0.5"
+                [ngClass]="radarLooping ? 'bg-accent text-accent-content border-emerald-800 shadow-[0_0_12px_rgba(52,211,153,0.4)]' : 'bg-base-100 border-base-content/20 text-white hover:bg-base-200'"
                 (click)="toggleRadarLoop()"
                 [disabled]="!canLoop"
-                title="Radar loop"
-              >{{ radarLooping ? '||' : '▶' }}</button>
-              @if (radarFrames.length > 1) {
-                <div class="pointer-events-auto flex flex-col items-center gap-0.5 rounded-lg border border-base-content/12 bg-base-300/55 backdrop-blur-sm px-1 py-1.5 shadow-sm">
-                  <input
-                    type="range"
-                    class="range range-xs range-primary h-16 w-3 writing-vertical"
-                    style="writing-mode: vertical-lr; direction: rtl; width: 0.75rem; height: 4rem;"
-                    min="0"
-                    [max]="Math.max(radarFrames.length - 1, 0)"
-                    [(ngModel)]="radarFrameIndex"
-                    (ngModelChange)="onRadarFrameScrub()"
-                    [disabled]="radarFrames.length < 2"
-                    [title]="radarFrameLabel"
-                  >
-                  <span class="text-[8px] font-bold tabular-nums text-base-content/45">{{ radarFrameLabel }}</span>
-                </div>
-              }
-              @if (outagePairNote) {
-                <p class="pointer-events-none text-[8px] text-amber-200/70 font-semibold leading-snug max-w-[4.75rem] text-right line-clamp-3">{{ outagePairNote }}</p>
-              }
-            </div>
+                title="Play / Pause Radar Loop"
+              >
+                {{ radarLooping ? '⏸ PAUSE' : '▶ PLAY' }}
+              </button>
 
-            <!-- Mobile: compact radar strip above sheet handle -->
-            <div class="md:hidden absolute bottom-14 right-2 left-auto z-[1000] flex flex-col items-end gap-1">
-              <div class="flex gap-1 rounded-xl border border-base-content/12 bg-base-300/65 backdrop-blur-md p-1 shadow-sm">
+              <!-- Product Choices (Ref, HD, Vel) -->
+              <div class="flex items-center gap-1 bg-base-200/60 p-1 rounded-xl border border-base-content/10">
                 @for (p of radarProductChoices; track p.id) {
                   <button
                     type="button"
-                    class="btn btn-xs rounded-md font-black uppercase min-h-8 h-8 px-1.5 text-[9px]"
-                    [ngClass]="radarProduct === p.id ? 'btn-primary' : 'btn-ghost border border-base-content/15'"
+                    class="btn btn-sm rounded-lg font-black uppercase text-[10px] min-h-8 h-8 px-2.5 border-b-[2px] transition-all active:scale-95"
+                    [ngClass]="radarProduct === p.id ? 'bg-primary text-primary-content border-blue-800 shadow-md' : 'btn-ghost text-base-content/70 hover:bg-base-300/60'"
                     (click)="setRadarProduct(p.id)"
                     [title]="p.label"
                   >{{ p.short }}</button>
                 }
-                <button
-                  type="button"
-                  class="btn btn-xs rounded-md font-black uppercase min-h-8 h-8 px-1.5 text-[9px]"
-                  [ngClass]="radarLooping ? 'btn-accent' : 'btn-ghost border border-base-content/15'"
-                  (click)="toggleRadarLoop()"
-                  [disabled]="!canLoop"
-                >{{ radarLooping ? '||' : 'Loop' }}</button>
               </div>
+
+              <!-- Time Scrubber Bar -->
+              <div class="flex items-center gap-2 bg-base-200/60 px-3 py-1 rounded-xl border border-base-content/10 flex-1 min-w-[160px] max-w-xs h-10">
+                <span class="text-[9px] font-black uppercase tracking-wider text-base-content/50 shrink-0">Time</span>
+                <input
+                  type="range"
+                  class="range range-xs range-primary flex-1 h-2 cursor-pointer"
+                  min="0"
+                  [max]="Math.max(radarFrames.length - 1, 0)"
+                  [(ngModel)]="radarFrameIndex"
+                  (ngModelChange)="onRadarFrameScrub()"
+                  [disabled]="radarFrames.length < 2"
+                  [title]="radarFrameLabel"
+                >
+                <span class="text-[10px] font-black tabular-nums text-primary w-12 text-right truncate">{{ radarFrameLabel }}</span>
+              </div>
+
+              <!-- Station & Age Badge -->
+              <div class="hidden sm:flex flex-col text-right px-1 w-24 shrink-0">
+                <span class="text-[9px] font-black uppercase tracking-widest text-sky-300 truncate" [title]="radarSiteLabel">{{ radarSiteLabel }}</span>
+                <span class="text-[8px] font-bold text-base-content/50 tabular-nums truncate">{{ radarAgeLabel }}</span>
+              </div>
+
             </div>
-          }
+
+            @if (outagePairNote) {
+              <p class="pointer-events-none text-[9px] text-amber-200/90 font-bold leading-snug bg-base-300/85 backdrop-blur-md px-2.5 py-1 rounded-xl border border-amber-500/20 max-w-xs text-center shadow-md truncate">{{ outagePairNote }}</p>
+            }
+          </div>
 
           <!-- Mobile sheet handle -->
           <button
@@ -911,6 +909,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     return fallbacks[this.radarProduct];
   }
 
+  private frameOverlays = new Map<string, L.ImageOverlay>();
+
   private applyRadarFrame(): void {
     if (!this.map || !this.layers.radar) return;
     const def = this.currentRadarProduct();
@@ -918,23 +918,39 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     const frame = this.radarFrames[this.radarFrameIndex];
     const looping = this.radarLooping || (frame && this.radarFrameIndex < this.radarFrames.length - 1);
 
-    if (def.kind === 'ridge') {
+    if (def.kind === 'ridge' || frame?.ridgeUrl) {
       this.clearRadarTile();
       const url = (looping && frame?.ridgeUrl)
         ? frame.ridgeUrl
         : (def.ridgeUrl || frame?.ridgeUrl);
-      const b = def.bounds;
+      const b = def.bounds || { south: 40.069, west: -73.776, north: 52.009, east: -61.836 };
       if (!url || !b) return;
       const bounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
-      if (this.radarImageOverlay) {
-        this.radarImageOverlay.setUrl(url);
-        this.radarImageOverlay.setBounds(bounds);
-        if (!this.map.hasLayer(this.radarImageOverlay)) {
-          this.radarImageOverlay.addTo(this.map);
+
+      // Smooth frame swapping with cached ImageOverlays to prevent flashing
+      this.frameOverlays.forEach((overlay, overlayUrl) => {
+        if (overlayUrl === url) {
+          overlay.setOpacity(0.65);
+          overlay.bringToFront();
+        } else {
+          overlay.setOpacity(0);
         }
-      } else {
-        this.radarImageOverlay = L.imageOverlay(url, bounds, { opacity: 0.65, interactive: false });
-        this.radarImageOverlay.addTo(this.map);
+      });
+
+      if (!this.frameOverlays.has(url)) {
+        const newOverlay = L.imageOverlay(url, bounds, { opacity: 0.65, interactive: false });
+        if (this.map) newOverlay.addTo(this.map);
+        this.frameOverlays.set(url, newOverlay);
+      }
+
+      // Preload next frame for ultra-smooth loop sequence
+      if (this.radarFrames.length > 1) {
+        const nextIdx = (this.radarFrameIndex + 1) % this.radarFrames.length;
+        const nextUrl = this.radarFrames[nextIdx]?.ridgeUrl;
+        if (nextUrl && !this.frameOverlays.has(nextUrl)) {
+          const img = new Image();
+          img.src = nextUrl;
+        }
       }
     } else {
       this.clearRadarImage();
@@ -996,6 +1012,10 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   }
 
   private clearRadarImage(): void {
+    this.frameOverlays.forEach(overlay => {
+      if (this.map) this.map.removeLayer(overlay);
+    });
+    this.frameOverlays.clear();
     if (this.radarImageOverlay && this.map) {
       this.map.removeLayer(this.radarImageOverlay);
     }
@@ -1248,9 +1268,34 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     );
   }
 
+  private savedPreImpactLayers?: Record<LayerChip, boolean>;
+
   toggleImpactMode(): void {
+    const turningOn = !this.ops.impactMode();
+    if (turningOn) {
+      this.savedPreImpactLayers = { ...this.layers };
+    }
     this.ops.toggleImpactMode();
-    this.applyImpactLayers();
+    if (this.ops.impactMode()) {
+      const keep: LayerChip[] = ['radar', 'warnings', 'cams', 'outages', 'flood'];
+      for (const key of Object.keys(this.layers) as LayerChip[]) {
+        this.layers[key] = keep.includes(key);
+      }
+    } else if (this.savedPreImpactLayers) {
+      this.layers = { ...this.savedPreImpactLayers };
+    } else {
+      this.layers = {
+        radar: true,
+        warnings: true,
+        lsr: false,
+        spc: false,
+        cams: false,
+        outages: false,
+        flood: false,
+        quakes: false,
+      };
+    }
+    this.applyLayerVisibility();
     this.persistView();
     this.persistLayersToPrefs();
   }

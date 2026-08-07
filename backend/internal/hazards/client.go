@@ -12,21 +12,23 @@ import (
 )
 
 const (
-	nwpsGaugeURL = "https://api.water.noaa.gov/nwps/v1/gauges/%s"
-	usgsQuakeURL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+	nwpsGaugeURL     = "https://api.water.noaa.gov/nwps/v1/gauges/%s"
+	usgsQuakeURL     = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+	usgsWaterDataURL = "https://waterdata.usgs.gov/monitoring-location/USGS-%s/#dataTypeId=continuous-00065-0"
+	usgsIVServiceURL = "https://waterservices.usgs.gov/nwis/iv/?format=json&sites=%s&parameterCd=00065,00060"
 )
 
-// Corridor NWPS AHPS gauges (St. John Valley / Aroostook first).
+// Corridor NWPS AHPS & USGS Water Data gauges (St. John Valley / Aroostook first).
 var corridorGauges = []nwpsGaugeRef{
-	{LID: "DICM1", Label: "St. John River at Dickey"},
-	{LID: "NINM1", Label: "St. John River at Nine Mile Bridge"},
-	{LID: "ALLM1", Label: "Allagash River above Allagash"},
-	{LID: "FTKM1", Label: "St. John River at Fort Kent"},
-	{LID: "FIHM1", Label: "Fish River at Fort Kent"},
-	{LID: "MASM1", Label: "Aroostook River at Masardis"},
-	{LID: "WSHM1", Label: "Aroostook River at Washburn"},
-	{LID: "LMRM1", Label: "Little Madawaska near Caribou"},
-	{LID: "SJEB3", Label: "St. John River at Edmundston"},
+	{LID: "DICM1", USGSID: "01010000", Label: "St. John River at Dickey"},
+	{LID: "NINM1", USGSID: "01010070", Label: "St. John River at Nine Mile Bridge"},
+	{LID: "ALLM1", USGSID: "01011000", Label: "Allagash River above Allagash"},
+	{LID: "FTKM1", USGSID: "01010500", Label: "St. John River at Fort Kent"},
+	{LID: "FIHM1", USGSID: "01013500", Label: "Fish River at Fort Kent"},
+	{LID: "MASM1", USGSID: "01015800", Label: "Aroostook River at Masardis"},
+	{LID: "WSHM1", USGSID: "01017000", Label: "Aroostook River at Washburn"},
+	{LID: "LMRM1", USGSID: "01016500", Label: "Little Madawaska near Caribou"},
+	{LID: "SJEB3", USGSID: "", Label: "St. John River at Edmundston"},
 }
 
 type Client struct {
@@ -59,7 +61,7 @@ func (c *Client) FetchSnapshot() (*Snapshot, error) {
 
 	snap := &Snapshot{
 		GeneratedAt: now.Format(time.RFC3339),
-		SourceNote:  "Flood stages from NOAA NWPS/AHPS; quakes from USGS FDSN (M≥2.5, 7d, ME corridor bbox). Fire/smoke deferred when no stable open feed.",
+		SourceNote:  "Flood stages & water data from USGS Water Data & NOAA NWPS; quakes from USGS FDSN (M≥2.5, 7d, ME corridor bbox). Fire/smoke deferred when no stable open feed.",
 		Flood:       flood,
 		Quakes:      quakes,
 		Fire:        []Incident{},
@@ -142,10 +144,13 @@ type nwpsCat struct {
 func (c *Client) fetchOneGauge(ref nwpsGaugeRef) (*Incident, error) {
 	u := fmt.Sprintf(nwpsGaugeURL, url.PathEscape(ref.LID))
 	var g nwpsGauge
-	if err := c.getJSON(u, &g); err != nil {
-		return nil, err
-	}
-	if g.LID == "" {
+	if err := c.getJSON(u, &g); err != nil || g.LID == "" {
+		if ref.USGSID != "" {
+			return c.fetchOneUSGSGauge(ref)
+		}
+		if err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("empty gauge")
 	}
 	name := g.Name
@@ -166,12 +171,22 @@ func (c *Client) fetchOneGauge(ref nwpsGaugeRef) (*Incident, error) {
 		observedAt = obs.ValidTime
 	}
 	sev := severityFromNWPS(cat, stage, g)
+	usgsID := g.USGSID
+	if usgsID == "" {
+		usgsID = ref.USGSID
+	}
+	srcURL := fmt.Sprintf("https://water.noaa.gov/gauges/%s", strings.ToLower(g.LID))
 	meta := map[string]any{
 		"lid":           g.LID,
-		"usgsId":        g.USGSID,
+		"usgsId":        usgsID,
 		"stage":         stage,
 		"stageUnit":     unit,
 		"floodCategory": cat,
+	}
+	if usgsID != "" {
+		u := fmt.Sprintf(usgsWaterDataURL, usgsID)
+		meta["usgsUrl"] = u
+		srcURL = u
 	}
 	if obs != nil && obs.Secondary > -900 {
 		meta["flow"] = obs.Secondary
@@ -187,17 +202,109 @@ func (c *Client) fetchOneGauge(ref nwpsGaugeRef) (*Incident, error) {
 	if sev != "info" && sev != "unknown" {
 		headline = fmt.Sprintf("%s · %s", headline, strings.ToUpper(sev))
 	}
-	srcURL := fmt.Sprintf("https://water.noaa.gov/gauges/%s", strings.ToLower(g.LID))
 	return &Incident{
 		ID:         "flood-" + strings.ToLower(g.LID),
 		Kind:       "flood",
-		Source:     "NOAA NWPS / AHPS",
+		Source:     "USGS Water Data / NOAA NWPS",
 		SourceURL:  srcURL,
 		Headline:   headline,
 		Status:     cat,
 		Severity:   sev,
 		Lat:        g.Lat,
 		Lon:        g.Lon,
+		Area:       name,
+		ObservedAt: observedAt,
+		Meta:       meta,
+	}, nil
+}
+
+type usgsIVResponse struct {
+	Value struct {
+		TimeSeries []struct {
+			SourceInfo struct {
+				SiteName    string `json:"siteName"`
+				GeoLocation struct {
+					GeogLocation struct {
+						Latitude  float64 `json:"latitude"`
+						Longitude float64 `json:"longitude"`
+					} `json:"geogLocation"`
+				} `json:"geoLocation"`
+			} `json:"sourceInfo"`
+			Variable struct {
+				VariableName string `json:"variableName"`
+			} `json:"variable"`
+			Values []struct {
+				Value []struct {
+					Value    string `json:"value"`
+					DateTime string `json:"dateTime"`
+				} `json:"value"`
+			} `json:"values"`
+		} `json:"timeSeries"`
+	} `json:"value"`
+}
+
+func (c *Client) fetchOneUSGSGauge(ref nwpsGaugeRef) (*Incident, error) {
+	if ref.USGSID == "" {
+		return nil, fmt.Errorf("no USGS ID for %s", ref.LID)
+	}
+	u := fmt.Sprintf(usgsIVServiceURL, ref.USGSID)
+	var resp usgsIVResponse
+	if err := c.getJSON(u, &resp); err != nil {
+		return nil, err
+	}
+	series := resp.Value.TimeSeries
+	if len(series) == 0 {
+		return nil, fmt.Errorf("no USGS time series for %s", ref.USGSID)
+	}
+
+	name := ref.Label
+	stage := 0.0
+	flow := 0.0
+	observedAt := ""
+	lat := series[0].SourceInfo.GeoLocation.GeogLocation.Latitude
+	lon := series[0].SourceInfo.GeoLocation.GeogLocation.Longitude
+
+	for _, ts := range series {
+		vName := strings.ToLower(ts.Variable.VariableName)
+		if len(ts.Values) > 0 && len(ts.Values[0].Value) > 0 {
+			valStr := ts.Values[0].Value[0].Value
+			valNum, _ := strconv.ParseFloat(valStr, 64)
+			dt := ts.Values[0].Value[0].DateTime
+			if observedAt == "" {
+				observedAt = dt
+			}
+			if strings.Contains(vName, "gage height") || strings.Contains(vName, "stage") {
+				stage = valNum
+			} else if strings.Contains(vName, "discharge") || strings.Contains(vName, "streamflow") {
+				flow = valNum
+			}
+		}
+	}
+
+	usgsUrl := fmt.Sprintf(usgsWaterDataURL, ref.USGSID)
+	headline := fmt.Sprintf("%s · %.2f ft", name, stage)
+
+	meta := map[string]any{
+		"lid":           ref.LID,
+		"usgsId":        ref.USGSID,
+		"usgsUrl":       usgsUrl,
+		"stage":         stage,
+		"stageUnit":     "ft",
+		"flow":          flow,
+		"flowUnit":      "cfs",
+		"floodCategory": "unknown",
+	}
+
+	return &Incident{
+		ID:         "flood-" + strings.ToLower(ref.LID),
+		Kind:       "flood",
+		Source:     "USGS Water Data",
+		SourceURL:  usgsUrl,
+		Headline:   headline,
+		Status:     "info",
+		Severity:   "info",
+		Lat:        lat,
+		Lon:        lon,
 		Area:       name,
 		ObservedAt: observedAt,
 		Meta:       meta,

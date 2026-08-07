@@ -13,8 +13,11 @@ var canadaFeeds = []struct {
 	URL   string
 	Label string
 }{
-	{"https://weather.gc.ca/rss/warning/nb_e.xml", "New Brunswick"},
 	{"https://weather.gc.ca/rss/warning/qc_e.xml", "Quebec"},
+	{"https://weather.gc.ca/rss/warning/nb_e.xml", "New Brunswick"},
+	{"https://weather.gc.ca/rss/warning/ns_e.xml", "Nova Scotia"},
+	{"https://weather.gc.ca/rss/warning/pe_e.xml", "Prince Edward Island"},
+	{"https://weather.gc.ca/rss/warning/nl_e.xml", "Newfoundland and Labrador"},
 }
 
 type atomFeed struct {

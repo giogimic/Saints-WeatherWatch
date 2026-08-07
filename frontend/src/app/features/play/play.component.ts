@@ -5,15 +5,9 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { OpsStateService } from '../../core/ops-state.service';
 import { QuizAttempt, QuizAward, WeatherService } from '../../core/weather.service';
-import {
-  QUIZ_TRACKS,
-  QuizCategory,
-  QuizQuestion,
-  QuizTrack,
-  expertRank,
-  questionsFor,
-} from './play.questions';
+import { QUIZ_TRACKS, QuizCategory, QuizQuestion, QuizTrack, expertRank, questionsFor } from './play.questions';
 import { ChaseGameComponent } from './chase-game.component';
+import { WorldService } from '../../core/world.service';
 
 interface TrackProgress {
   bestPercent: number;
@@ -111,6 +105,42 @@ const CALLSIGN_KEY = 'ww-play-callsign';
               <span class="text-base-content/30 text-sm self-center">{{ auth.isLoggedIn() ? '▶' : '🔒' }}</span>
             </div>
           </button>
+
+          @if (auth.isLoggedIn()) {
+            <article class="storm-card p-4 mb-3 space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="text-xs font-black uppercase tracking-widest text-accent">Your Field Network</h3>
+                <span class="text-[10px] font-black uppercase bg-base-300 px-2 py-0.5 rounded-full text-base-content/60">
+                  {{ myDeployables.length }}/5 Deployed
+                </span>
+              </div>
+              @if (myDeployables.length === 0) {
+                <p class="text-xs text-base-content/50 font-semibold">No active deployables. Build one at the Trade Center and deploy it in Storm World!</p>
+              } @else {
+                <div class="space-y-2">
+                  @for (d of myDeployables; track d.id) {
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-base-200/50 border border-base-300">
+                      <div>
+                        <div class="font-black text-white text-xs">{{ d.label }} <span class="text-base-content/40 font-normal">({{ d.kindName }})</span></div>
+                        <div class="text-[10px] font-semibold text-base-content/60 mt-0.5">
+                          Health: <span [class.text-error]="d.health < 25" [class.text-success]="d.health >= 50">{{ d.health }}%</span> · 
+                          Fuel: <span [class.text-error]="d.fuel < 25" [class.text-success]="d.fuel >= 50">{{ d.fuel }}%</span> · 
+                          Stored: <span class="text-accent font-black">{{ d.yieldStored }} {{ d.yieldKey.replace('_', ' ') }}</span>
+                        </div>
+                      </div>
+                      <div class="flex gap-1.5 justify-end">
+                        <button type="button" class="btn btn-xs btn-success font-black uppercase" [disabled]="d.yieldStored === 0" (click)="collectDeployable(d.id)">Collect</button>
+                        <button type="button" class="btn btn-xs btn-warning font-black uppercase" (click)="refuelDeployable(d.id)">Refuel</button>
+                        <button type="button" class="btn btn-xs btn-info font-black uppercase" (click)="repairDeployable(d.id)">Repair</button>
+                        <button type="button" class="btn btn-xs btn-error font-black uppercase" (click)="removeDeployable(d.id)">Salvage</button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </article>
+          }
+
 
           <a
             routerLink="/trade"
@@ -431,8 +461,12 @@ export class PlayComponent implements OnInit {
   postedToBoard = false;
   unlockedKeys: string[] = [];
   lastAward: QuizAward | null = null;
+  readonly world = inject(WorldService);
   private startedAt = 0;
   private lastSeconds = 0;
+
+  myDeployables: any[] = [];
+
 
   get current(): QuizQuestion | null {
     return this.deck[this.index] ?? null;
@@ -459,6 +493,7 @@ export class PlayComponent implements OnInit {
     if (this.auth.user()) {
       this.callsign = this.auth.user()!.chaserName;
     }
+    this.refreshMyDeployables();
   }
 
   promptRegister(): void {
@@ -491,6 +526,37 @@ export class PlayComponent implements OnInit {
     return this.tracks.find(t => t.id === category)?.title || category;
   }
 
+  refreshMyDeployables(): void {
+    if (!this.auth.isLoggedIn()) return;
+    this.world.getMyDeployables().subscribe(list => {
+      this.myDeployables = list || [];
+    });
+  }
+
+  collectDeployable(id: string): void {
+    this.world.collectDeployable(id).subscribe(res => {
+      this.refreshMyDeployables();
+    });
+  }
+
+  refuelDeployable(id: string): void {
+    this.world.refuelDeployable(id).subscribe(() => {
+      this.refreshMyDeployables();
+    });
+  }
+
+  repairDeployable(id: string): void {
+    this.world.repairDeployable(id).subscribe(() => {
+      this.refreshMyDeployables();
+    });
+  }
+
+  removeDeployable(id: string): void {
+    this.world.removeDeployable(id).subscribe(() => {
+      this.refreshMyDeployables();
+    });
+  }
+
   startTrack(track: QuizTrack): void {
     this.activeTrack = track;
     this.deck = this.shuffle(questionsFor(track.id));
@@ -520,6 +586,7 @@ export class PlayComponent implements OnInit {
     this.deck = [];
     this.refreshOverallRank();
     this.loadLeaderboard();
+    this.refreshMyDeployables();
   }
 
   pick(choiceId: string): void {

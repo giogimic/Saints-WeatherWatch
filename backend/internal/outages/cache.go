@@ -14,6 +14,7 @@ import (
 // Cache polls ODIN and holds the latest Snapshot.
 type Cache struct {
 	client *Client
+	cmp    *cmpScraper
 	store  *store.Store
 
 	mu     sync.RWMutex
@@ -25,6 +26,7 @@ type Cache struct {
 func NewCache(userAgent string, st *store.Store) *Cache {
 	return &Cache{
 		client: NewClient(userAgent),
+		cmp:    newCMPScraper(),
 		store:  st,
 		snap: Snapshot{
 			Source:     "ODIN (ORNL) public API",
@@ -33,8 +35,13 @@ func NewCache(userAgent string, st *store.Store) *Cache {
 			Nearby:     []CountyOutage{},
 			States:     []StateOutage{},
 			UtilityLinks: []UtilityLink{
-				{Name: "Versant Power outage map", URL: "https://www.versantpower.com/outages-restoration/live-outage-map/current-outage-alerts", Blurb: "Northern & eastern Maine"},
-				{Name: "CMP outages", URL: "https://www.cmpco.com/outages", Blurb: "Central & southern Maine"},
+				{Name: "Versant Power Live Outage Center", URL: "https://www.versantpower.com/outages-and-restoration/outage-map/", Blurb: "Northern & Eastern Maine (Aroostook, Wallagrass, Fort Kent, Bangor)"},
+				{Name: "Eastern Maine Electric Co-op (EMEC)", URL: "https://www.emec.com/outages", Blurb: "Rural Aroostook & St. John Valley Co-op"},
+				{Name: "Central Maine Power (CMP) Direct", URL: "https://outagemap.cmpco.com/cmp/", Blurb: "Central & Southern Maine (ArcGIS Hybrid Ingest)"},
+				{Name: "Hydro-Québec Info-pannes", URL: "https://infopannes.solutions.hydroquebec.com/info-pannes", Blurb: "Québec Regional Live Outage Map"},
+				{Name: "NB Power Live Outages", URL: "https://www.nbpower.com/Open/Outages.aspx", Blurb: "New Brunswick Grid Status"},
+				{Name: "Nova Scotia Power Outage Center", URL: "https://outagemap.nspower.ca/", Blurb: "Nova Scotia Coastal & Inland Outages"},
+				{Name: "Maritime Electric PEI", URL: "https://www.maritimeelectric.com/outages/", Blurb: "Prince Edward Island Grid Operations"},
 			},
 		},
 	}
@@ -61,7 +68,7 @@ func (c *Cache) Get() Snapshot {
 	out.StaleAfterSec = int((20 * time.Minute).Seconds())
 	out.Stale = stale
 	out.LastError = c.err
-	out.PolicyNote = "Official ODIN county estimates only. No address-level scraping; Maine CMP/Versant may be uncovered."
+	out.PolicyNote = "Hybrid data: Maine data sourced directly from utility ArcGIS where available. National estimates from ODIN."
 	return out
 }
 
@@ -93,6 +100,26 @@ func (c *Cache) Start(ctx context.Context, every time.Duration) {
 
 func (c *Cache) refresh() {
 	snap, err := c.client.FetchSnapshot()
+	
+	// Hybrid override: merge CMP data
+	if cmpOut, cmpErr := c.cmp.Fetch(); cmpErr == nil {
+		snap.Source = "ODIN (ORNL) + CMP Direct"
+		snap.MaineMetersOut = 0
+		snap.MaineCountiesOut = 0
+		snap.MaineCovered = true
+		for i := range snap.Maine {
+			if count, ok := cmpOut[snap.Maine[i].FIPS]; ok {
+				snap.Maine[i].MetersOut = count
+			}
+			if snap.Maine[i].MetersOut > 0 {
+				snap.MaineCountiesOut++
+			}
+			snap.MaineMetersOut += snap.Maine[i].MetersOut
+		}
+	} else {
+		log.Printf("outages: cmp scraper failed: %v", cmpErr)
+	}
+
 	c.mu.Lock()
 	prev := c.snap.MaineMetersOut
 	if err != nil {
