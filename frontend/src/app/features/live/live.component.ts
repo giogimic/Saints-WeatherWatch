@@ -613,7 +613,7 @@ export class LiveComponent implements OnInit, OnDestroy {
       if (list.length) {
         this.loadError = '';
         this.cameras = list.map(c => {
-          const type = c.type === 'iframe' || c.streamType === 'iframe' ? 'iframe' : (c.type || 'image');
+          const type: 'iframe' | 'image' = (c.type === 'iframe' || c.streamType === 'iframe') ? 'iframe' : 'image';
           const group = c.group || 'cams';
           const cam = {
             ...c,
