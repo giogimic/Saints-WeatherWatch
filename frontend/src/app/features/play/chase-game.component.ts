@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
   Component,
@@ -78,7 +79,7 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
 @Component({
   selector: 'app-chase-game',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div
       #shell
@@ -253,13 +254,20 @@ const WORLD_NAMES: Record<string, { name: string; rarity: string }> = {
                   >
                     Find
                   </button>
-                  <button
-                    type="button"
-                    class="btn btn-accent btn-sm rounded-xl font-black uppercase text-[10px] min-h-11"
-                    (click)="placeBasicProbe()"
-                  >
-                    Deploy Probe
-                  </button>
+                  <div class="flex items-center gap-1 bg-base-300/50 backdrop-blur-sm rounded-xl border border-base-300/80 pr-1 pl-2">
+                    <select [(ngModel)]="deployAccessLevel" class="bg-transparent text-[10px] uppercase font-black outline-none w-16 h-10">
+                      <option value="private">Priv</option>
+                      <option value="friends">Friends</option>
+                      <option value="public">Pub</option>
+                    </select>
+                    <button
+                      type="button"
+                      class="btn btn-accent btn-sm rounded-lg font-black uppercase text-[10px] min-h-8 h-8"
+                      (click)="placeBasicProbe()"
+                    >
+                      Deploy Probe
+                    </button>
+                  </div>
                 }
                 @if (!immersive) {
                   <button
@@ -447,6 +455,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
   selectedLobby = 'main';
   chatOpen = false;
   chatDraft = '';
+  deployAccessLevel = 'friends';
 
   private map?: L.Map;
   private playerMarker?: L.Marker;
@@ -1120,21 +1129,23 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
 
   private createDeployablePopupHtml(d: any): string {
     const isOwner = d.userId === this.auth.user()?.id;
-    const actions = isOwner 
+    // For now, if it's not the owner, we show actions for Friends/Public. The server will reject if not actual friend.
+    const canAccess = isOwner || d.accessLevel === 'friends' || d.accessLevel === 'public';
+    
+    const actions = canAccess 
       ? `<div style="display:flex;gap:4px;margin-top:6px;">
           <button onclick="window.__chaseGameInstance.handleDeployAction('collect','${d.id}')" style="background:#22c55e;color:#fff;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;">Collect</button>
           <button onclick="window.__chaseGameInstance.handleDeployAction('refuel','${d.id}')" style="background:#eab308;color:#000;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;">Refuel</button>
           <button onclick="window.__chaseGameInstance.handleDeployAction('repair','${d.id}')" style="background:#3b82f6;color:#fff;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;">Repair</button>
-          <button onclick="window.__chaseGameInstance.handleDeployAction('remove','${d.id}')" style="background:#ef4444;color:#fff;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;">Salvage</button>
-         </div>`
-      : d.public 
-        ? `<div style="margin-top:6px;">
-            <button onclick="window.__chaseGameInstance.handleDeployAction('collect','${d.id}')" style="background:#22c55e;color:#fff;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;width:100%;">Collect Yield</button>
-           </div>`
-        : `<div style="font-size:10px;color:#8592a6;margin-top:4px;">Private deployable</div>`;
+          ${isOwner ? `<button onclick="window.__chaseGameInstance.handleDeployAction('remove','${d.id}')" style="background:#ef4444;color:#fff;border:none;padding:2px 6px;font-size:10px;font-weight:bold;border-radius:4px;cursor:pointer;">Remove</button>` : ''}
+        </div>`
+      : `<div style="font-size:10px;color:#8592a6;margin-top:4px;">Private deployable</div>`;
 
     return `<div style="color:#fff;font-family:sans-serif;font-size:11px;min-width:140px;">
-      <b style="color:#60a5fa;text-transform:uppercase;font-size:10px;">${d.kindName}</b>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <b style="color:#60a5fa;text-transform:uppercase;font-size:10px;">${d.kindName}</b>
+        <span style="font-size:8px;background:#334155;padding:1px 3px;border-radius:2px;">${d.accessLevel}</span>
+      </div>
       <div>Health: ${d.health}% | Fuel: ${d.fuel}%</div>
       <div style="color:#a1b0cb;font-size:9px;margin-top:2px;">Yield Stored: ${d.yieldStored}</div>
       ${actions}
@@ -1159,7 +1170,7 @@ export class ChaseGameComponent implements AfterViewInit, OnDestroy {
     this.world.getInventory().subscribe(res => {
       const probe = res.items.find(x => x.key === 'basic_probe');
       if (probe && probe.count && probe.count > 0) {
-        this.world.sendDeployPlace('basic_probe', 'Probe Grid', this.lat, this.lng, true);
+        this.world.sendDeployPlace('basic_probe', 'Probe Grid', this.lat, this.lng, this.deployAccessLevel);
       } else {
         this.showToast('Craft a Basic Probe at the Trade Center first!');
       }

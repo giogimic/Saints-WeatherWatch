@@ -10,7 +10,7 @@
     "region": "New Brunswick Corridor",
     "attribution": "\u00a9 NB 511",
     "km": 36.4,
-    "stream_type": "iframe"
+    "stream_type": "image"
   },
   {
     "id": "nb-grand-falls-rt2",
@@ -23,7 +23,7 @@
     "region": "New Brunswick Corridor",
     "attribution": "\u00a9 NB 511",
     "km": 46.4,
-    "stream_type": "iframe"
+    "stream_type": "image"
   },
   {
     "id": "nb-woodstock-rt2",
@@ -36,7 +36,7 @@
     "region": "New Brunswick Corridor",
     "attribution": "\u00a9 NB 511",
     "km": 115.8,
-    "stream_type": "iframe"
+    "stream_type": "image"
   },
   {
     "id": "nb-fredericton-bridge",
@@ -49,7 +49,7 @@
     "region": "New Brunswick Corridor",
     "attribution": "\u00a9 NB 511",
     "km": 179.6,
-    "stream_type": "iframe"
+    "stream_type": "image"
   },
   {
     "id": "ns-halifax-harbor",
@@ -62,7 +62,7 @@
     "region": "Nova Scotia Coastal Corridor",
     "attribution": "\u00a9 NS 511",
     "km": 456.1,
-    "stream_type": "iframe"
+    "stream_type": "image"
   },
   {
     "id": "pei-confederation-bridge",
@@ -75,19 +75,6 @@
     "region": "Prince Edward Island Corridor",
     "attribution": "\u00a9 PEI 511",
     "km": 365.9,
-    "stream_type": "iframe"
-  },
-  {
-    "id": "nl-st-johns-harbor",
-    "name": "St. John's Harbor & Signal Hill",
-    "lat": 47.562,
-    "lng": -52.709,
-    "category": "marine",
-    "feed_url": "https://511.gov.nl.ca/map/Cctv/st-johns-harbor",
-    "update_rate_ms": 60000,
-    "region": "Newfoundland & Labrador",
-    "attribution": "\u00a9 NL 511",
-    "km": 1178.7,
-    "stream_type": "iframe"
+    "stream_type": "image"
   }
 ]

@@ -549,11 +549,11 @@ func worldDeployKindsHandler() http.HandlerFunc {
 }
 
 type placeDeployableReq struct {
-	Kind   string  `json:"kind"`
-	Label  string  `json:"label"`
-	Lat    float64 `json:"lat"`
-	Lng    float64 `json:"lng"`
-	Public bool    `json:"public"`
+	Kind        string  `json:"kind"`
+	Label       string  `json:"label"`
+	Lat         float64 `json:"lat"`
+	Lng         float64 `json:"lng"`
+	AccessLevel string  `json:"accessLevel"`
 }
 
 func worldPlaceDeployableHandler(st *store.Store) http.HandlerFunc {
@@ -573,7 +573,7 @@ func worldPlaceDeployableHandler(st *store.Store) http.HandlerFunc {
 			http.Error(w, "Invalid input", http.StatusBadRequest)
 			return
 		}
-		v, err := world.PlaceDeployable(st, r.Context(), user.ID, req.Kind, req.Label, req.Lat, req.Lng, req.Public)
+		v, err := world.PlaceDeployable(st, r.Context(), user.ID, req.Kind, req.Label, req.Lat, req.Lng, req.AccessLevel)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

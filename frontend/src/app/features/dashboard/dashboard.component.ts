@@ -19,8 +19,9 @@ import {
   WeatherAlert,
   WeatherService,
 } from '../../core/weather.service';
+import { FriendsService, Friend } from '../../core/friends.service';
 
-type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | 'map';
+type CardKey = 'profile' | 'friends' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | 'map';
 
 @Component({
   selector: 'app-dashboard',
@@ -84,6 +85,27 @@ type CardKey = 'profile' | 'progress' | 'garage' | 'loot' | 'cams' | 'areas' | '
                         </div>
                       </div>
                     </div>
+                  }
+                </article>
+              }
+              @case ('friends') {
+                <article class="storm-card p-4 space-y-3">
+                  <h2 class="text-xs font-black uppercase tracking-widest text-pink-400">Chaser Network</h2>
+                  <form (submit)="addFriend($event)" class="flex gap-2 mb-2">
+                    <input type="text" [(ngModel)]="newFriendName" name="newFriendName" placeholder="Chaser Name" class="input input-bordered input-sm text-xs flex-1 bg-base-300/50">
+                    <button type="submit" class="btn btn-sm btn-primary text-xs uppercase font-black" [disabled]="!newFriendName.trim() || isAddingFriend">Add</button>
+                  </form>
+                  @if (friendsList.length) {
+                    <div class="space-y-2">
+                      @for (f of friendsList; track f.id) {
+                        <div class="flex items-center justify-between bg-base-300/50 p-2 rounded-lg">
+                          <span class="text-sm font-black italic">{{ f.chaserName }}</span>
+                          <button class="btn btn-xs btn-ghost text-red-400 font-bold uppercase text-[10px]" (click)="removeFriend(f.id)">Remove</button>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="text-xs text-base-content/50 font-semibold text-center italic py-2">No friends yet.<br>Add chasers to share deployables!</p>
                   }
                 </article>
               }
@@ -287,8 +309,9 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly ops = inject(OpsStateService);
   private readonly weather = inject(WeatherService);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly friends = inject(FriendsService);
 
-  allCards: CardKey[] = ['profile', 'progress', 'garage', 'loot', 'cams', 'areas', 'map'];
+  allCards: CardKey[] = ['profile', 'friends', 'progress', 'garage', 'loot', 'cams', 'areas', 'map'];
   visibleCards: CardKey[] = [...this.allCards];
   hidden = new Set<string>();
   editLayout = false;
@@ -303,6 +326,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   expandedCams: CameraFeedDto[] = [];
   expandedHazards: HazardAreaInfo | null = null;
   expandedDeskScore: DeskScore | null = null;
+  
+  friendsList: Friend[] = [];
+  newFriendName = '';
+  isAddingFriend = false;
 
   get hazardPreview(): HazardIncident[] {
     if (!this.expandedHazards) return [];
@@ -322,6 +349,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.weather.getDashboardPrefs().subscribe(p => {
       this.prefs = p;
       this.applyPrefs();
+      this.loadFriends();
     });
     this.ops.reloadAccountData();
   }
@@ -481,4 +509,38 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       }).bindPopup(cam.title).addTo(this.layer);
     }
   }
+
+  loadFriends() {
+    this.friends.listFriends().subscribe({
+      next: (res) => this.friendsList = res,
+      error: (err) => console.error('Failed to load friends', err)
+    });
+  }
+
+  addFriend(e: Event) {
+    e.preventDefault();
+    if (!this.newFriendName.trim() || this.isAddingFriend) return;
+    this.isAddingFriend = true;
+    this.friends.addFriend(this.newFriendName.trim()).subscribe({
+      next: () => {
+        this.newFriendName = '';
+        this.isAddingFriend = false;
+        this.loadFriends();
+      },
+      error: (err) => {
+        console.error('Failed to add friend', err);
+        alert(err.error || 'Failed to add friend');
+        this.isAddingFriend = false;
+      }
+    });
+  }
+
+  removeFriend(id: string) {
+    if (!confirm('Remove this friend?')) return;
+    this.friends.removeFriend(id).subscribe({
+      next: () => this.loadFriends(),
+      error: (err) => console.error('Failed to remove friend', err)
+    });
+  }
 }
+

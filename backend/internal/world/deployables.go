@@ -87,7 +87,7 @@ type DeployableView struct {
 	Lng         float64 `json:"lng"`
 	Health      int     `json:"health"`
 	Fuel        int     `json:"fuel"`
-	Public      bool    `json:"public"`
+	AccessLevel string  `json:"accessLevel"`
 	YieldKey    string  `json:"yieldKey"`
 	YieldStored int     `json:"yieldStored"`
 	PlacedAt    string  `json:"placedAt"`
@@ -102,7 +102,7 @@ func viewFromRow(row *db.DeployableModel) DeployableView {
 	return DeployableView{
 		ID: row.ID, UserID: row.UserID, Kind: row.Kind, KindName: kindName,
 		Label: row.Label, Lat: row.Lat, Lng: row.Lng,
-		Health: row.Health, Fuel: row.Fuel, Public: row.Public,
+		Health: row.Health, Fuel: row.Fuel, AccessLevel: row.AccessLevel,
 		YieldKey: row.YieldKey, YieldStored: row.YieldStored,
 		PlacedAt:  row.PlacedAt.UTC().Format(time.RFC3339),
 		ExpiresAt: row.ExpiresAt.UTC().Format(time.RFC3339),
@@ -112,7 +112,7 @@ func viewFromRow(row *db.DeployableModel) DeployableView {
 // ── Core operations ─────────────────────────────────────────────────────────
 
 // PlaceDeployable consumes the required gear items and places a new entity.
-func PlaceDeployable(st *store.Store, ctx context.Context, userID, kind, label string, lat, lng float64, public bool) (*DeployableView, error) {
+func PlaceDeployable(st *store.Store, ctx context.Context, userID, kind, label string, lat, lng float64, accessLevel string) (*DeployableView, error) {
 	dk, ok := LookupDeployKind(kind)
 	if !ok {
 		return nil, errString("unknown deployable kind")
@@ -156,7 +156,7 @@ func PlaceDeployable(st *store.Store, ctx context.Context, userID, kind, label s
 		db.Deployable.ExpiresAt.Set(expiresAt),
 		db.Deployable.User.Link(db.User.ID.Equals(userID)),
 		db.Deployable.Label.Set(label),
-		db.Deployable.Public.Set(public),
+		db.Deployable.AccessLevel.Set(accessLevel),
 		db.Deployable.YieldKey.Set(dk.YieldKey),
 		db.Deployable.Health.Set(100),
 		db.Deployable.Fuel.Set(100),
@@ -175,7 +175,17 @@ func PlaceDeployable(st *store.Store, ctx context.Context, userID, kind, label s
 	return &v, nil
 }
 
-// CollectDeployable harvests accumulated yield. Owner or any player if public.
+func isFriend(st *store.Store, ctx context.Context, userA, userB string) bool {
+	f, _ := st.Client.Friendship.FindUnique(
+		db.Friendship.UserIDFriendID(
+			db.Friendship.UserID.Equals(userA),
+			db.Friendship.FriendID.Equals(userB),
+		),
+	).Exec(ctx)
+	return f != nil
+}
+
+// CollectDeployable harvests accumulated yield. Owner or authorized player.
 func CollectDeployable(st *store.Store, ctx context.Context, userID, deployableID string) (*DeployableView, int, error) {
 	row, err := st.Client.Deployable.FindUnique(
 		db.Deployable.ID.Equals(deployableID),
@@ -183,9 +193,15 @@ func CollectDeployable(st *store.Store, ctx context.Context, userID, deployableI
 	if err != nil || row == nil {
 		return nil, 0, errString("deployable not found")
 	}
-	// Auth: owner or public
-	if row.UserID != userID && !row.Public {
-		return nil, 0, errString("not your deployable")
+	// Auth
+	if row.UserID != userID {
+		if row.AccessLevel == "private" {
+			return nil, 0, errString("not your deployable")
+		} else if row.AccessLevel == "friends" {
+			if !isFriend(st, ctx, row.UserID, userID) {
+				return nil, 0, errString("deployable is friends-only")
+			}
+		}
 	}
 	if row.YieldStored <= 0 {
 		v := viewFromRow(row)
@@ -218,7 +234,13 @@ func RefuelDeployable(st *store.Store, ctx context.Context, userID, deployableID
 		return nil, errString("deployable not found")
 	}
 	if row.UserID != userID {
-		return nil, errString("not your deployable")
+		if row.AccessLevel == "private" {
+			return nil, errString("not your deployable")
+		} else if row.AccessLevel == "friends" {
+			if !isFriend(st, ctx, row.UserID, userID) {
+				return nil, errString("deployable is friends-only")
+			}
+		}
 	}
 	// Try solar_pack first, then fuel_can
 	fuelItem := ""
@@ -258,7 +280,13 @@ func RepairDeployable(st *store.Store, ctx context.Context, userID, deployableID
 		return nil, errString("deployable not found")
 	}
 	if row.UserID != userID {
-		return nil, errString("not your deployable")
+		if row.AccessLevel == "private" {
+			return nil, errString("not your deployable")
+		} else if row.AccessLevel == "friends" {
+			if !isFriend(st, ctx, row.UserID, userID) {
+				return nil, errString("deployable is friends-only")
+			}
+		}
 	}
 	if !ConsumeStack(st, ctx, userID, "repair_kit", 1) {
 		return nil, errString("need a repair_kit")

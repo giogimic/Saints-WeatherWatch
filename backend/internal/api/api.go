@@ -95,6 +95,9 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		// Storm World — craft / trade / inventory / lobbies
 		mountWorldRoutes(r, st, worldHub)
 
+		// Friends System
+		r.Mount("/friends", NewFriendsAPI(st).Routes())
+
 		// Phase A — power outages (ODIN)
 		mountOutageRoutes(r, st, outageCache)
 
@@ -122,6 +125,11 @@ func Mount(r chi.Router, st *store.Store, cache *nws.Cache, camCache *cams.Cache
 		r.Get("/locations", getSavedLocationsHandler(st))
 		r.Post("/locations", createSavedLocationHandler(st))
 		r.Delete("/locations/{id}", deleteSavedLocationHandler(st))
+
+		// Custom Cameras
+		r.Get("/cams/custom", getCustomCamsHandler(st))
+		r.Post("/cams/custom/{id}/downvote", downvoteCustomCamHandler(st))
+		r.Post("/cams/custom", addCustomCamHandler(st))
 
 		// Camera proxy + listing (Phase C health / near-warnings)
 		r.Get("/cams", camListHandler(camCache, cache))

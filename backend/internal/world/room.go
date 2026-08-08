@@ -294,17 +294,16 @@ type ChatLine struct {
 }
 
 type clientMsg struct {
-	Type    string  `json:"type"`
-	Lat     float64 `json:"lat"`
-	Lng     float64 `json:"lng"`
-	DropID  string  `json:"dropId"`
-	EventID string  `json:"eventId"`
-	Text    string  `json:"text"`
-	// Phase 5 — deployable actions
-	DeployableID string `json:"deployableId"`
-	Kind         string `json:"kind"`
-	Label        string `json:"label"`
-	Public       bool   `json:"public"`
+	Type         string  `json:"type"`
+	Lat          float64 `json:"lat,omitempty"`
+	Lng          float64 `json:"lng,omitempty"`
+	Text         string  `json:"text,omitempty"`
+	DropID       string  `json:"dropId,omitempty"`
+	EventID      string  `json:"eventId,omitempty"`
+	Kind         string  `json:"kind,omitempty"`
+	Label        string  `json:"label,omitempty"`
+	AccessLevel  string  `json:"accessLevel,omitempty"`
+	DeployableID string  `json:"deployableId,omitempty"`
 }
 
 type client struct {
@@ -662,7 +661,7 @@ func (c *client) readPump() {
 			c.room.handleChat(c, msg.Text)
 		// Phase 5 — deployable WS actions
 		case "deploy_place":
-			c.room.handleDeployPlace(c, msg.Kind, msg.Label, msg.Lat, msg.Lng, msg.Public)
+			c.room.handleDeployPlace(c, msg.Kind, msg.Label, msg.Lat, msg.Lng, msg.AccessLevel)
 		case "deploy_collect":
 			c.room.handleDeployCollect(c, msg.DeployableID)
 		case "deploy_refuel":
@@ -1159,11 +1158,11 @@ func StackCount(st *store.Store, ctx context.Context, userID, key string) int {
 
 // ── Phase 5 — deploy WS handlers ────────────────────────────────────────────
 
-func (r *Room) handleDeployPlace(c *client, kind, label string, lat, lng float64, public bool) {
+func (r *Room) handleDeployPlace(c *client, kind, label string, lat, lng float64, accessLevel string) {
 	if c.userID == "" || r.st == nil || kind == "" {
 		return
 	}
-	v, err := PlaceDeployable(r.st, context.Background(), c.userID, kind, label, lat, lng, public)
+	v, err := PlaceDeployable(r.st, context.Background(), c.userID, kind, label, lat, lng, accessLevel)
 	if err != nil {
 		r.toast(c, "Deploy failed: "+err.Error())
 		return

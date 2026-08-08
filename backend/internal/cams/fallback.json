@@ -316,19 +316,6 @@
       "attribution": "\u00a9 NS 511",
       "km": 456.1,
       "stream_type": "image"
-    },
-    {
-      "id": "nl-st-johns-harbor",
-      "name": "St. John's Harbor & Signal Hill",
-      "lat": 47.562,
-      "lng": -52.709,
-      "category": "marine",
-      "feed_url": "https://511.gov.nl.ca/map/Cctv/st-johns-harbor",
-      "update_rate_ms": 60000,
-      "region": "Newfoundland & Labrador",
-      "attribution": "\u00a9 NL 511",
-      "km": 1178.7,
-      "stream_type": "image"
     }
   ]
 }

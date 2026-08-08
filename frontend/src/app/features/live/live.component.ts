@@ -3,9 +3,11 @@ import { HttpClient } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { catchError, of } from 'rxjs';
+import { catchError, of, forkJoin } from 'rxjs';
+import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/auth.service';
 import { OpsStateService } from '../../core/ops-state.service';
+import { WeatherService } from '../../core/weather.service';
 
 export interface CameraFeed {
   id: string;
@@ -45,7 +47,7 @@ export interface CameraFeed {
 @Component({
   selector: 'app-live',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, FormsModule],
   template: `
     <div class="min-h-[calc(100vh-4rem)] p-4 md:p-6">
       <div class="max-w-6xl mx-auto">
@@ -86,6 +88,15 @@ export interface CameraFeed {
             >
               Impact mode
             </button>
+            @if (isLoggedIn()) {
+              <button
+                type="button"
+                class="btn btn-sm btn-ghost border border-primary/50 text-primary rounded-xl font-bold uppercase text-[10px] min-h-11 ml-2"
+                (click)="showAddCamModal = true"
+              >
+                a~ Add Custom Cam
+              </button>
+            }
 
             <!-- Group By Selector -->
             <div class="join border border-base-300 rounded-xl overflow-hidden ml-auto">
@@ -415,6 +426,15 @@ export interface CameraFeed {
                       >
                         View Source
                       </a>
+                      @if (camera.id.startsWith('custom_')) {
+                        <button
+                          type="button"
+                          class="btn btn-xs rounded-lg font-black uppercase text-[10px] min-h-10 btn-ghost border border-error/40 text-error"
+                          (click)="downvoteCam(camera.id); $event.stopPropagation()"
+                        >
+                          a~. Downvote
+                        </button>
+                      }
                     }
                   </div>
                 </div>
@@ -422,6 +442,53 @@ export interface CameraFeed {
             </div>
           </article>
         </ng-template>
+
+        <!-- Add Custom Camera Modal -->
+        @if (showAddCamModal) {
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div class="bg-base-300 border border-base-100 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+              <div class="p-4 border-b border-base-100 flex justify-between items-center bg-base-200">
+                <h3 class="font-black uppercase tracking-wider text-sm">Add Community Camera</h3>
+                <button class="btn btn-sm btn-circle btn-ghost" (click)="showAddCamModal = false">a~i</button>
+              </div>
+              <div class="p-6 space-y-4">
+                <div class="form-control">
+                  <label class="label"><span class="label-text font-bold uppercase text-[10px] tracking-wider">Camera Title</span></label>
+                  <input type="text" class="input input-bordered input-sm rounded-xl font-semibold" [(ngModel)]="addCamForm.title" placeholder="e.g. Route 1 - Fort Kent" />
+                </div>
+                <div class="form-control">
+                  <label class="label"><span class="label-text font-bold uppercase text-[10px] tracking-wider">Stream Type</span></label>
+                  <select class="select select-bordered select-sm rounded-xl font-semibold" [(ngModel)]="addCamForm.streamType">
+                    <option value="image">Auto-Refreshing JPEG (Image)</option>
+                    <option value="burst">Image Sequence (Burst)</option>
+                    <option value="iframe">Live Video (Embed Iframe)</option>
+                  </select>
+                </div>
+                <div class="form-control">
+                  <label class="label"><span class="label-text font-bold uppercase text-[10px] tracking-wider">Feed / Embed URL</span></label>
+                  <input type="text" class="input input-bordered input-sm rounded-xl font-semibold" [(ngModel)]="addCamForm.feedUrl" placeholder="https://..." />
+                </div>
+
+                @if (addCamForm.streamType === 'iframe') {
+                  <div class="p-3 bg-info/10 border border-info/30 rounded-xl text-xs text-info/90">
+                    <p class="font-bold mb-1">Live Embed Instructions:</p>
+                    <ul class="list-disc pl-4 space-y-1">
+                      <li><strong>YouTube:</strong> Use <code>youtube.com/embed/VIDEO_ID</code> (Do not use watch?v=)</li>
+                      <li><strong>EarthCam:</strong> Use the embed code URL provided by EarthCam.</li>
+                    </ul>
+                  </div>
+                }
+
+                <div class="flex gap-2 pt-2">
+                  <button class="btn btn-sm flex-1 rounded-xl font-bold uppercase" (click)="showAddCamModal = false">Cancel</button>
+                  <button class="btn btn-sm btn-primary flex-1 rounded-xl font-bold uppercase" (click)="submitCustomCam()" [disabled]="isSubmittingCam || !addCamForm.title || !addCamForm.feedUrl">
+                    {{ isSubmittingCam ? 'Submitting...' : 'Add Camera' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
 
       </div>
     </div>
@@ -446,8 +513,9 @@ export class LiveComponent implements OnInit, OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly auth = inject(AuthService);
+  readonly auth = inject(AuthService);
   readonly ops = inject(OpsStateService);
+  readonly weather = inject(WeatherService);
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
   private listTimer: ReturnType<typeof setInterval> | undefined;
   private burstTimer: ReturnType<typeof setInterval> | undefined;
@@ -474,6 +542,14 @@ export class LiveComponent implements OnInit, OnDestroy {
     { group: 'satellite' as const, title: 'NOAA Satellite', icon: '🛰️' },
     { group: 'radar' as const, title: 'NOAA Radar', icon: '📡' },
   ];
+
+  showAddCamModal = false;
+  isSubmittingCam = false;
+  addCamForm = {
+    title: '',
+    streamType: 'image',
+    feedUrl: ''
+  };
 
   windySafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(
     'https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=default&metricTemp=default&metricWind=default&zoom=7&overlay=rain&product=radar&level=surface&lat=47.05&lon=-68.35&detailLat=47.05&detailLon=-68.35&marker=true'
@@ -515,7 +591,6 @@ export class LiveComponent implements OnInit, OnDestroy {
       'nb-route2',
       'nova-scotia',
       'pei',
-      'newfoundland',
       'outer',
       '',
     ];
@@ -610,34 +685,38 @@ export class LiveComponent implements OnInit, OnDestroy {
   }
 
   loadCameras(): void {
-    this.http.get<CameraFeed[]>('/api/cams').pipe(
-      catchError(err => {
-        console.error('cams list error', err);
-        this.loadError = 'Backend camera list unavailable.';
-        this.loading = false;
-        return of([] as CameraFeed[]);
-      })
-    ).subscribe(list => {
+    forkJoin({
+      official: this.http.get<CameraFeed[]>('/api/cams').pipe(
+        catchError(err => {
+          console.error('cams list error', err);
+          return of([] as CameraFeed[]);
+        })
+      ),
+      custom: this.weather.getCustomCams()
+    }).subscribe(({ official, custom }) => {
       this.loading = false;
-      if (list.length) {
-        this.loadError = '';
-        this.cameras = list.map(c => {
-          const type: 'iframe' | 'image' = (c.type === 'iframe' || c.streamType === 'iframe') ? 'iframe' : 'image';
-          const group = c.group || 'cams';
-          const cam = {
-            ...c,
-            type,
-            group,
-          };
-          if (type === 'iframe' && cam.embedUrl) {
-            cam.safeEmbedUrl = this.sanitizer.bypassSecurityTrustResourceUrl(cam.embedUrl);
-          }
-          return cam;
-        });
-        const requested = this.route.snapshot.queryParamMap.get('cam');
-        if (requested) {
-          this.openRequestedCam(requested);
+      const list = [...official, ...custom];
+      if (!list.length) {
+        this.loadError = 'Backend camera list unavailable.';
+        return;
+      }
+      this.loadError = '';
+      this.cameras = list.map(c => {
+        const type: 'iframe' | 'image' = (c.type === 'iframe' || c.streamType === 'iframe') ? 'iframe' : 'image';
+        const group = c.group || 'cams';
+        const cam = {
+          ...c,
+          type,
+          group,
+        };
+        if (type === 'iframe' && cam.embedUrl) {
+          cam.safeEmbedUrl = this.sanitizer.bypassSecurityTrustResourceUrl(cam.embedUrl);
         }
+        return cam;
+      });
+      const requested = this.route.snapshot.queryParamMap.get('cam');
+      if (requested) {
+        this.openRequestedCam(requested);
       }
     });
   }
@@ -794,6 +873,46 @@ export class LiveComponent implements OnInit, OnDestroy {
       queryParams: { cam: null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
+    });
+  }
+
+  isLoggedIn(): boolean {
+    return this.auth.isLoggedIn();
+  }
+
+  submitCustomCam(): void {
+    if (!this.addCamForm.title || !this.addCamForm.feedUrl) return;
+    this.isSubmittingCam = true;
+    this.weather.addCustomCam(this.addCamForm).subscribe({
+      next: () => {
+        this.isSubmittingCam = false;
+        this.showAddCamModal = false;
+        this.addCamForm = { title: '', streamType: 'image', feedUrl: '' };
+        this.loadCameras(); // refresh list
+      },
+      error: () => {
+        this.isSubmittingCam = false;
+        alert('Failed to add custom camera. Please try again.');
+      }
+    });
+  }
+
+  downvoteCam(id: string): void {
+    if (!confirm('Are you sure you want to downvote this camera? If a camera receives 25 downvotes, it will be automatically removed.')) {
+      return;
+    }
+    this.weather.downvoteCustomCam(id).subscribe({
+      next: () => {
+        alert('Downvote registered!');
+        this.loadCameras(); // refresh list to potentially see it removed
+      },
+      error: (err) => {
+        if (err.status === 409) {
+          alert('You have already downvoted this camera.');
+        } else {
+          alert('Failed to downvote camera.');
+        }
+      }
     });
   }
 }

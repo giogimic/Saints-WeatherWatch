@@ -79,7 +79,7 @@ ATLANTIC_CAMERAS = [
         "lat": 47.562,
         "lng": -52.709,
         "category": "marine",
-        "feed_url": "https://511.gov.nl.ca/map/Cctv/st-johns-harbor",
+        "feed_url": "https://511nl.ca/map/Cctv/st-johns-harbor",
         "update_rate_ms": 60000,
         "region": "Newfoundland & Labrador",
         "attribution": "© NL 511"

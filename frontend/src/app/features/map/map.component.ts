@@ -17,7 +17,13 @@ import {
 } from '../../core/weather.service';
 
 type BaseKey = 'street' | 'dark' | 'imagery';
-type LayerChip = 'radar' | 'warnings' | 'lsr' | 'spc' | 'cams' | 'outages' | 'flood' | 'quakes';
+type LayerChip = 
+  | 'radar' | 'rain_intensity' | 'snow' 
+  | 'temp' | 'humidity' | 'pressure' 
+  | 'wind' 
+  | 'warnings' | 'lsr' | 'spc' | 'storm_cells' 
+  | 'clouds' | 'visibility' 
+  | 'cams' | 'outages' | 'flood' | 'quakes';
 type RadarProductId = 'n0r' | 'n0q' | 'n0s';
 
 interface MapPersist {
@@ -27,6 +33,9 @@ interface MapPersist {
   base: BaseKey;
   layers: LayerChip[];
 }
+
+const OWM_API_KEY = 'YOUR_API_KEY_HERE'; // Note: Requires free OpenWeatherMap API key for some atmosphere layers
+
 
 const DEFAULT_CENTER: [number, number] = [47.05, -68.35];
 const DEFAULT_ZOOM = 8;
@@ -106,23 +115,39 @@ const STORAGE_KEY = 'ww-map-view';
             }
           </div>
 
-          <!-- Left edge: layer toggles (desktop) — no bottom bar -->
-          <div class="hidden md:flex absolute top-1/2 -translate-y-1/2 left-2 z-[1000] flex-col gap-1.5 pointer-events-none max-h-[70%] overflow-y-auto pr-0.5">
+          <!-- Left edge: layer toggles (desktop) — now grouped -->
+          <div class="hidden md:flex absolute top-3 left-3 z-[1000] flex-col gap-3 pointer-events-none max-h-[85%] overflow-y-auto pr-2 pb-16 custom-scrollbar">
+            
             <button
               type="button"
-              class="pointer-events-auto btn btn-sm rounded-xl font-black uppercase tracking-wider min-h-10 h-10 w-[3.5rem] px-0 text-[9px] border-b-[3px] backdrop-blur-md shadow-lg transition-all active:scale-95 active:border-b hover:-translate-y-0.5"
-              [ngClass]="ops.impactMode() ? 'bg-warning text-warning-content border-orange-600 shadow-[0_0_12px_rgba(251,191,36,0.4)]' : 'bg-base-300/70 border-base-content/10 text-base-content/70 hover:bg-base-300/90'"
+              class="pointer-events-auto btn btn-sm rounded-xl font-black uppercase tracking-wider min-h-10 h-10 px-4 text-[10px] border-b-[3px] backdrop-blur-md shadow-lg transition-all active:scale-95 active:border-b hover:-translate-y-0.5"
+              [ngClass]="ops.impactMode() ? 'bg-warning text-warning-content border-orange-600 shadow-[0_0_12px_rgba(251,191,36,0.4)]' : 'bg-base-300/80 border-base-content/10 text-base-content/70 hover:bg-base-300/90'"
               (click)="toggleImpactMode()"
               title="Focus warnings, outages, flood, cams"
-            >Imp</button>
-            @for (chip of layerChips; track chip.key) {
-              <button
-                type="button"
-                class="pointer-events-auto btn btn-sm rounded-xl font-black uppercase tracking-wider min-h-10 h-10 w-[3.5rem] px-0 text-[9px] border-b-[3px] backdrop-blur-md shadow-lg transition-all active:scale-95 active:border-b hover:-translate-y-0.5"
-                [ngClass]="layers[chip.key] ? 'bg-primary text-primary-content border-blue-800 shadow-[0_0_12px_rgba(56,189,248,0.4)]' : 'bg-base-300/70 border-base-content/10 text-base-content/70 hover:bg-base-300/90'"
-                (click)="toggleLayer(chip.key)"
-                [title]="chip.label"
-              >{{ chip.short || chip.label }}</button>
+            >Impact Mode</button>
+
+            <!-- Grouped Layers -->
+            @for (group of layerGroups; track group.name) {
+              <div class="flex flex-col gap-1.5 bg-base-300/50 backdrop-blur-md p-1.5 rounded-2xl border border-base-content/10 pointer-events-auto shadow-sm">
+                <div class="text-[8px] font-black uppercase tracking-widest text-base-content/50 px-2 py-0.5">{{ group.name }}</div>
+                <div class="flex flex-wrap gap-1.5 w-32">
+                  @for (chip of group.chips; track chip.key) {
+                    <div class="storm-chip-wrap flex-1">
+                      <button
+                        type="button"
+                        class="w-full btn btn-sm rounded-xl font-bold tracking-wider min-h-8 h-8 px-1.5 text-[9px] border-b-[2px] transition-all active:scale-95 active:border-b"
+                        [ngClass]="layers[chip.key] ? 'bg-primary text-primary-content border-blue-800 shadow-[0_0_8px_rgba(56,189,248,0.4)]' : 'bg-base-200 border-base-content/10 text-base-content/70 hover:bg-base-300'"
+                        (click)="toggleLayer(chip.key)"
+                      >{{ chip.short || chip.label }}</button>
+                      <div class="storm-chip-tip">
+                        <div class="storm-chip-tip-title">{{ chip.label }}</div>
+                        {{ chip.tooltip }}
+                        <div class="storm-chip-tip-source">Source: {{ chip.source }}</div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
             }
           </div>
 
@@ -161,6 +186,20 @@ const STORAGE_KEY = 'ww-map-view';
               >
                 {{ radarLooping ? '⏸ PAUSE' : '▶ PLAY' }}
               </button>
+
+              <!-- Playback Speed -->
+              @if (canLoop) {
+                <div class="hidden sm:flex items-center gap-1 bg-base-200/60 p-1 rounded-xl border border-base-content/10">
+                  @for (spd of [0.5, 1, 2]; track spd) {
+                    <button
+                      type="button"
+                      class="btn btn-sm rounded-lg font-black uppercase text-[10px] min-h-8 h-8 px-2.5 border-b-[2px] transition-all active:scale-95"
+                      [ngClass]="radarPlaybackSpeed === spd ? 'bg-primary text-primary-content border-blue-800 shadow-md' : 'btn-ghost text-base-content/70 hover:bg-base-300/60'"
+                      (click)="setRadarPlaybackSpeed(spd)"
+                    >{{ spd }}x</button>
+                  }
+                </div>
+              }
 
               <!-- Product Choices (Ref, HD, Vel) -->
               <div class="flex items-center gap-1 bg-base-200/60 p-1 rounded-xl border border-base-content/10">
@@ -204,14 +243,101 @@ const STORAGE_KEY = 'ww-map-view';
             }
           </div>
 
+          <!-- Legends (Desktop & Mobile) -->
+          <div class="absolute bottom-32 md:bottom-20 right-2 md:right-3 z-[1000] flex flex-col gap-2 pointer-events-none">
+            @if (layers.temp) {
+              <div class="pointer-events-auto p-2 bg-base-300/85 backdrop-blur-md rounded-xl border border-base-content/15 shadow-xl w-40">
+                <div class="text-[9px] font-black uppercase tracking-wider text-base-content/60 mb-1">Temperature</div>
+                <div class="h-2 w-full rounded-full bg-gradient-to-r from-purple-500 via-blue-400 via-green-400 via-yellow-400 to-red-600"></div>
+                <div class="flex justify-between text-[8px] font-bold mt-1 text-base-content/70">
+                  <span>-30°C</span><span>-10°</span><span>0°</span><span>15°</span><span>30°C+</span>
+                </div>
+              </div>
+            }
+            @if (layers.rain_intensity) {
+              <div class="pointer-events-auto p-2 bg-base-300/85 backdrop-blur-md rounded-xl border border-base-content/15 shadow-xl w-40">
+                <div class="text-[9px] font-black uppercase tracking-wider text-base-content/60 mb-1">Rain Intensity</div>
+                <div class="h-2 w-full rounded-full bg-gradient-to-r from-blue-300 via-green-400 via-yellow-400 via-red-500 to-purple-600"></div>
+                <div class="flex justify-between text-[8px] font-bold mt-1 text-base-content/70">
+                  <span>Trace</span><span>Light</span><span>Mod</span><span>Heavy</span><span>Extreme</span>
+                </div>
+              </div>
+            }
+            @if (layers.radar) {
+              <div class="pointer-events-auto p-2 bg-base-300/85 backdrop-blur-md rounded-xl border border-base-content/15 shadow-xl w-40">
+                <div class="text-[9px] font-black uppercase tracking-wider text-base-content/60 mb-1">Reflectivity (dBZ)</div>
+                <div class="h-2 w-full rounded-full bg-gradient-to-r from-green-300 via-yellow-300 via-red-500 to-pink-500"></div>
+                <div class="flex justify-between text-[8px] font-bold mt-1 text-base-content/70">
+                  <span>20</span><span>30</span><span>40</span><span>50</span><span>65+</span>
+                </div>
+              </div>
+            }
+            @if (layers.wind) {
+              <div class="pointer-events-auto p-2 bg-base-300/85 backdrop-blur-md rounded-xl border border-base-content/15 shadow-xl w-40">
+                <div class="text-[9px] font-black uppercase tracking-wider text-base-content/60 mb-1">Wind Speed</div>
+                <div class="h-2 w-full rounded-full bg-gradient-to-r from-cyan-300 via-blue-500 via-purple-500 to-pink-600"></div>
+                <div class="flex justify-between text-[8px] font-bold mt-1 text-base-content/70">
+                  <span>Calm</span><span>5</span><span>15</span><span>25</span><span>30+ m/s</span>
+                </div>
+              </div>
+            }
+            @if (layers.storm_cells) {
+              <div class="pointer-events-auto p-2 bg-base-300/85 backdrop-blur-md rounded-xl border border-base-content/15 shadow-xl w-40">
+                <div class="text-[9px] font-black uppercase tracking-wider text-base-content/60 mb-1">Velocity (SR)</div>
+                <div class="h-2 w-full rounded-full bg-gradient-to-r from-red-600 via-gray-400 to-green-600"></div>
+                <div class="flex justify-between text-[8px] font-bold mt-1 text-base-content/70">
+                  <span>Outbound</span><span>0</span><span>Inbound</span>
+                </div>
+              </div>
+            }
+            @if (layers.snow) {
+              <div class="pointer-events-auto p-2 bg-base-300/85 backdrop-blur-md rounded-xl border border-base-content/15 shadow-xl w-40">
+                <div class="text-[9px] font-black uppercase tracking-wider text-base-content/60 mb-1">Snow / Ice</div>
+                <div class="h-2 w-full rounded-full bg-gradient-to-r from-cyan-100 via-cyan-400 to-blue-700"></div>
+                <div class="flex justify-between text-[8px] font-bold mt-1 text-base-content/70">
+                  <span>Trace</span><span>Light</span><span>Moderate</span><span>Heavy</span>
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Coordinate display pill (desktop) -->
+          <div class="hidden md:block coord-pill">{{ coordDisplay }}</div>
+
+          <!-- Live weather HUD (desktop, below base map buttons) -->
+          @if (wxHud) {
+            <div class="hidden md:block absolute top-44 right-3 z-[1000]">
+              <div class="p-2.5 bg-base-300/80 backdrop-blur-md rounded-2xl border border-base-content/15 shadow-xl w-48 space-y-1.5">
+                <div class="text-[8px] font-black uppercase tracking-widest text-sky-300/80">Conditions at map center</div>
+                <div class="text-[10px] font-bold text-base-content/50 truncate" [title]="wxHud.station">{{ wxHud.station }}</div>
+                <div class="grid grid-cols-2 gap-x-3 gap-y-1">
+                  <div class="text-[10px] font-semibold text-base-content/60">🌡 Temp</div>
+                  <div class="text-[10px] font-black text-white text-right">{{ wxHud.tempF }}°F</div>
+                  <div class="text-[10px] font-semibold text-base-content/60">💨 Wind</div>
+                  <div class="text-[10px] font-black text-white text-right">{{ wxHud.wind }}</div>
+                  <div class="text-[10px] font-semibold text-base-content/60">💧 Humidity</div>
+                  <div class="text-[10px] font-black text-white text-right">{{ wxHud.humidity }}%</div>
+                  <div class="text-[10px] font-semibold text-base-content/60">📊 Pressure</div>
+                  <div class="text-[10px] font-black text-white text-right">{{ wxHud.pressure }}</div>
+                  <div class="text-[10px] font-semibold text-base-content/60">☁ Sky</div>
+                  <div class="text-[10px] font-black text-white text-right truncate">{{ wxHud.sky }}</div>
+                </div>
+                <div class="text-[8px] text-base-content/40 font-semibold">{{ wxHud.age }}</div>
+              </div>
+            </div>
+          }
+
           <!-- Mobile sheet handle -->
           <button
             type="button"
             class="md:hidden absolute bottom-0 left-0 right-0 z-[1000] storm-card rounded-b-none rounded-t-2xl px-4 py-3 flex items-center justify-between min-h-14 border-b-0"
             (click)="sheetOpen = !sheetOpen"
           >
-            <span class="font-black uppercase tracking-widest text-xs text-primary">
+            <span class="font-black uppercase tracking-widest text-xs text-primary flex items-center gap-2">
               {{ sheetOpen ? 'Close panel' : 'Layers & nearby' }}
+              @if (!sheetOpen && activeLayerCount > 0) {
+                <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-primary text-primary-content text-[9px] font-black px-1">{{ activeLayerCount }}</span>
+              }
             </span>
             <span class="text-base-content/40 transition-transform" [class.rotate-180]="sheetOpen">▲</span>
           </button>
@@ -234,19 +360,26 @@ const STORAGE_KEY = 'ww-map-view';
             <h2 class="font-black uppercase tracking-widest text-xs text-primary">Layers</h2>
             <button type="button" class="btn btn-ghost btn-xs" (click)="closeSheet()">✕</button>
           </div>
-          <div class="flex flex-wrap gap-1.5">
-            @for (chip of layerChips; track chip.key) {
-              <button
-                type="button"
-                class="btn btn-sm rounded-xl font-black uppercase tracking-wider min-h-11"
-                [ngClass]="layers[chip.key] ? 'btn-primary' : 'btn-ghost border border-base-300'"
-                (click)="toggleLayer(chip.key)"
-              >
-                {{ chip.label }}
-              </button>
+          <div class="flex flex-col gap-3">
+            @for (group of layerGroups; track group.name) {
+              <div>
+                <div class="text-[10px] font-bold uppercase text-base-content/50 mb-1.5">{{ group.name }}</div>
+                <div class="flex flex-wrap gap-1.5">
+                  @for (chip of group.chips; track chip.key) {
+                    <button
+                      type="button"
+                      class="btn btn-sm rounded-xl font-black uppercase tracking-wider min-h-10"
+                      [ngClass]="layers[chip.key] ? 'btn-primary' : 'btn-ghost border border-base-300 bg-base-200'"
+                      (click)="toggleLayer(chip.key)"
+                    >
+                      {{ chip.label }}
+                    </button>
+                  }
+                </div>
+              </div>
             }
           </div>
-          <div class="flex flex-wrap gap-1.5">
+          <div class="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-base-300/50">
             @for (b of baseChips; track b.key) {
               <button
                 type="button"
@@ -343,18 +476,32 @@ const STORAGE_KEY = 'ww-map-view';
           @if (nearbyAlerts.length === 0) {
             <p class="text-xs text-base-content/50 font-semibold">No active Maine alerts right now.</p>
           } @else {
-            <div class="space-y-1.5 max-h-48 overflow-y-auto">
-              @for (alert of nearbyAlerts; track alert.id) {
-                <button
-                  type="button"
-                  class="w-full text-left rounded-lg border border-base-300/60 bg-base-200/40 px-3 py-2 hover:border-primary transition-colors min-h-11"
-                  (click)="focusAlert(alert)"
-                >
-                  <div class="text-xs font-black text-white truncate">{{ alert.headline }}</div>
-                  <div class="text-[10px] text-base-content/45 font-semibold truncate">{{ alert.area }}</div>
-                </button>
-              }
-            </div>
+              <div class="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                @for (alert of nearbyAlerts; track alert.id) {
+                  <button
+                    type="button"
+                    class="w-full text-left rounded-lg border border-base-300/60 bg-base-200/40 px-3 py-2 hover:border-primary transition-colors min-h-11 border-l-4"
+                    [ngClass]="{
+                      'border-l-red-500': alert.severity === 'Severe' || alert.severity === 'Extreme',
+                      'border-l-amber-500': alert.severity === 'Moderate',
+                      'border-l-sky-400': alert.severity === 'Elevated'
+                    }"
+                    (click)="focusAlert(alert)"
+                  >
+                    <div class="flex justify-between items-start mb-0.5">
+                      <div class="text-[10px] font-black uppercase"
+                           [ngClass]="{
+                             'text-red-400': alert.severity === 'Severe' || alert.severity === 'Extreme',
+                             'text-amber-400': alert.severity === 'Moderate',
+                             'text-sky-300': alert.severity === 'Elevated'
+                           }">{{ alert.category || 'Alert' }}</div>
+                      <div class="text-[9px] font-bold bg-base-300/80 px-1 rounded text-base-content/70">{{ alert.severity }}</div>
+                    </div>
+                    <div class="text-xs font-black text-white truncate">{{ alert.headline }}</div>
+                    <div class="text-[10px] text-base-content/45 font-semibold truncate">{{ alert.area }}</div>
+                  </button>
+                }
+              </div>
           }
         </article>
 
@@ -363,9 +510,16 @@ const STORAGE_KEY = 'ww-map-view';
           @if (camsWithCoords.length === 0) {
             <p class="text-xs text-base-content/50 font-semibold">No geo-tagged cams loaded.</p>
           } @else {
-            <div class="space-y-1.5 max-h-56 overflow-y-auto">
+            <div class="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar">
               @for (cam of camsWithCoords.slice(0, 12); track cam.id) {
                 <div class="flex items-center gap-2 rounded-lg border border-base-300/60 bg-base-200/40 px-2 py-1.5">
+                  <div class="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm border border-base-100"
+                       [ngClass]="{
+                         'bg-green-500': cam.health === 'OK',
+                         'bg-amber-400': cam.health === 'DEGRADED',
+                         'bg-red-500': cam.health === 'OFFLINE' || cam.status === 'down',
+                         'bg-base-content/30': !cam.health && cam.status !== 'down'
+                       }"></div>
                   <button
                     type="button"
                     class="flex-1 text-left min-w-0 min-h-10"
@@ -383,6 +537,18 @@ const STORAGE_KEY = 'ww-map-view';
               }
             </div>
           }
+        </article>
+
+        <!-- Stats Summary Footer -->
+        <article class="storm-card px-4 py-2 grid grid-cols-2 gap-2 text-center">
+          <div>
+            <div class="text-[14px] font-black text-base-content">{{ nearbyAlerts.length }}</div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-base-content/50">Alerts</div>
+          </div>
+          <div>
+            <div class="text-[14px] font-black text-base-content">{{ camsWithCoords.length }}</div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-base-content/50">Cameras</div>
+          </div>
         </article>
 
         @if (selectedLabel) {
@@ -418,6 +584,16 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private radarTileLayer?: L.TileLayer.WMS;
   private radarImageOverlay?: L.ImageOverlay;
   private warningsLayer?: L.TileLayer;
+  private rainIntensityLayer?: L.TileLayer.WMS;
+  private snowLayer?: L.TileLayer;
+  private tempLayer?: L.TileLayer;
+  private humidityLayer?: L.TileLayer;
+  private pressureLayer?: L.TileLayer;
+  private windLayer?: L.TileLayer;
+  private stormCellsLayer?: L.TileLayer.WMS;
+  private cloudsLayer?: L.TileLayer.WMS;
+  private visibilityLayer?: L.TileLayer;
+
   private lsrLayer = L.layerGroup();
   private spcLayer = L.layerGroup();
   private camsLayer = L.layerGroup();
@@ -445,17 +621,34 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   newPinLabel = 'Home base';
   savingPin = false;
 
+  coordDisplay = '';
+  wxHud: {
+    station: string;
+    tempF: number;
+    wind: string;
+    humidity: number;
+    pressure: string;
+    sky: string;
+    age: string;
+  } | null = null;
+  private wxHudTimer?: ReturnType<typeof setTimeout>;
+
   radarProduct: RadarProductId = 'n0q';
   radarStatus: RadarStatus | null = null;
   radarFrames: RadarScan[] = [];
   radarFrameIndex = 0;
   radarLooping = false;
+  radarPlaybackSpeed = 1; // 0.5, 1, 2
   radarSiteLabel = 'Nearest NEXRAD…';
   radarAgeLabel = 'Scan age —';
   radarSourceNote = 'IEM NEXRAD / RIDGE';
   radarFrameLabel = 'live';
   outagePairNote = '';
   canLoop = false;
+
+  get activeLayerCount(): number {
+    return (Object.keys(this.layers) as LayerChip[]).filter(k => this.layers[k]).length;
+  }
 
   radarProductChoices: { id: RadarProductId; label: string; short: string }[] = [
     { id: 'n0r', label: 'Reflectivity', short: 'Ref' },
@@ -465,24 +658,72 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   layers: Record<LayerChip, boolean> = {
     radar: true,
+    rain_intensity: false,
+    snow: false,
+    temp: false,
+    humidity: false,
+    pressure: false,
+    wind: false,
     warnings: true,
     lsr: true,
     spc: false,
+    storm_cells: false,
+    clouds: false,
+    visibility: false,
     cams: true,
     outages: true,
     flood: true,
     quakes: true,
   };
 
-  layerChips: { key: LayerChip; label: string; short: string }[] = [
-    { key: 'radar', label: 'Radar', short: 'Rdr' },
-    { key: 'warnings', label: 'Warnings', short: 'Wrn' },
-    { key: 'lsr', label: 'Reports', short: 'Rpt' },
-    { key: 'spc', label: 'SPC', short: 'SPC' },
-    { key: 'cams', label: 'Cams', short: 'Cam' },
-    { key: 'outages', label: 'Outages', short: 'Out' },
-    { key: 'flood', label: 'Flood', short: 'Fld' },
-    { key: 'quakes', label: 'Quakes', short: 'Qke' },
+  layerGroups: { name: string; chips: { key: LayerChip; label: string; short: string; tooltip: string; source: string }[] }[] = [
+    {
+      name: '🌧 Precipitation',
+      chips: [
+        { key: 'radar', label: 'Radar', short: 'Rdr', tooltip: 'NEXRAD composite reflectivity. Shows precipitation intensity, storm structure, and supercell signatures.', source: 'IEM NEXRAD' },
+        { key: 'rain_intensity', label: 'Rain Intensity', short: 'Rain', tooltip: 'Multi-Radar Multi-Sensor (MRMS) 1-hour precipitation estimate. Best for gauging rainfall rates.', source: 'IEM MRMS' },
+        { key: 'snow', label: 'Snow/Ice', short: 'Snow', tooltip: 'Snowfall and ice accumulation overlay. Useful during Nor\'easters and winter storms.', source: 'OpenWeatherMap' }
+      ]
+    },
+    {
+      name: '🌡 Atmosphere',
+      chips: [
+        { key: 'temp', label: 'Temperature', short: 'Temp', tooltip: 'Surface temperature grid. Purple = sub-zero, green = moderate, red = extreme heat.', source: 'OpenWeatherMap' },
+        { key: 'humidity', label: 'Humidity', short: 'Hum', tooltip: 'Relative humidity. High values indicate fog or moisture-laden air favorable for severe weather.', source: 'OpenWeatherMap' },
+        { key: 'pressure', label: 'Air Pressure', short: 'Pres', tooltip: 'Sea-level barometric pressure. Falling pressure signals approaching storms.', source: 'OpenWeatherMap' }
+      ]
+    },
+    {
+      name: '💨 Wind',
+      chips: [
+        { key: 'wind', label: 'Wind Speed', short: 'Wind', tooltip: 'Surface wind speed overlay. Cyan = calm, pink = 30+ m/s gale force. Critical for chase decisions.', source: 'OpenWeatherMap' }
+      ]
+    },
+    {
+      name: '⚡ Severe Weather',
+      chips: [
+        { key: 'warnings', label: 'Warnings', short: 'Wrn', tooltip: 'NWS Watch/Warning/Advisory polygons. Color-coded by type: red = warning, orange = watch, blue = advisory.', source: 'NOAA NWS' },
+        { key: 'lsr', label: 'Reports', short: 'Rpt', tooltip: 'Local Storm Reports — verified hail, wind damage, tornado, and flood observations from trained spotters.', source: 'NWS LSR' },
+        { key: 'spc', label: 'SPC', short: 'SPC', tooltip: 'Storm Prediction Center convective outlook. Risk levels: Marginal → Slight → Enhanced → Moderate → High.', source: 'NOAA SPC' },
+        { key: 'storm_cells', label: 'Storm Cells', short: 'Cell', tooltip: 'Storm-relative velocity (N0S). Identifies rotation signatures: green = inbound, red = outbound = possible mesocyclone.', source: 'IEM Velocity' }
+      ]
+    },
+    {
+      name: '👁 Visibility',
+      chips: [
+        { key: 'clouds', label: 'Cloud Cover', short: 'Cld', tooltip: 'GOES infrared satellite imagery showing cloud tops. Brighter = colder = taller storms.', source: 'IEM GOES IR' },
+        { key: 'visibility', label: 'Visibility', short: 'Vis', tooltip: 'Surface visibility overlay. Low values indicate fog, heavy precipitation, or blowing snow.', source: 'OpenWeatherMap' }
+      ]
+    },
+    {
+      name: '🏗 Infrastructure',
+      chips: [
+        { key: 'cams', label: 'Cameras', short: 'Cam', tooltip: 'DOT and user-submitted cameras with health status. Amber icons = near active NWS warnings.', source: 'DOT / User' },
+        { key: 'outages', label: 'Outages', short: 'Out', tooltip: 'ODIN power outage estimates per county. Yellow = minor, orange = moderate, red = 500+ meters out.', source: 'ODIN' },
+        { key: 'flood', label: 'Flood', short: 'Fld', tooltip: 'USGS river gauge observations. Circle size and color indicate stage severity: action → minor → moderate → major.', source: 'USGS / NWS' },
+        { key: 'quakes', label: 'Quakes', short: 'Qke', tooltip: 'USGS earthquake detections within 500 km. Circle size scales with magnitude. Rare in Maine but monitored.', source: 'USGS' }
+      ]
+    }
   ];
 
   baseChips: { key: BaseKey; label: string; short: string }[] = [
@@ -529,6 +770,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       zoomControl: true,
       scrollWheelZoom: true,
     });
+    
+    L.control.scale({ imperial: true, metric: true, position: 'bottomleft' }).addTo(this.map);
 
     this.baseLayers.street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
@@ -555,10 +798,69 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       } as any
     );
 
+    // Precipitation & Clouds from IEM (Free, No Key)
+    this.rainIntensityLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/us/mrms.cgi', {
+      layers: 'mrms_p1h',
+      format: 'image/png',
+      transparent: true,
+      attribution: 'IEM MRMS',
+      opacity: 0.7,
+    } as any);
+
+    this.cloudsLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/goes/conus_ir.cgi', {
+      layers: 'goes_conus_ir',
+      format: 'image/png',
+      transparent: true,
+      attribution: 'IEM GOES',
+      opacity: 0.6,
+    } as any);
+
+    this.stormCellsLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0s.cgi', {
+      layers: 'nexrad-n0s-900913',
+      format: 'image/png',
+      transparent: true,
+      attribution: 'IEM Velocity',
+      opacity: 0.7,
+    } as any);
+
+    // OpenWeatherMap layers (Requires API Key)
+    const owmUrl = (layer: string) => `https://tile.openweathermap.org/map/${layer}/{z}/{x}/{y}.png?appid=${OWM_API_KEY}`;
+    const owmOpts = { maxZoom: 18, opacity: 0.6, attribution: 'OpenWeatherMap' };
+
+    this.tempLayer = L.tileLayer(owmUrl('temp_new'), owmOpts);
+    this.pressureLayer = L.tileLayer(owmUrl('pressure_new'), owmOpts);
+    this.windLayer = L.tileLayer(owmUrl('wind_new'), owmOpts);
+    this.snowLayer = L.tileLayer(owmUrl('snow_new'), owmOpts);
+    // Humidity and Visibility use temp/clouds as placeholders if OWM lacks them
+    this.humidityLayer = L.tileLayer(owmUrl('precipitation_new'), owmOpts);
+    this.visibilityLayer = L.tileLayer(owmUrl('clouds_new'), owmOpts);
+
     this.applyLayerVisibility();
 
-    this.map.on('moveend', () => this.persistView());
+    this.map.on('mousemove', (e: L.LeafletMouseEvent) => {
+      if (window.innerWidth >= 768) {
+        this.coordDisplay = `${e.latlng.lat.toFixed(4)}°, ${e.latlng.lng.toFixed(4)}°`;
+      }
+    });
+
+    const handleMapMove = () => {
+      this.persistView();
+      if (!this.map) return;
+      const c = this.map.getCenter();
+      if (window.innerWidth < 768) {
+        this.coordDisplay = `${c.lat.toFixed(4)}°, ${c.lng.toFixed(4)}°`;
+      }
+      this.fetchWxHud(c.lat, c.lng);
+    };
+
+    this.map.on('moveend', handleMapMove);
     this.map.on('zoomend', () => this.persistView());
+
+    // Initial weather fetch
+    if (window.innerWidth < 768) {
+      this.coordDisplay = `${center[0].toFixed(4)}°, ${center[1].toFixed(4)}°`;
+    }
+    this.fetchWxHud(center[0], center[1]);
 
     this.loadCams();
     this.loadLsr();
@@ -633,11 +935,20 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     }
     if (this.radarFrames.length < 2) return;
     this.radarLooping = true;
+    const intervalMs = Math.round(700 / this.radarPlaybackSpeed);
     this.radarLoopTimer = setInterval(() => {
       if (!this.radarFrames.length) return;
       this.radarFrameIndex = (this.radarFrameIndex + 1) % this.radarFrames.length;
       this.applyRadarFrame();
-    }, 700);
+    }, intervalMs);
+  }
+
+  setRadarPlaybackSpeed(speed: number): void {
+    this.radarPlaybackSpeed = speed;
+    if (this.radarLooping) {
+      this.stopRadarLoop();
+      this.toggleRadarLoop(); // Restart loop with new speed
+    }
   }
 
   onRadarFrameScrub(): void {
@@ -751,6 +1062,19 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       sync(this.radarTileLayer, true);
       sync(this.radarImageOverlay, true);
     }
+    
+    // New layers sync
+    sync(this.rainIntensityLayer, this.layers.rain_intensity);
+    sync(this.snowLayer, this.layers.snow);
+    sync(this.tempLayer, this.layers.temp);
+    sync(this.humidityLayer, this.layers.humidity);
+    sync(this.pressureLayer, this.layers.pressure);
+    sync(this.windLayer, this.layers.wind);
+    sync(this.stormCellsLayer, this.layers.storm_cells);
+    sync(this.cloudsLayer, this.layers.clouds);
+    sync(this.visibilityLayer, this.layers.visibility);
+    
+    // Infrastructure & Severe Layers
     sync(this.warningsLayer, this.layers.warnings);
     sync(this.lsrLayer, this.layers.lsr);
     sync(this.spcLayer, this.layers.spc);
@@ -1043,7 +1367,13 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     });
     for (const loc of this.savedLocations) {
       const marker = L.marker([loc.lat, loc.lon], { icon }).bindPopup(
-        `<strong>${loc.label}</strong><br><span style="font-size:11px;opacity:.7">Saved pin</span>`
+        `<div class="storm-popup">
+          <div class="storm-popup-header">
+            <span class="storm-popup-icon">🏠</span>
+            <div class="storm-popup-title">${loc.label}</div>
+          </div>
+          <div class="storm-popup-sub">Saved pin</div>
+        </div>`
       );
       marker.addTo(this.savedLayer);
       this.savedMarkers.set(loc.id, marker);
@@ -1070,14 +1400,24 @@ export class MapComponent implements AfterViewInit, OnDestroy {
           const age = cam.ageSec != null
             ? (cam.ageSec < 90 ? `${cam.ageSec}s` : `${Math.round(cam.ageSec / 60)}m`)
             : '—';
+          
+          let alertWarning = '';
+          if ((cam.nearAlertCount || 0) > 0) {
+            alertWarning = `<div class="storm-popup-detail" style="color: #fbbf24;">Near ${cam.nearAlertCount} warning(s)</div>`;
+          }
+
           const marker = L.marker([cam.lat!, cam.lng!], { icon }).bindPopup(
-            `<strong>${cam.title}</strong><br>` +
-              `<span style="font-size:11px;opacity:.7">${cam.corridorLabel || cam.region}</span><br>` +
-              `<span style="font-size:11px">Health ${cam.health || cam.status} · age ${age}</span>` +
-              ((cam.nearAlertCount || 0) > 0
-                ? `<br><span style="font-size:11px;color:#fbbf24;font-weight:700">Near ${cam.nearAlertCount} warning(s)</span>`
-                : '') +
-              `<br><a href="/live?cam=${encodeURIComponent(cam.id)}" style="color:#38bdf8;font-weight:700">Open Live →</a>`
+            `<div class="storm-popup">
+              <div class="storm-popup-header">
+                <span class="storm-popup-icon">${warn}</span>
+                <div class="storm-popup-title">${cam.title}</div>
+              </div>
+              <div class="storm-popup-sub">${cam.corridorLabel || cam.region}</div>
+              <div class="storm-popup-detail">Health: ${cam.health || cam.status}</div>
+              <div class="storm-popup-meta">Age: ${age}</div>
+              ${alertWarning}
+              <a href="/live?cam=${encodeURIComponent(cam.id)}" class="storm-popup-link">Open Live →</a>
+            </div>`
           );
           marker.addTo(this.camsLayer);
           this.camMarkers.set(cam.id, marker);
@@ -1133,10 +1473,28 @@ export class MapComponent implements AfterViewInit, OnDestroy {
             const extra = kind === 'flood'
               ? `Stage ${p['stage'] ?? '—'} ${p['stageUnit'] || 'ft'}`
               : `M${p['magnitude'] ?? '—'} · depth ${p['depthKm'] ?? '—'} km`;
+            
+            let sevClass = '';
+            const sev = String(p['severity'] || '').toLowerCase();
+            if (kind === 'flood') {
+              if (sev === 'major') sevClass = 'storm-popup-sev storm-popup-sev-purple';
+              else if (sev === 'moderate') sevClass = 'storm-popup-sev storm-popup-sev-red';
+              else if (sev === 'minor') sevClass = 'storm-popup-sev storm-popup-sev-amber';
+            } else if (kind === 'quake') {
+              const mag = Number(p['magnitude'] || 0);
+              if (mag >= 3.5) sevClass = 'storm-popup-sev storm-popup-sev-red';
+              else if (mag >= 3) sevClass = 'storm-popup-sev storm-popup-sev-amber';
+            }
+
             layer.bindPopup(
-              `<strong>${p['headline'] || kind}</strong><br>` +
-                `<span style="font-size:11px">${extra}</span><br>` +
-                `<span style="font-size:10px;opacity:.7">${p['source'] || ''} · ${p['severity'] || ''}</span>`
+              `<div class="storm-popup ${sevClass}">
+                <div class="storm-popup-header">
+                  <span class="storm-popup-icon">${kind === 'flood' ? '🌊' : '💢'}</span>
+                  <div class="storm-popup-title">${p['headline'] || kind}</div>
+                </div>
+                <div class="storm-popup-sub">${extra}</div>
+                <div class="storm-popup-meta">${p['source'] || ''} · ${p['severity'] || ''}</div>
+              </div>`
             );
             if (kind === 'flood') layer.addTo(this.floodLayer);
             else if (kind === 'quake') layer.addTo(this.quakesLayer);
@@ -1175,10 +1533,20 @@ export class MapComponent implements AfterViewInit, OnDestroy {
           onEachFeature: (feature, layer) => {
             const p = feature.properties || {};
             const meters = Number(p['metersOut'] || 0);
+            
+            let sevClass = '';
+            if (meters >= 500) sevClass = 'storm-popup-sev storm-popup-sev-red';
+            else if (meters >= 50) sevClass = 'storm-popup-sev storm-popup-sev-amber';
+
             layer.bindPopup(
-              `<strong>${p['name'] || 'County'} Co.</strong><br>` +
-                `<span style="font-size:12px;font-weight:800">${meters.toLocaleString()} meters out</span><br>` +
-                `<span style="font-size:10px;opacity:.7">ODIN estimate · see utility map for local detail</span>`
+              `<div class="storm-popup ${sevClass}">
+                <div class="storm-popup-header">
+                  <span class="storm-popup-icon">🔌</span>
+                  <div class="storm-popup-title">${p['name'] || 'County'} Co.</div>
+                </div>
+                <div class="storm-popup-detail" style="font-weight: 800; color: #f8fafc;">${meters.toLocaleString()} meters out</div>
+                <div class="storm-popup-meta">ODIN estimate · see utility map for detail</div>
+              </div>`
             );
           },
         }).addTo(this.outagesLayer);
@@ -1204,9 +1572,14 @@ export class MapComponent implements AfterViewInit, OnDestroy {
             const p = feature.properties || {};
             const mag = p.magnitude != null ? ` ${p.magnitude}${p.unit || ''}` : '';
             layer.bindPopup(
-              `<strong>${p.typetext || p.type || 'Report'}${mag}</strong><br>` +
-                `<span style="font-size:11px">${p.city || p.county || ''} ${p.state || ''}</span><br>` +
-                `<span style="font-size:11px;opacity:.75">${p.remark || ''}</span>`
+              `<div class="storm-popup storm-popup-sev storm-popup-sev-amber">
+                <div class="storm-popup-header">
+                  <span class="storm-popup-icon">🚨</span>
+                  <div class="storm-popup-title">${p.typetext || p.type || 'Report'}${mag}</div>
+                </div>
+                <div class="storm-popup-sub">${p.city || p.county || ''} ${p.state || ''}</div>
+                <div class="storm-popup-detail">${p.remark || ''}</div>
+              </div>`
             );
           },
         }).addTo(this.lsrLayer);
@@ -1240,7 +1613,21 @@ export class MapComponent implements AfterViewInit, OnDestroy {
           },
           onEachFeature: (feature, layer) => {
             const p = feature.properties || {};
-            layer.bindPopup(`<strong>SPC ${p.LABEL || p.label || 'Outlook'}</strong><br>${p.LABEL2 || ''}`);
+            const label = String(p.LABEL || p.label || '').toUpperCase();
+            let sevClass = '';
+            if (label === 'HIGH') sevClass = 'storm-popup-sev storm-popup-sev-purple';
+            else if (label === 'MDT') sevClass = 'storm-popup-sev storm-popup-sev-red';
+            else if (label === 'ENH' || label === 'SLGT') sevClass = 'storm-popup-sev storm-popup-sev-amber';
+
+            layer.bindPopup(
+              `<div class="storm-popup ${sevClass}">
+                <div class="storm-popup-header">
+                  <span class="storm-popup-icon">🌩</span>
+                  <div class="storm-popup-title">SPC ${p.LABEL || p.label || 'Outlook'}</div>
+                </div>
+                <div class="storm-popup-sub">${p.LABEL2 || ''}</div>
+              </div>`
+            );
           },
         }).addTo(this.spcLayer);
         this.applyLayerVisibility();
@@ -1286,9 +1673,18 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     } else {
       this.layers = {
         radar: true,
+        rain_intensity: false,
+        snow: false,
+        temp: false,
+        humidity: false,
+        pressure: false,
+        wind: false,
         warnings: true,
         lsr: false,
         spc: false,
+        storm_cells: false,
+        clouds: false,
+        visibility: false,
         cams: false,
         outages: false,
         flood: false,
@@ -1351,6 +1747,79 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
+  }
+
+  private fetchWxHud(lat: number, lon: number): void {
+    if (this.wxHudTimer) clearTimeout(this.wxHudTimer);
+    // Debounce the call to avoid hammering NWS API on rapid pans
+    this.wxHudTimer = setTimeout(async () => {
+      try {
+        const pointRes = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`);
+        if (!pointRes.ok) return;
+        const pointData = await pointRes.json();
+        const obsUrl = pointData?.properties?.observationStations;
+        if (!obsUrl) return;
+
+        const stationsRes = await fetch(obsUrl);
+        if (!stationsRes.ok) return;
+        const stationsData = await stationsRes.json();
+        const stationId = stationsData?.features?.[0]?.properties?.stationIdentifier;
+        const stationName = stationsData?.features?.[0]?.properties?.name || 'Unknown Station';
+        if (!stationId) return;
+
+        const obsRes = await fetch(`https://api.weather.gov/stations/${stationId}/observations/latest`);
+        if (!obsRes.ok) return;
+        const obsData = await obsRes.json();
+        const props = obsData?.properties;
+        if (!props) return;
+
+        const cToF = (c: number | null) => c != null ? Math.round((c * 9/5) + 32) : null;
+        const msToMph = (ms: number | null) => ms != null ? Math.round(ms * 2.23694) : null;
+        
+        let windStr = 'Calm';
+        if (props.windSpeed?.value) {
+          const spd = msToMph(props.windSpeed.value);
+          const dir = props.windDirection?.value;
+          if (spd) {
+            let dirStr = '';
+            if (dir !== null) {
+              const val = Math.floor((dir / 22.5) + 0.5);
+              const arr = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+              dirStr = arr[(val % 16)] + ' ';
+            }
+            windStr = `${dirStr}${spd} mph`;
+          }
+        }
+
+        let ageStr = 'Just now';
+        if (props.timestamp) {
+          const min = Math.round((Date.now() - new Date(props.timestamp).getTime()) / 60000);
+          if (min > 0) {
+            if (min >= 60) {
+              const hr = Math.floor(min / 60);
+              const extraMin = min % 60;
+              ageStr = extraMin > 0 ? `${hr}h ${extraMin}m ago` : `${hr}h ago`;
+            } else {
+              ageStr = `${min}m ago`;
+            }
+          }
+        }
+
+        const pressureMb = props.barometricPressure?.value ? Math.round(props.barometricPressure.value / 100) : null;
+
+        this.wxHud = {
+          station: stationName,
+          tempF: cToF(props.temperature?.value) ?? 0,
+          wind: windStr,
+          humidity: props.relativeHumidity?.value ? Math.round(props.relativeHumidity.value) : 0,
+          pressure: pressureMb ? `${pressureMb} mb` : '—',
+          sky: props.textDescription || 'Clear',
+          age: ageStr
+        };
+      } catch (err) {
+        console.error('Failed to fetch NWS observation for HUD:', err);
+      }
+    }, 500);
   }
 }
 

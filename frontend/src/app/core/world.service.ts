@@ -411,8 +411,8 @@ export class WorldService {
     this.send({ type: 'chat', text: t.slice(0, 140) });
   }
 
-  sendDeployPlace(kind: string, label: string, lat: number, lng: number, isPublic: boolean): void {
-    this.send({ type: 'deploy_place', kind, label, lat, lng, public: isPublic });
+  sendDeployPlace(kind: string, label: string, lat: number, lng: number, accessLevel: string): void {
+    this.send({ type: 'deploy_place', kind, label, lat, lng, accessLevel });
   }
 
   sendDeployCollect(deployableId: string): void {

@@ -35,6 +35,10 @@ model User {
   savedLocations       SavedLocation[]
   dashboardPreference  DashboardPreference?
   deployables          Deployable[]
+  userCameras          UserCamera[]
+  userCameraDownvotes  UserCameraDownvote[]
+  friendships          Friendship[] @relation("UserFriendships")
+  friendsOf            Friendship[] @relation("FriendUsers")
 
   @@index([createdAt])
   @@index([level])
@@ -97,6 +101,20 @@ model UserCollectible {
   @@index([userId])
 }
 
+model Friendship {
+  id        String   @id @default(cuid())
+  userId    String
+  friendId  String
+  createdAt DateTime @default(now())
+
+  user      User     @relation("UserFriendships", fields: [userId], references: [id], onDelete: Cascade)
+  friend    User     @relation("FriendUsers", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([userId])
+  @@index([friendId])
+}
+
 /// Storm World Phase 4 — personal weather research grants (SIM loot from real WX context).
 /// Copies alert metadata for the log only; never mutates NWS payloads.
 model ResearchLogEntry {
@@ -139,7 +157,7 @@ model TradeListing {
 }
 
 /// Phase 5 — player-placed world entities (probes, stations).
-/// Power / upkeep / collect-later loop. Co-op: public flag lets others collect.
+/// Power / upkeep / collect-later loop. Co-op: accessLevel (private, friends, public)
 model Deployable {
   id          String   @id @default(cuid())
   userId      String
@@ -149,7 +167,7 @@ model Deployable {
   lng         Float
   health      Int      @default(100)  // 0–100, decays over time
   fuel        Int      @default(100)  // 0–100, drains each tick
-  public      Boolean  @default(false) // co-op: others can collect
+  accessLevel String   @default("private") // private | friends | public
   yieldKey    String   @default("research_sample")
   yieldStored Int      @default(0)     // accumulated yield ready to collect
   lastCollect DateTime @default(now())
@@ -264,4 +282,30 @@ model OutageSnapshot {
   sampledAt    DateTime @default(now())
 
   @@index([scope, sampledAt])
+}
+
+// User-contributed custom camera feeds.
+model UserCamera {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  streamType  String   // image | burst | iframe
+  feedUrl     String
+  lat         Float?
+  lng         Float?
+  downvotes   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  voters      UserCameraDownvote[]
+}
+
+model UserCameraDownvote {
+  id           String @id @default(cuid())
+  userCameraId String
+  userId       String?  // Nullable for anonymous users
+  clientIp     String?  // Track anonymous voters by IP
+
+  userCamera UserCamera @relation(fields: [userCameraId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

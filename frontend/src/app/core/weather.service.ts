@@ -301,6 +301,7 @@ export interface CameraFeedDto {
   group: 'cams' | 'satellite' | 'radar';
   imageUrl?: string;
   embedUrl?: string;
+  safeEmbedUrl?: import('@angular/platform-browser').SafeResourceUrl;
   attribution: string;
   sourceUrl?: string;
   lat?: number;
@@ -312,11 +313,11 @@ export interface CameraFeedDto {
   ageSec?: number;
   blackFrame?: boolean;
   corridorId?: string;
+  streamType?: string;
+  burstUrls?: string[];
   corridorLabel?: string;
   nearAlertIds?: string[];
   nearAlertCount?: number;
-  streamType?: string; // image | burst | mjpeg | hls
-  burstUrls?: string[];
   supportsEmbedding?: boolean;
   authRequired?: boolean;
   weatherTags?: string[];
@@ -345,6 +346,33 @@ export class WeatherService {
       catchError(err => {
         console.error('getCams error:', err);
         return of([]);
+      })
+    );
+  }
+
+  getCustomCams(): Observable<CameraFeedDto[]> {
+    return this.http.get<CameraFeedDto[]>('/api/cams/custom').pipe(
+      catchError(err => {
+        console.error('getCustomCams error:', err);
+        return of([]);
+      })
+    );
+  }
+
+  addCustomCam(payload: { title: string; streamType: string; feedUrl: string; lat?: number; lng?: number }): Observable<any> {
+    return this.http.post('/api/cams/custom', payload).pipe(
+      catchError(err => {
+        console.error('addCustomCam error:', err);
+        throw err;
+      })
+    );
+  }
+
+  downvoteCustomCam(id: string): Observable<void> {
+    return this.http.post<void>(`/api/cams/custom/${encodeURIComponent(id)}/downvote`, {}).pipe(
+      catchError(err => {
+        console.error('downvoteCustomCam error:', err);
+        throw err;
       })
     );
   }
